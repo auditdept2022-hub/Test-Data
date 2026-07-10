@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Audit Dashboard</title>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     body { font-family: sans-serif; max-width: 480px; margin: 60px auto; }
     .hidden { display: none; }
@@ -19,17 +18,9 @@
 </head>
 <body>
 
-  <button id="hamburgerBtn" class="hidden" onclick="toggleMenu()">☰</button>
+  <button id="hamburgerBtn" onclick="toggleMenu()">☰</button>
   <div id="menuItems" class="hidden">
     <div onclick="openQuickLinksTab()">📋 Quick Links</div>
-  </div>
-
-  <div id="signInArea">
-    <div id="g_id_onload"
-         data-client_id="YOUR_CLIENT_ID.apps.googleusercontent.com"
-         data-callback="handleCredentialResponse">
-    </div>
-    <div class="g_id_signin" data-type="standard"></div>
   </div>
 
   <div id="quickLinksPanel" class="hidden"></div>
@@ -37,7 +28,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithCredential }
+    import { getAuth, GoogleAuthProvider, signInWithPopup }
       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     // Fill in with your real Firebase project config
@@ -47,31 +38,34 @@
       projectId: "your-project"
     };
     const app = initializeApp(firebaseConfig);
-    window.auth = getAuth(app);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
 
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzAnYCe1Oc0SDG8tRLDGi_Ycr_zA65Awnaj-rgFPr70Tlz-wn6ouzlQqg-8SHa1p26fQ/exec";
     let currentToken = null;
-
-    window.handleCredentialResponse = (response) => {
-      currentToken = response.credential;
-      document.getElementById("signInArea").classList.add("hidden");
-      document.getElementById("hamburgerBtn").classList.remove("hidden");
-
-      const credential = GoogleAuthProvider.credential(currentToken);
-      signInWithCredential(window.auth, credential).catch(err => {
-        document.getElementById("status").innerText = "Login error: " + err.message;
-      });
-    };
 
     window.toggleMenu = () => {
       document.getElementById("menuItems").classList.toggle("hidden");
     };
 
-    // No extra password step: Google sign-in + the server-side email
-    // allowlist in Apps Script is the real authorization check.
-    window.openQuickLinksTab = () => {
+    // Nothing requires sign-in until this is clicked. Firebase's Google
+    // popup runs here, on demand, and the resulting Google ID token is
+    // what gets sent to Apps Script for verification.
+    window.openQuickLinksTab = async () => {
       document.getElementById("menuItems").classList.add("hidden");
-      loadLinkList();
+      const status = document.getElementById("status");
+      status.innerText = "";
+
+      try {
+        if (!currentToken) {
+          const result = await signInWithPopup(auth, provider);
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          currentToken = credential.idToken;
+        }
+        loadLinkList();
+      } catch (err) {
+        status.innerText = "Sign-in failed: " + err.message;
+      }
     };
 
     window.loadLinkList = () => {
