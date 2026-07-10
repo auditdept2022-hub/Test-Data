@@ -157,22 +157,10 @@
     const DASH_CACHE_KEY = 'auditDashboard_v1_cachedData';
     const DASH_CACHE_TS_KEY = 'auditDashboard_v1_lastSyncedAt';
 
-    const STRICT_BRANCH_LIST = [
-        "ALFONSO", "ANGELES", "ATIMONAN", "BACOOR 2", "BACOOR CAVITE", 
-        "BATAAN", "BATANGAS", "BAY", "BAYAMBANG", "BINALONAN", 
-        "BINANGONAN", "CALAMBA", "CALAPAN", "CALAUAG", "CALIT-CALIT SAN JUAN", 
-        "CARMEN", "CATANAUAN", "DAET", "DAGUPAN", "GENERAL TRIAS", 
-        "GUMACA", "INFANTA", "LAIYA SAN JUAN", "LIMAY BATAAN", "LIPA", 
-        "LOPEZ", "LOS BAÑOS", "LUCENA", "MALOLOS", "MARILAO", 
-        "NAGCARLAN", "NAIC", "ORANI", "PAGBILAO", "PANIQUI", 
-        "PILILLA", "PINAMALAYAN", "PLARIDEL", "PUERTO GALERA", "SAN FRANCISCO", 
-        "SAN PABLO", "SILANG CAVITE", "SINILOAN", "STA CRUZ", "STA. ROSA", 
-        "STO TOMAS", "TANAUAN", "TANAY", "TANZA", "TARLAC",
-        "CALAMBA (YAMAHA EXCLUSIVE)", "GUMACA (HONDA EXCLUSIVE)", 
-        "INFANTA (HONDA EXCLUSIVE)", "LUCENA (YAMAHA EXCLUSIVE)", 
-        "SAN PABLO (YAMAHA EXCLUSIVE)", "STA ROSA (YAMAHA EXCLUSIVE)"
-    ];
-
+    // The branch master list is intentionally NOT hardcoded here — it is
+    // derived at runtime from whatever the uploaded/synced data source
+    // contains (see processExcelData below). This keeps actual branch
+    // names out of the client-side source code.
     const normalizeName = (name) => {
         let n = String(name).toUpperCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
@@ -181,7 +169,6 @@
         if (n === "PILILIA") n = "PILILLA"; 
         return n;
     };
-    const STRICT_NORMALIZED = STRICT_BRANCH_LIST.map(normalizeName);
 
     function updateCalculations() {
         const tb = activeData.branches;
@@ -1238,26 +1225,153 @@ header .bg-white:hover{
 header .text-royalBlue{ color:#3730a3 !important; }
 header svg.text-royalBlue{ color:#3730a3 !important; }
 
+/* ---------- hamburger button ---------- */
+.hamburger-btn{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  width:2.75rem;
+  height:2.75rem;
+  flex-shrink:0;
+  border-radius:0.9rem;
+  background:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.16);
+  cursor:pointer;
+  transition:background-color .2s ease, border-color .2s ease, transform .15s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease;
+}
+.hamburger-btn:hover{
+  background:rgba(255,255,255,0.22);
+  border-color:rgba(255,255,255,0.28);
+  box-shadow:0 4px 14px -4px rgba(0,0,0,0.35);
+}
+.hamburger-btn:active{ transform:scale(0.93); }
+.hamburger-btn:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
+.hamburger-bar{
+  width:1.15rem;
+  height:2px;
+  border-radius:2px;
+  background:#fff;
+  transition:transform .32s cubic-bezier(.4,0,.2,1), opacity .2s ease, width .2s ease;
+}
+.hamburger-btn:hover .hamburger-bar:first-child{ width:1.4rem; }
+.hamburger-btn.is-open .hamburger-bar:nth-child(1){ transform:translateY(7px) rotate(45deg); }
+.hamburger-btn.is-open .hamburger-bar:nth-child(2){ opacity:0; transform:scaleX(0); }
+.hamburger-btn.is-open .hamburger-bar:nth-child(3){ transform:translateY(-7px) rotate(-45deg); }
+.hamburger-btn.is-open:hover .hamburger-bar:first-child{ width:1.15rem; }
+
 /* ---------- side menu ---------- */
+#sideMenuHeader{
+  background:linear-gradient(120deg,#3355d8 0%,#4169E1 60%,#3a5fe0 100%);
+}
+#sideMenuHeader .side-menu-header-badge{
+  width:2.3rem;
+  height:2.3rem;
+  border-radius:0.75rem;
+  background:rgba(255,255,255,0.16);
+  border:1px solid rgba(255,255,255,0.2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+}
+.side-menu-group-details{
+  margin:0.35rem 0.65rem 0.5rem;
+}
+.side-menu-group-summary{
+  display:flex;
+  align-items:center;
+  gap:0.6rem;
+  list-style:none;
+  cursor:pointer;
+  user-select:none;
+  padding:0.55rem 0.6rem;
+  border-radius:0.75rem;
+  transition:background-color .15s ease;
+}
+.side-menu-group-summary::-webkit-details-marker{ display:none; }
+.side-menu-group-summary:hover{ background:#f5f7ff; }
+.side-menu-group-summary:focus-visible{ outline:2px solid #4169E1; outline-offset:2px; }
+.side-menu-group-summary .side-menu-group-title{
+  flex:1;
+  font-size:0.7rem;
+  font-weight:700;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:#94a3b8;
+}
+.side-menu-group-summary .side-menu-group-count{
+  font-size:0.65rem;
+  font-weight:700;
+  color:#94a3b8;
+  background:#f1f5f9;
+  border-radius:9999px;
+  padding:0.05rem 0.45rem;
+}
+.side-menu-group-summary .side-menu-group-chevron{
+  color:#cbd5e1;
+  transition:transform .25s cubic-bezier(.4,0,.2,1);
+  flex-shrink:0;
+}
+.side-menu-group-details[open] .side-menu-group-summary .side-menu-group-chevron{
+  transform:rotate(90deg);
+}
+.side-menu-group-details[open] .side-menu-group-summary{ margin-bottom:0.15rem; }
 .side-menu-link{
   display:flex;
   align-items:center;
   gap:0.75rem;
-  padding:0.85rem 1.25rem;
-  font-size:0.875rem;
+  padding:0.65rem 0.75rem;
+  margin:0.2rem 0.65rem;
+  font-size:0.85rem;
   font-weight:600;
   color:#334155;
-  border-bottom:1px solid #f1f5f9;
-  transition:all 0.15s ease;
+  border-radius:0.9rem;
+  border:1px solid rgba(15,23,42,0.06);
+  background:#fff;
+  box-shadow:0 1px 2px rgba(15,23,42,0.04);
+  transition:background-color .15s ease, border-color .15s ease, transform .15s cubic-bezier(.2,.8,.2,1), box-shadow .15s ease;
   text-decoration:none;
+  min-height:2.75rem;
+}
+.side-menu-link .side-menu-icon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:2.15rem;
+  height:2.15rem;
+  border-radius:0.7rem;
+  background:rgba(65,105,225,0.10);
+  flex-shrink:0;
+  transition:background-color .15s ease, transform .15s ease;
+}
+.side-menu-link .side-menu-chevron{
+  margin-left:auto;
+  flex-shrink:0;
+  color:#cbd5e1;
+  opacity:0;
+  transform:translateX(-2px);
+  transition:opacity .15s ease, transform .15s ease;
 }
 .side-menu-link:hover{
-  background:#f8fafc;
-  color:#3730a3;
-  padding-left:1.5rem;
+  background:#f5f7ff;
+  border-color:rgba(65,105,225,0.22);
+  transform:translateX(2px);
+  box-shadow:0 4px 10px -4px rgba(15,23,42,0.14);
 }
-.side-menu-link:hover svg{ color:#3730a3; }
+.side-menu-link:active{
+  transform:translateX(2px) scale(0.98);
+}
+.side-menu-link:hover .side-menu-icon{ transform:scale(1.06); }
+.side-menu-link:hover .side-menu-chevron{ opacity:1; transform:translateX(0); }
+.side-menu-link:focus-visible{
+  outline:2px solid #4169E1;
+  outline-offset:2px;
+}
 #sideMenu.menu-open{ transform:translateX(0); }
+#sideMenu .side-menu-group-label{ padding:0.9rem 1.15rem 0.4rem; }
 
 /* ---------- surfaces / cards ---------- */
 .bg-coolCard{
@@ -1645,14 +1759,21 @@ body.bg-coolDark{
       display:flex; align-items:center; gap:.5rem; cursor:pointer; user-select:none;
     }
     .auth-remember input{
-      appearance:none; -webkit-appearance:none; width:1.05rem; height:1.05rem;
-      border:1.5px solid rgba(65,105,225,0.35); border-radius:.35rem;
+      appearance:none; -webkit-appearance:none; -moz-appearance:none;
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
+      width:1.05rem; height:1.05rem; min-width:1.05rem; min-height:1.05rem;
+      margin:0; padding:0; box-sizing:border-box;
+      border:1.75px solid #94a3b8; border-radius:.35rem;
       display:inline-flex; align-items:center; justify-content:center;
       cursor:pointer; flex-shrink:0; transition:all .15s ease; background:#fff;
+      outline:none;
     }
+    .auth-remember input:hover{ border-color:#4169E1; }
+    .auth-remember input:focus-visible{ box-shadow:0 0 0 3px rgba(65,105,225,0.25); }
     .auth-remember input:checked{
-      background:linear-gradient(90deg,#3355d8,#4169E1); border-color:transparent;
-      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+      background-color:#4169E1;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E');
+      border-color:#4169E1;
       background-repeat:no-repeat; background-position:center; background-size:70%;
     }
     .auth-remember span{ font-size:.8rem; color:#475569; font-weight:600; }
@@ -1681,12 +1802,14 @@ body.bg-coolDark{
             <label for="authPassword" class="auth-label block mb-2">Password</label>
             <div class="relative">
               <input type="password" id="authPassword" autocomplete="current-password" required
-                class="auth-input pr-10">
-              <button type="button" id="authTogglePass" tabindex="-1" aria-label="Show password" class="auth-toggle-pass">
-                <svg id="authEyeIcon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-              </button>
+                class="auth-input">
             </div>
           </div>
+
+          <label class="auth-remember">
+            <input type="checkbox" id="authRememberMe" checked>
+            <span>Keep me signed in</span>
+          </label>
 
           <button type="submit" id="authSubmitBtn"
             class="auth-submit w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold tracking-tight shadow-lg active:scale-[0.98] transition-all duration-200">
@@ -2267,8 +2390,10 @@ body.bg-coolDark{
       
       <div class="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
         <div class="flex items-center gap-3">
-          <button id="hamburgerBtn" type="button" aria-label="Open menu" class="flex items-center justify-center w-10 h-10 shrink-0 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/10 transition-all duration-200 text-white">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-menu"><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="18" y2="18"></line></svg>
+          <button id="hamburgerBtn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sideMenu" class="hamburger-btn">
+            <span class="hamburger-bar"></span>
+            <span class="hamburger-bar"></span>
+            <span class="hamburger-bar"></span>
           </button>
           <div class="flex items-center gap-2.5">
             <div class="leading-tight">
@@ -2305,68 +2430,108 @@ body.bg-coolDark{
   <div id="menuOverlay" class="fixed inset-0 bg-black/50 z-[60] hidden opacity-0 transition-opacity duration-300"></div>
 
   <aside id="sideMenu" class="fixed top-0 left-0 h-full w-72 max-w-[85vw] bg-white z-[70] shadow-2xl transform -translate-x-full transition-transform duration-300 ease-out flex flex-col">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-blue-800 bg-royalBlue shrink-0">
-      <h2 class="text-white font-bold text-base tracking-tight">Shortcuts</h2>
-      <button id="closeMenuBtn" type="button" aria-label="Close menu" class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 active:scale-95 transition-all duration-200 text-white">
+    <div id="sideMenuHeader" class="flex items-center justify-between gap-3 px-5 py-4 border-b border-blue-800 shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="side-menu-header-badge">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>
+        </span>
+        <div class="min-w-0 leading-tight">
+          <h2 class="text-white font-bold text-base tracking-tight">Shortcuts</h2>
+        </div>
+      </div>
+      <button id="closeMenuBtn" type="button" aria-label="Close menu" class="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg hover:bg-white/15 active:scale-95 transition-all duration-200 text-white">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
       </button>
     </div>
     <nav class="flex-1 overflow-y-auto custom-scrollbar py-2">
-      <p class="px-5 pt-3 pb-1 text-[0.7rem] font-bold tracking-wider text-slate-400 uppercase">Jump to</p>
+      <details class="side-menu-group-details">
+        <summary class="side-menu-group-summary">
+          <span class="side-menu-group-title">Jump to</span>
+          <span class="side-menu-group-count">5</span>
+          <svg class="side-menu-group-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+        </summary>
 
       <div role="button" tabindex="0" onclick="scrollToSection('section-overview')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-overview');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg></span>
         <span>Overview</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="scrollToSection('section-charts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-charts');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"></path><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path></svg>
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"></path><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path></svg></span>
         <span>Charts &amp; Breakdown</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="scrollToSection('section-rankings')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-rankings');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg></span>
         <span>Top 10 Rankings</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="scrollToSection('section-findings')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-findings');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect><path d="M14 4h7"></path><path d="M14 9h7"></path><path d="M14 15h7"></path><path d="M14 20h7"></path></svg>
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect><path d="M14 4h7"></path><path d="M14 9h7"></path><path d="M14 15h7"></path><path d="M14 20h7"></path></svg></span>
         <span>Findings &amp; Declining</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="scrollToSection('section-scorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-scorecard');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M12 3v18"></path><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M3 15h18"></path></svg>
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M12 3v18"></path><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M3 15h18"></path></svg></span>
         <span>Branch Scorecard</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
+      </details>
 
-      <p class="px-5 pt-4 pb-1 text-[0.7rem] font-bold tracking-wider text-slate-400 uppercase">Quick actions</p>
+      <details class="side-menu-group-details">
+        <summary class="side-menu-group-summary">
+          <span class="side-menu-group-title">Quick actions</span>
+          <span class="side-menu-group-count">6</span>
+          <svg class="side-menu-group-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+        </summary>
 
       <div role="button" tabindex="0" onclick="updateDataFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();updateDataFromMenu();}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg>
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg></span>
         <span>Update Data</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+      </div>
+
+      <div role="button" tabindex="0" onclick="window.open('attendance_dashboard_v35.html', '_blank')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.open('attendance_dashboard_v35.html', '_blank');}" class="side-menu-link cursor-pointer select-none">
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path></svg></span>
+        <span>Attendance Dashboard</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="triggerFileUploadFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();triggerFileUploadFromMenu();}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg>
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg></span>
         <span>Upload File</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="openAuditFindingsFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAuditFindingsFromMenu();}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg>
+        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg></span>
         <span>AUDIT FINDINGS</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="openExportPicker('consolidated')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openExportPicker('consolidated');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentEmerald shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+        <span class="side-menu-icon" style="background:rgba(5,150,105,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentEmerald shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></span>
         <span>Download Report</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="openEmergencyAuditorFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmergencyAuditorFromMenu();}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose shrink-0"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+        <span class="side-menu-icon" style="background:rgba(225,29,72,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose shrink-0"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg></span>
         <span>Emergency Auditor</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
+      </details>
 
-      <p class="px-5 pt-4 pb-1 text-[0.7rem] font-bold tracking-wider text-slate-400 uppercase">Quick Links</p>
+      <details class="side-menu-group-details">
+        <summary class="side-menu-group-summary">
+          <span class="side-menu-group-title">Quick Links</span>
+          <span class="side-menu-group-count">6</span>
+          <svg class="side-menu-group-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+        </summary>
 
       <!-- Each of these only ever knows an id + label — the real Google
            Sheet URL never touches this page. Clicking one asks for the
@@ -2376,34 +2541,41 @@ body.bg-coolDark{
            by redirecting a new tab straight to the sheet. See the
            QUICK_LINKS / openQuickLink script further down this file. -->
       <div role="button" tabindex="0" onclick="openQuickLink('opex','AUDIT OPEX')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('opex','AUDIT OPEX');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
         <span>AUDIT OPEX</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="openQuickLink('attendance','AUDIT ATTENDANCE')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('attendance','AUDIT ATTENDANCE');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
         <span>AUDIT ATTENDANCE</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="openQuickLink('data','AUDIT DATA')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('data','AUDIT DATA');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
         <span>AUDIT DATA</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="openQuickLink('accounts','AUDIT AUDITED ACCOUNTS')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('accounts','AUDIT AUDITED ACCOUNTS');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
         <span>AUDIT AUDITED ACCOUNTS</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="openQuickLink('sheets','AUDIT SHEETS')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('sheets','AUDIT SHEETS');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
         <span>AUDIT SHEETS</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
       <div role="button" tabindex="0" onclick="openQuickLink('personnel','PERSONNEL')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('personnel','PERSONNEL');}" class="side-menu-link cursor-pointer select-none">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
         <span>PERSONNEL</span>
+        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
+      </details>
     </nav>
 
     <div id="sideMenuUserFooter" class="hidden shrink-0 border-t border-coolBorder p-4">
@@ -2420,19 +2592,21 @@ body.bg-coolDark{
     </div>
   </aside>
 
-  <main class="dash-container mt-8 space-y-8">
+  <main class="dash-container mt-4 space-y-6">
 
-    <div class="flex items-center justify-between flex-wrap gap-3 -mb-2">
-      <div>
-        <span class="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-[0.12em] text-accentBlue uppercase">
-          <span class="w-1.5 h-1.5 rounded-full bg-accentBlue"></span>
+    <div id="overviewHeaderRow" class="flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1 text-[10px] font-bold tracking-[0.1em] text-accentBlue uppercase">
+          <span class="w-1 h-1 rounded-full bg-accentBlue"></span>
           Overview
         </span>
-        <h2 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight mt-0.5">Branch Performance</h2>
+        <span class="text-slate-300 text-xs">/</span>
+        <h2 class="text-sm sm:text-base font-bold text-slate-900 tracking-tight">Branch Performance</h2>
       </div>
-      <div id="liveDateTime" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false" aria-label="Show calendar" class="relative flex flex-col items-end justify-center leading-tight px-4 py-2.5 rounded-2xl bg-coolCard border border-coolBorder shadow-md whitespace-nowrap self-center cursor-pointer select-none">
-        <span id="liveTimeText" class="text-xl sm:text-2xl font-extrabold text-slate-900 tabular-nums tracking-tight">--:--:--</span>
-        <span id="liveDateText" class="text-xs sm:text-sm text-slate-500 font-semibold mt-0.5">--</span>
+      <div id="liveDateTime" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false" aria-label="Show calendar" class="relative flex items-center gap-1.5 leading-tight px-2.5 py-1 rounded-xl bg-coolCard border border-coolBorder shadow-sm whitespace-nowrap self-center cursor-pointer select-none">
+        <span id="liveTimeText" class="text-xs sm:text-sm font-extrabold text-slate-900 tabular-nums tracking-tight">--:--:--</span>
+        <span class="text-slate-300 text-[10px]">·</span>
+        <span id="liveDateText" class="text-[10px] sm:text-xs text-slate-500 font-semibold">--</span>
 
         <div id="miniCalendarPopup" class="hidden absolute right-0 top-full mt-2 w-64 bg-coolCard border border-coolBorder rounded-2xl shadow-2xl p-3 z-50 text-left cursor-default" onclick="event.stopPropagation()">
           <div class="flex items-center justify-between mb-2 px-1">
@@ -2453,7 +2627,7 @@ body.bg-coolDark{
       </div>
     </div>
 
-    <div id="section-overview" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <div id="section-overview" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" style="margin-top:0.6rem">
       <div onclick="openModal('All Branches Overview', 'all', null)" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentBlue/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold tracking-wider text-slate-500">TOTAL BRANCHES</span>
@@ -5234,19 +5408,17 @@ body.bg-coolDark{
           const mainSheet = workbook.Sheets[targetSheet];
           const rawRows = XLSX.utils.sheet_to_json(mainSheet, { header: 1 });
           
+          // Master branch list is built live from this file's own BRANCHES
+          // column — nothing is hardcoded in the source. `branchList` keeps
+          // the canonical (as-typed-in-sheet) name per branch and
+          // `branchNormalized` is the parallel lookup key used to match
+          // the same branch across the other sheets (Rotation, Audit
+          // Report, Audit Findings) and to merge spelling/format variants
+          // (e.g. "STA ROSA" vs "STA. ROSA") into one entry.
           const tempBranchesMap = {};
-          STRICT_BRANCH_LIST.forEach(branch => {
-              tempBranchesMap[branch] = {
-                name: branch, accountsMar: 0, accountsApr: 0, accountsMay: 0,
-                effMar: 0, effApr: 0, effLatest: 0, collection: "Stable", sales: "Stable", service: "Target",
-                repoRate: 0, repoRateMar: 0, repoRateApr: 0, repoRateLatest: 0,
-                noOfRepo: 0, noOfRepoMar: 0, noOfRepoApr: 0, noOfRepoLatest: 0,
-                findings2024: 0, findings2025: 0, findings2026: 0, auditStatus: "PENDING", auditor: "UNASSIGNED",
-                salesMar: { ins: 0, cod: 0, ca: 0 }, salesApr: { ins: 0, cod: 0, ca: 0 }, salesMay: { ins: 0, cod: 0, ca: 0 },
-                expectedIns: 0, expectedCod: 0,
-                serviceTarget: 0, serviceMar: 0, serviceApr: 0, serviceMay: 0
-              };
-          });
+          const branchList = [];
+          const branchNormalized = [];
+          const NON_BRANCH_LABELS = ['TOTAL', 'GRAND TOTAL', 'SUBTOTAL', 'TOTALS', 'BRANCH', 'BRANCHES', ''];
           
           let matchedAny = false;
           let auditorMap = { "KARL": [], "GENESIS": [], "EDISON": [], "LAURENCE": [] };
@@ -5284,10 +5456,25 @@ body.bg-coolDark{
             if (!rawName) continue;
             
             const normalizedInput = normalizeName(rawName);
-            const matchedIndex = STRICT_NORMALIZED.indexOf(normalizedInput);
-            
-            if (matchedIndex === -1) continue; 
-            const branchName = STRICT_BRANCH_LIST[matchedIndex];
+            if (NON_BRANCH_LABELS.includes(normalizedInput)) continue;
+
+            let matchedIndex = branchNormalized.indexOf(normalizedInput);
+            if (matchedIndex === -1) {
+                matchedIndex = branchList.length;
+                branchList.push(rawName);
+                branchNormalized.push(normalizedInput);
+                tempBranchesMap[rawName] = {
+                  name: rawName, accountsMar: 0, accountsApr: 0, accountsMay: 0,
+                  effMar: 0, effApr: 0, effLatest: 0, collection: "Stable", sales: "Stable", service: "Target",
+                  repoRate: 0, repoRateMar: 0, repoRateApr: 0, repoRateLatest: 0,
+                  noOfRepo: 0, noOfRepoMar: 0, noOfRepoApr: 0, noOfRepoLatest: 0,
+                  findings2024: 0, findings2025: 0, findings2026: 0, auditStatus: "PENDING", auditor: "UNASSIGNED",
+                  salesMar: { ins: 0, cod: 0, ca: 0 }, salesApr: { ins: 0, cod: 0, ca: 0 }, salesMay: { ins: 0, cod: 0, ca: 0 },
+                  expectedIns: 0, expectedCod: 0,
+                  serviceTarget: 0, serviceMar: 0, serviceApr: 0, serviceMay: 0
+                };
+            }
+            const branchName = branchList[matchedIndex];
             
             if (seenBranches.has(branchName)) continue;
             seenBranches.add(branchName);
@@ -5399,9 +5586,9 @@ body.bg-coolDark{
                           let rawVal = String(cellValue).trim();
                           if (rawVal && isNaN(rawVal) && rawVal.length > 2) { 
                               let normalizedInput = normalizeName(rawVal);
-                              let matchIdx = STRICT_NORMALIZED.indexOf(normalizedInput);
+                              let matchIdx = branchNormalized.indexOf(normalizedInput);
                               if (matchIdx !== -1) {
-                                  auditorMap[auditorName].push(STRICT_BRANCH_LIST[matchIdx]);
+                                  auditorMap[auditorName].push(branchList[matchIdx]);
                               }
                           }
                       }
@@ -5416,9 +5603,9 @@ body.bg-coolDark{
                   const rawBranch = String(r[1] || "").trim();
                   if (!rawBranch) continue;
                   const normalizedBranch = normalizeName(rawBranch);
-                  const branchIdx = STRICT_NORMALIZED.indexOf(normalizedBranch);
+                  const branchIdx = branchNormalized.indexOf(normalizedBranch);
                   if (branchIdx === -1) continue;
-                  const branchName = STRICT_BRANCH_LIST[branchIdx];
+                  const branchName = branchList[branchIdx];
 
                   const candidatePairs = [
                       { auditor: r[2], date: r[3] },   // C, D
@@ -5464,9 +5651,9 @@ body.bg-coolDark{
                   const auditor = String(r[1] || "").trim();
                   const remark = String(r[2] || "").trim();
                   
-                  const matchIdx = STRICT_NORMALIZED.indexOf(branchName);
+                  const matchIdx = branchNormalized.indexOf(branchName);
                   if (matchIdx !== -1) {
-                      const bName = STRICT_BRANCH_LIST[matchIdx];
+                      const bName = branchList[matchIdx];
                       if (!activeData.dataAudit[bName]) activeData.dataAudit[bName] = [];
                       activeData.dataAudit[bName].push({ auditor, remark });
                   }
@@ -5496,9 +5683,9 @@ body.bg-coolDark{
                   if (!r || !r[1]) continue;
 
                   const branchRaw = String(r[1]).trim();
-                  const matchIdx = STRICT_NORMALIZED.indexOf(normalizeName(branchRaw));
+                  const matchIdx = branchNormalized.indexOf(normalizeName(branchRaw));
                   if (matchIdx === -1) continue;
-                  const bName = STRICT_BRANCH_LIST[matchIdx];
+                  const bName = branchList[matchIdx];
 
                   const dateVal = excelSerialToISO(r[0]);
                   const category = String(r[2] || "").trim();
@@ -5519,7 +5706,7 @@ body.bg-coolDark{
           }
 
           if (matchedAny) {
-            activeData.branches = STRICT_BRANCH_LIST.map(b => tempBranchesMap[b]);
+            activeData.branches = branchList.slice().sort((a, b) => a.localeCompare(b)).map(b => tempBranchesMap[b]);
             
             activeData.auditors = Object.keys(auditorMap)
                 .map(aud => ({ name: aud, count: auditorMap[aud].length, branches: auditorMap[aud] }))
@@ -6200,12 +6387,22 @@ body.bg-coolDark{
         menuOverlay.classList.remove('hidden');
         requestAnimationFrame(() => menuOverlay.classList.remove('opacity-0'));
         document.body.style.overflow = 'hidden';
+        if (hamburgerBtn) {
+          hamburgerBtn.classList.add('is-open');
+          hamburgerBtn.setAttribute('aria-expanded', 'true');
+          hamburgerBtn.setAttribute('aria-label', 'Close menu');
+        }
       }
       function closeSideMenu() {
         sideMenu.classList.add('-translate-x-full');
         menuOverlay.classList.add('opacity-0');
         document.body.style.overflow = '';
         setTimeout(() => menuOverlay.classList.add('hidden'), 300);
+        if (hamburgerBtn) {
+          hamburgerBtn.classList.remove('is-open');
+          hamburgerBtn.setAttribute('aria-expanded', 'false');
+          hamburgerBtn.setAttribute('aria-label', 'Open menu');
+        }
       }
       // Exposed globally so inline onclick handlers (e.g. the AUDIT FINDINGS
       // menu item) can close the side menu after opening a popup.
@@ -6232,6 +6429,7 @@ body.bg-coolDark{
       onAuthStateChanged,
       setPersistence,
       browserLocalPersistence,
+      browserSessionPersistence,
       signOut,
       EmailAuthProvider,
       reauthenticateWithCredential
@@ -6311,18 +6509,7 @@ body.bg-coolDark{
     const sideMenuUserEmail = document.getElementById('sideMenuUserEmail');
     const sideMenuUserInitial = document.getElementById('sideMenuUserInitial');
     const sideMenuLogoutBtn = document.getElementById('sideMenuLogoutBtn');
-    const authTogglePass = document.getElementById('authTogglePass');
-    const authEyeIcon = document.getElementById('authEyeIcon');
-
-    const EYE_OPEN = '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle>';
-    const EYE_OFF = '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line>';
-
-    authTogglePass.addEventListener('click', () => {
-      const showing = authPassword.type === 'text';
-      authPassword.type = showing ? 'password' : 'text';
-      authEyeIcon.innerHTML = showing ? EYE_OPEN : EYE_OFF;
-      authTogglePass.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
-    });
+    const authRememberMe = document.getElementById('authRememberMe');
 
     function setSubmitting(isSubmitting) {
       authSubmitBtn.disabled = isSubmitting;
@@ -6341,6 +6528,13 @@ body.bg-coolDark{
       authError.classList.add('hidden');
       setSubmitting(true);
       try {
+        // "Keep me signed in" (checked by default) keeps the session in the
+        // browser's local storage so it survives closing the tab/browser —
+        // this is what lets people skip re-entering their password next
+        // time. Unchecking it signs them out as soon as the browser closes,
+        // which is safer on a shared/public computer.
+        const persistence = authRememberMe.checked ? browserLocalPersistence : browserSessionPersistence;
+        await setPersistence(auth, persistence);
         await signInWithEmailAndPassword(auth, authEmail.value.trim(), authPassword.value);
         // onAuthStateChanged below handles revealing the dashboard.
       } catch (err) {
@@ -6359,11 +6553,11 @@ body.bg-coolDark{
       signOut(auth);
     });
 
-    // Auto sign-out after 10 minutes of no interaction, so a session left
+    // Auto sign-out after 1 hour of no interaction, so a session left
     // open on a shared/public computer doesn't stay unlocked forever.
     // Only runs while someone is actually signed in (started/stopped from
     // the onAuthStateChanged handler below) and resets on any real activity.
-    const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+    const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
     let idleTimer = null;
     function handleIdleTimeout() {
       signOut(auth).catch(function(err) {
@@ -6462,7 +6656,6 @@ body.bg-coolDark{
         authLogoutBtn.classList.remove('flex');
         sideMenuUserFooter.classList.add('hidden');
         authPassword.type = 'password';
-        authEyeIcon.innerHTML = EYE_OPEN;
 
         // SECURITY: wipe any cached/rendered audit data now that this
         // session is signed out, so it can't be read back from
