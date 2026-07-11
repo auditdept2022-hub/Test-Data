@@ -198,6 +198,42 @@
             trendLabels: activeData.summary?.trendLabels || ["MARCH", "APRIL", "MAY"]
         };
 
+        // --- Auditor Next Assignment: who is queued up for a "FOR AUDIT" branch ---
+        const forAuditList = tb.filter(b => (b.auditStatus || '').toUpperCase() === "FOR AUDIT");
+        const auditorQueueCounts = {};
+        forAuditList.forEach(b => {
+            const a = (b.auditor && b.auditor !== 'UNASSIGNED') ? b.auditor : 'Unassigned';
+            auditorQueueCounts[a] = (auditorQueueCounts[a] || 0) + 1;
+        });
+        const forAuditBreakdown = Object.keys(auditorQueueCounts)
+            .map(name => ({ name, count: auditorQueueCounts[name] }))
+            .sort((a, b) => b.count - a.count);
+
+        // Branch that's been waiting longest since its last audit gets shown
+        // as the "up next" branch in the queue (falls back to the first
+        // unaudited branch on record if no prior audit date exists).
+        const sortedQueue = [...forAuditList].sort((a, b) => (a.lastAuditDateRaw || 0) - (b.lastAuditDateRaw || 0));
+        const nextUpBranch = sortedQueue[0] || null;
+
+        // --- Branch Last Audited: most recently completed audit across the whole portfolio ---
+        const auditedBranches = tb.filter(b => b.lastAuditDateRaw);
+        const lastAuditedBranch = auditedBranches.length
+            ? auditedBranches.reduce((latest, b) => (b.lastAuditDateRaw > (latest.lastAuditDateRaw || 0) ? b : latest), auditedBranches[0])
+            : null;
+
+        activeData.summary.forAuditBreakdown = forAuditBreakdown;
+        activeData.summary.nextUpBranch = nextUpBranch ? {
+            name: nextUpBranch.name,
+            auditor: (nextUpBranch.auditor && nextUpBranch.auditor !== 'UNASSIGNED') ? nextUpBranch.auditor : 'Unassigned',
+            lastAuditDate: nextUpBranch.lastAuditDate || null
+        } : null;
+        activeData.summary.lastAuditedBranch = lastAuditedBranch ? {
+            name: lastAuditedBranch.name,
+            auditor: lastAuditedBranch.auditor || 'Unassigned',
+            lastAuditDate: lastAuditedBranch.lastAuditDate || null,
+            findings2026: lastAuditedBranch.findings2026 || 0
+        } : null;
+
         activeData.lowestEfficiency = [...tb].sort((a,b) => a.effLatest - b.effLatest).slice(0, 10).map(x => ({ branch: x.name, rate: x.effLatest }));
         activeData.highestRepo = [...tb].sort((a,b) => b.repoRate - a.repoRate).slice(0, 10).map(x => ({ branch: x.name, rate: parseFloat(x.repoRate.toFixed(2)) }));
         activeData.highestNoRepo = [...tb].sort((a,b) => b.noOfRepo - a.noOfRepo).slice(0, 10).map(x => ({ branch: x.name, count: x.noOfRepo }));
@@ -2374,209 +2410,6 @@ body.bg-coolDark{
     </div>
   </div>
 
-  <!-- ================= MANAGE BRANCHES (list) MODAL =================
-       Reads live from window.activeData.branches (already parsed from the
-       DASHBOARDDATA sheet). Add/Edit open branchFormModal below; Delete
-       confirms then writes straight to the Apps Script doPost endpoint,
-       which writes straight to the real Google Sheet. -->
-  <div id="manageBranchesModal" class="fixed inset-0 z-[75] hidden">
-    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeManageBranchesModal()"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
-      <div class="bg-coolCard w-full max-w-3xl max-h-[85vh] rounded-2xl shadow-2xl pointer-events-auto border border-coolBorder flex flex-col overflow-hidden">
-        <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-coolBorder shrink-0">
-          <div class="flex items-center gap-2 min-w-0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue flex-shrink-0"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5V19A9 3 0 0 0 21 19V5"></path><path d="M3 12A9 3 0 0 0 21 12"></path></svg>
-            <h3 class="text-sm font-bold text-slate-800 truncate">Manage Branches</h3>
-          </div>
-          <div class="flex items-center gap-2">
-            <button onclick="openBranchForm(null)" class="text-xs font-semibold text-white bg-royalBlue hover:bg-blue-700 px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
-              New Branch
-            </button>
-            <button onclick="closeManageBranchesModal()" title="Close" aria-label="Close" class="p-2 text-slate-400 hover:text-accentRose hover:bg-accentRose/10 active:scale-95 rounded-xl transition-all cursor-pointer flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
-            </button>
-          </div>
-        </div>
-        <p id="manageBranchesStatus" class="hidden text-xs text-accentAmber px-5 pt-3"></p>
-        <div class="overflow-y-auto custom-scrollbar px-5 py-3 flex-1">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="text-left text-slate-400 uppercase tracking-wide text-[10px] border-b border-coolBorder">
-                <th class="py-2 pr-2">Branch</th>
-                <th class="py-2 pr-2">Auditor</th>
-                <th class="py-2 pr-2">Audit Status</th>
-                <th class="py-2 pr-2">Repo Rate</th>
-                <th class="py-2 pr-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="manageBranchesTbody"></tbody>
-          </table>
-          <p id="manageBranchesEmpty" class="hidden text-center text-slate-400 text-xs py-8">No branches loaded yet — click "Update data" first.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= ADD / EDIT BRANCH FORM MODAL =================
-       One shared form for both Add and Edit. branchFormMode ('add'|'edit')
-       and branchFormSheetRow (the target row number when editing) are
-       tracked in JS. Submitting posts straight to the Apps Script doPost
-       endpoint (addRow / updateRow on the DASHBOARDDATA tab). -->
-  <div id="branchFormModal" class="fixed inset-0 z-[76] hidden">
-    <div class="absolute inset-0 bg-slate-900/55 backdrop-blur-sm"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
-      <div class="bg-coolCard w-full max-w-lg max-h-[88vh] rounded-2xl shadow-2xl pointer-events-auto border border-coolBorder flex flex-col overflow-hidden">
-        <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-coolBorder shrink-0">
-          <h3 id="branchFormTitle" class="text-sm font-bold text-slate-800">New Branch</h3>
-          <button onclick="closeBranchForm()" title="Close" aria-label="Close" class="p-2 text-slate-400 hover:text-accentRose hover:bg-accentRose/10 active:scale-95 rounded-xl transition-all cursor-pointer">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
-          </button>
-        </div>
-        <div class="overflow-y-auto custom-scrollbar px-5 py-4 flex-1 space-y-4">
-          <div>
-            <label class="text-[11px] font-semibold text-slate-500">Branch Name *</label>
-            <input id="bf_name" type="text" class="w-full mt-1 px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" placeholder="e.g. STA. ROSA" />
-          </div>
-
-          <div>
-            <p class="text-[11px] font-semibold text-slate-500 mb-1">Accounts (Mar / Apr / Latest)</p>
-            <div class="grid grid-cols-3 gap-2">
-              <input id="bf_accountsMar" type="number" placeholder="Mar" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_accountsApr" type="number" placeholder="Apr" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_accountsMay" type="number" placeholder="Latest" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-            </div>
-          </div>
-
-          <div>
-            <p class="text-[11px] font-semibold text-slate-500 mb-1"># of Repo (Mar / Apr / Latest)</p>
-            <div class="grid grid-cols-3 gap-2">
-              <input id="bf_noOfRepoMar" type="number" placeholder="Mar" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_noOfRepoApr" type="number" placeholder="Apr" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_noOfRepoLatest" type="number" placeholder="Latest" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-            </div>
-          </div>
-
-          <div>
-            <p class="text-[11px] font-semibold text-slate-500 mb-1">Repo Rate % (Mar / Apr / Latest)</p>
-            <div class="grid grid-cols-3 gap-2">
-              <input id="bf_repoRateMar" type="number" step="0.01" placeholder="Mar" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_repoRateApr" type="number" step="0.01" placeholder="Apr" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_repoRateLatest" type="number" step="0.01" placeholder="Latest" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-            </div>
-          </div>
-
-          <div>
-            <p class="text-[11px] font-semibold text-slate-500 mb-1">Efficiency % (Mar / Apr / Latest)</p>
-            <div class="grid grid-cols-3 gap-2">
-              <input id="bf_effMar" type="number" placeholder="Mar" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_effApr" type="number" placeholder="Apr" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_effLatest" type="number" placeholder="Latest" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="text-[11px] font-semibold text-slate-500">Collection Status</label>
-              <select id="bf_collection" class="w-full mt-1 px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40">
-                <option>Stable</option><option>Improving</option><option>Declining</option><option>Recovering</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-[11px] font-semibold text-slate-500">Sales Status</label>
-              <select id="bf_sales" class="w-full mt-1 px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40">
-                <option>Stable</option><option>Improving</option><option>Declining</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="text-[11px] font-semibold text-slate-500">Service Status</label>
-              <select id="bf_service" class="w-full mt-1 px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40">
-                <option>Target</option><option>Declining</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-[11px] font-semibold text-slate-500">Audit Status</label>
-              <select id="bf_auditStatus" class="w-full mt-1 px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40">
-                <option value="PENDING">PENDING</option><option value="FOR AUDIT">FOR AUDIT</option><option value="DONE">DONE</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label class="text-[11px] font-semibold text-slate-500">Assigned Auditor</label>
-            <input id="bf_auditor" type="text" class="w-full mt-1 px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" placeholder="e.g. KARL, or UNASSIGNED" />
-          </div>
-
-          <div>
-            <p class="text-[11px] font-semibold text-slate-500 mb-1">Findings (2024 / 2025 / 2026)</p>
-            <div class="grid grid-cols-3 gap-2">
-              <input id="bf_findings2024" type="number" placeholder="2024" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_findings2025" type="number" placeholder="2025" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-              <input id="bf_findings2026" type="number" placeholder="2026" class="px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40" />
-            </div>
-          </div>
-
-          <details class="text-xs">
-            <summary class="cursor-pointer font-semibold text-slate-500 select-none">Advanced (service targets, sales breakdown)</summary>
-            <div class="mt-3 space-y-3">
-              <div>
-                <p class="text-[11px] font-semibold text-slate-500 mb-1">Service (Target / Mar / Apr / Latest)</p>
-                <div class="grid grid-cols-4 gap-2">
-                  <input id="bf_serviceTarget" type="number" placeholder="Target" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_serviceMar" type="number" placeholder="Mar" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_serviceApr" type="number" placeholder="Apr" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_serviceMay" type="number" placeholder="Latest" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                </div>
-              </div>
-              <div>
-                <p class="text-[11px] font-semibold text-slate-500 mb-1">Expected (INS / COD)</p>
-                <div class="grid grid-cols-2 gap-2">
-                  <input id="bf_expectedIns" type="number" placeholder="Expected INS" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_expectedCod" type="number" placeholder="Expected COD" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                </div>
-              </div>
-              <div>
-                <p class="text-[11px] font-semibold text-slate-500 mb-1">Sales Mar (INS / COD / CA)</p>
-                <div class="grid grid-cols-3 gap-2">
-                  <input id="bf_salesMar_ins" type="number" placeholder="INS" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_salesMar_cod" type="number" placeholder="COD" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_salesMar_ca" type="number" placeholder="CA" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                </div>
-              </div>
-              <div>
-                <p class="text-[11px] font-semibold text-slate-500 mb-1">Sales Apr (INS / COD / CA)</p>
-                <div class="grid grid-cols-3 gap-2">
-                  <input id="bf_salesApr_ins" type="number" placeholder="INS" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_salesApr_cod" type="number" placeholder="COD" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_salesApr_ca" type="number" placeholder="CA" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                </div>
-              </div>
-              <div>
-                <p class="text-[11px] font-semibold text-slate-500 mb-1">Sales Latest (INS / COD / CA)</p>
-                <div class="grid grid-cols-3 gap-2">
-                  <input id="bf_salesMay_ins" type="number" placeholder="INS" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_salesMay_cod" type="number" placeholder="COD" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                  <input id="bf_salesMay_ca" type="number" placeholder="CA" class="px-2 py-2 rounded-xl border border-coolBorder text-xs" />
-                </div>
-              </div>
-            </div>
-          </details>
-
-          <p id="branchFormError" class="hidden text-[11px] text-accentRose"></p>
-        </div>
-        <div class="flex gap-2 px-5 py-4 border-t border-coolBorder shrink-0">
-          <button onclick="closeBranchForm()" class="flex-1 text-xs font-semibold text-slate-600 hover:text-slate-800 py-2.5 rounded-xl border border-coolBorder hover:bg-slate-50 cursor-pointer">Cancel</button>
-          <button id="branchFormSubmitBtn" onclick="submitBranchForm()" class="flex-1 text-xs font-semibold text-white bg-royalBlue hover:bg-blue-700 py-2.5 rounded-xl transition-colors cursor-pointer disabled:opacity-60">
-            <span id="branchFormSubmitLabel">Save to Sheet</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- ================= CONFIRM / "ARE YOU SURE" MODAL =================
        Reused for two situations:
        1) Clicking Log out (header button or side-menu button)
@@ -2642,11 +2475,6 @@ body.bg-coolDark{
               <span id="lastSyncedLabel" class="text-[9px] font-medium normal-case text-white/50"></span>
             </span>
           </span>
-        </button>
-
-        <button id="manageBranchesBtn" type="button" onclick="openManageBranchesModal()" title="Add, edit, or delete branches" class="group flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer text-sm font-medium transition-colors duration-150 text-white/90 hover:text-white whitespace-nowrap">
-          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-database shrink-0"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5V19A9 3 0 0 0 21 19V5"></path><path d="M3 12A9 3 0 0 0 21 12"></path></svg>
-          <span class="hidden sm:inline">Manage Branches</span>
         </button>
 
         <label id="uploadFileLabel" title="Upload a spreadsheet" class="group flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer text-sm font-medium transition-colors duration-150 text-white/90 hover:text-white whitespace-nowrap aria-disabled:opacity-40 aria-disabled:cursor-not-allowed">
@@ -2903,28 +2731,27 @@ body.bg-coolDark{
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-      <div class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:shadow-lg transition-all shadow-md group">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div onclick="openModal('Audit Findings FY2026 Breakdown', 'findings', 'findings2026')" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentCyan/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT FINDINGS (FY24&ndash;FY26)</span>
-          <span class="p-1.5 bg-accentRose/10 text-accentRose rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span>
+          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT FINDINGS (FY2024–FY2026)</span>
+          <span class="p-1.5 bg-accentCyan/10 text-accentCyan rounded-lg group-hover:bg-accentCyan group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span>
         </div>
-        <div class="mt-4 grid grid-cols-3 divide-x divide-coolBorder">
-          <div onclick="event.stopPropagation(); openModal('Audit Findings FY2024 Breakdown', 'findings', 'findings2024')" class="text-center cursor-pointer rounded-lg py-1 hover:bg-slate-50 active:scale-[0.97] transition-all">
-            <p class="text-[10px] font-bold text-slate-400 tracking-wide">FY2024</p>
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 mt-1" id="stat-findings-2024">197</h3>
+        <div class="mt-4 grid grid-cols-3 divide-x divide-coolBorder text-center">
+          <div class="cursor-pointer" onclick="event.stopPropagation(); openModal('Audit Findings FY2024 Breakdown', 'findings', 'findings2024')">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-findings-2024">197</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">FY2024</p>
           </div>
-          <div onclick="event.stopPropagation(); openModal('Audit Findings FY2025 Breakdown', 'findings', 'findings2025')" class="text-center cursor-pointer rounded-lg py-1 hover:bg-accentRose/5 active:scale-[0.97] transition-all">
-            <p class="text-[10px] font-bold text-slate-400 tracking-wide">FY2025</p>
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentRose mt-1" id="stat-findings-2025">280</h3>
-            <p class="text-[10px] text-accentRose mt-0.5" id="stat-findings-2025-sub">+42% vs 2024</p>
+          <div class="cursor-pointer" onclick="event.stopPropagation(); openModal('Audit Findings FY2025 Breakdown', 'findings', 'findings2025')">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentRose" id="stat-findings-2025">280</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">FY2025</p>
           </div>
-          <div onclick="event.stopPropagation(); openModal('Audit Findings FY2026 Breakdown', 'findings', 'findings2026')" class="text-center cursor-pointer rounded-lg py-1 hover:bg-accentCyan/5 active:scale-[0.97] transition-all">
-            <p class="text-[10px] font-bold text-slate-400 tracking-wide">FY2026</p>
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentCyan mt-1" id="stat-findings-2026">202</h3>
-            <p class="text-[10px] text-accentEmerald mt-0.5">YTD (on track)</p>
+          <div class="cursor-pointer" onclick="event.stopPropagation(); openModal('Audit Findings FY2026 Breakdown', 'findings', 'findings2026')">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentCyan" id="stat-findings-2026">202</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">FY2026</p>
           </div>
         </div>
+        <p class="text-xs text-accentRose mt-3 text-center" id="stat-findings-2025-sub">+42% vs 2024</p>
       </div>
 
       <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentBlue/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
@@ -2938,19 +2765,29 @@ body.bg-coolDark{
         </div>
       </div>
 
-      <div onclick="openModal('Auditor Next Target Plan', 'nextAuditPlan', null)" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentAmber/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
+      <div onclick="openAuditQueueModal()" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentAmber/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDITOR NEXT TARGET PLAN</span>
-          <span class="p-1.5 bg-accentAmber/10 text-accentAmber rounded-lg group-hover:bg-accentAmber group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-clock w-4 h-4"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4.5"></path><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h5"></path><path d="M17.5 17.5 16 16.25V14"></path><path d="M22 16a6 6 0 1 1-12 0 6 6 0 0 1 12 0"></path></svg></span>
+          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDITOR NEXT ASSIGNMENT</span>
+          <span class="p-1.5 bg-accentAmber/10 text-accentAmber rounded-lg group-hover:bg-accentAmber group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clipboard-list w-4 h-4"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path></svg></span>
         </div>
         <div class="mt-4">
-          <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-accentAmber" id="stat-next-audit-count">0 <span class="text-sm font-medium text-slate-500">queued</span></h3>
-          <p class="text-xs text-slate-500 mt-1" id="stat-next-audit-sub">All caught up</p>
+          <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-accentAmber" id="stat-next-assignment-count">0 <span class="text-sm font-medium text-slate-500">queued</span></h3>
+          <p class="text-xs text-slate-500 mt-1" id="stat-next-assignment-sub">No branches for audit</p>
+          <p class="text-xs font-semibold text-slate-700 mt-2 truncate" id="stat-next-assignment-branch">—</p>
         </div>
-        <div class="mt-3 pt-3 border-t border-coolBorder space-y-1.5" id="next-audit-mini-list"></div>
+      </div>
+
+      <div onclick="openLastAuditedBranchDetail()" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentEmerald/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold tracking-wider text-slate-500">BRANCH LAST AUDITED</span>
+          <span class="p-1.5 bg-accentEmerald/10 text-accentEmerald rounded-lg group-hover:bg-accentEmerald group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-badge-check w-4 h-4"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+        </div>
+        <div class="mt-4">
+          <h3 class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 truncate" id="stat-last-audited-name">—</h3>
+          <p class="text-xs text-slate-500 mt-1" id="stat-last-audited-sub">No completed audits on record</p>
+        </div>
       </div>
     </div>
-
 
     <div id="section-charts" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
@@ -3497,51 +3334,6 @@ body.bg-coolDark{
                 ${historyHtml}
             </div>
           </div>`;
-      } else if (type === 'nextAuditPlan') {
-          const targets = getNextAuditTargets();
-
-          // Group by assigned auditor so each auditor's next targets are
-          // easy to scan together, with an "UNASSIGNED" bucket last.
-          const byAuditor = {};
-          targets.forEach(function(b) {
-              const key = b.auditor || 'UNASSIGNED';
-              if (!byAuditor[key]) byAuditor[key] = [];
-              byAuditor[key].push(b);
-          });
-          const auditorNames = Object.keys(byAuditor).sort(function(a, b) {
-              if (a === 'UNASSIGNED') return 1;
-              if (b === 'UNASSIGNED') return -1;
-              return a.localeCompare(b);
-          });
-
-          let groupsHtml = '';
-          if (auditorNames.length > 0) {
-              groupsHtml = auditorNames.map(function(auditorName) {
-                  const rows = byAuditor[auditorName].map(function(b, idx) {
-                      return `<div class="flex items-center gap-2 p-2.5 bg-gray-50 border border-coolBorder rounded-lg hover:border-accentAmber/30 cursor-pointer active:scale-95 transition-all" onclick="openModalDetail('${b.name.replace(/'/g, "\\'")}')">
-                          <div class="w-5 h-5 rounded bg-accentAmber/10 text-accentAmber flex items-center justify-center font-bold flex-shrink-0 text-[10px]">${idx + 1}</div>
-                          <span class="text-xs font-semibold text-slate-700 truncate">${b.name}</span>
-                      </div>`;
-                  }).join('');
-                  return `<div class="mb-4">
-                      <h4 class="text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider flex items-center gap-2">
-                          <span class="w-1.5 h-1.5 rounded-full bg-accentAmber"></span>${auditorName} <span class="text-slate-300 normal-case font-medium">&middot; ${byAuditor[auditorName].length} branch${byAuditor[auditorName].length === 1 ? '' : 'es'}</span>
-                      </h4>
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${rows}</div>
-                  </div>`;
-              }).join('');
-          } else {
-              groupsHtml = `<div class="text-sm text-slate-500 italic p-4 text-center bg-gray-50 rounded-xl border border-coolBorder">Nothing queued \u2014 every branch is either done or not yet scheduled.</div>`;
-          }
-
-          modalBody.innerHTML = `
-          <div class="p-5 bg-accentAmber/10 border border-accentAmber/20 text-accentAmber rounded-xl mb-4">
-            <h3 class="font-bold text-lg mb-2">Auditor Next Target Plan</h3>
-            <p class="text-sm text-slate-700"><strong>${targets.length}</strong> branch${targets.length === 1 ? ' is' : 'es are'} marked <strong>FOR AUDIT</strong> and next in line, grouped by assigned auditor.</p>
-          </div>
-          <div class="p-5 bg-white border border-coolBorder rounded-xl shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
-            ${groupsHtml}
-          </div>`;
       } else {
           if (type === 'findings') {
               branchesToDisplay = [...activeData.branches].sort((a, b) => b[filterValue] - a[filterValue]);
@@ -3602,6 +3394,23 @@ body.bg-coolDark{
     function openModalDetail(branchName) {
       const b = activeData.branches.find(x => x.name === branchName);
       if(b) openModal(`${b.name} — Detailed Profile`, 'branchDetail', b);
+    }
+
+    // Opens the "All Branches" modal pre-filtered to the FOR AUDIT queue —
+    // used by the Auditor Next Assignment stack card.
+    function openAuditQueueModal() {
+      openModal('Auditor Next Assignments — For Audit Queue', 'all', null);
+      if (window.modalFilterState) {
+          window.modalFilterState.auditStatus = 'FOR AUDIT';
+          renderModalFilteredView();
+      }
+    }
+
+    // Jumps straight to the detailed profile of whichever branch was most
+    // recently audited — used by the Branch Last Audited stack card.
+    function openLastAuditedBranchDetail() {
+      const info = activeData.summary && activeData.summary.lastAuditedBranch;
+      if (info && info.name) openModalDetail(info.name);
     }
 
     // Fired from the "AUDIT FINDINGS" side-menu item. The whole menu row is
@@ -5189,49 +4998,43 @@ body.bg-coolDark{
       
       document.getElementById('stat-findings-2026').innerText = sum.findings2026 || 0;
       document.getElementById('stat-total-accounts').innerText = sum.totalAccounts || 0;
-      updateNextAuditCard();
+
+      // Auditor Next Assignment card
+      const queueCountEl = document.getElementById('stat-next-assignment-count');
+      const queueSubEl = document.getElementById('stat-next-assignment-sub');
+      const queueBranchEl = document.getElementById('stat-next-assignment-branch');
+      if (queueCountEl) queueCountEl.innerHTML = `${sum.forAuditCount || 0} <span class="text-sm font-medium text-slate-500">queued</span>`;
+      if (queueSubEl) {
+          const breakdown = sum.forAuditBreakdown || [];
+          queueSubEl.innerText = breakdown.length > 0
+              ? breakdown.map(a => `${a.count} ${a.name}`).join(' · ')
+              : 'No branches for audit';
+      }
+      if (queueBranchEl) {
+          const nextUp = sum.nextUpBranch;
+          queueBranchEl.innerText = nextUp
+              ? `Up next: ${nextUp.name} — ${nextUp.auditor}`
+              : 'Nothing queued right now';
+      }
+
+      // Branch Last Audited card
+      const lastNameEl = document.getElementById('stat-last-audited-name');
+      const lastSubEl = document.getElementById('stat-last-audited-sub');
+      if (lastNameEl && lastSubEl) {
+          const lastAudited = sum.lastAuditedBranch;
+          if (lastAudited) {
+              lastNameEl.innerText = lastAudited.name;
+              lastSubEl.innerText = `${lastAudited.auditor} · ${lastAudited.lastAuditDate || 'date unknown'} · ${lastAudited.findings2026} findings (FY26)`;
+          } else {
+              lastNameEl.innerText = '—';
+              lastSubEl.innerText = 'No completed audits on record';
+          }
+      }
 
       const labels = activeData.summary.trendLabels || ["MARCH", "APRIL", "LATEST"];
       if(document.getElementById('span-rankings-month')) document.getElementById('span-rankings-month').innerText = labels[2];
       if(document.getElementById('span-accounts-month')) document.getElementById('span-accounts-month').innerText = labels[2];
       if(document.getElementById('th-eff-month')) document.getElementById('th-eff-month').innerText = labels[2];
-    }
-
-    // Builds the "Auditor Next Target Plan" card: which branches are next
-    // in line for audit (auditStatus === 'FOR AUDIT') and who they're
-    // assigned to. Pulls straight from activeData.branches — the same
-    // parsed DASHBOARDDATA rows everything else on the dashboard uses —
-    // so it always mirrors the actual sheet with no separate data source.
-    function getNextAuditTargets() {
-      const branches = (typeof activeData !== 'undefined' && activeData.branches) ? activeData.branches : [];
-      return branches
-        .filter(function(b) { return (b.auditStatus || '').toUpperCase() === 'FOR AUDIT'; })
-        .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-    }
-
-    function updateNextAuditCard() {
-      const targets = getNextAuditTargets();
-      const countEl = document.getElementById('stat-next-audit-count');
-      const subEl = document.getElementById('stat-next-audit-sub');
-      const listEl = document.getElementById('next-audit-mini-list');
-      if (!countEl || !listEl) return;
-
-      countEl.innerHTML = targets.length + ' <span class="text-sm font-medium text-slate-500">queued</span>';
-
-      if (targets.length === 0) {
-        subEl.textContent = 'All caught up \u2014 nothing pending audit right now.';
-        listEl.innerHTML = '';
-        return;
-      }
-
-      subEl.textContent = 'Next up: ' + targets[0].name + ' \u00b7 ' + (targets[0].auditor || 'UNASSIGNED');
-
-      listEl.innerHTML = targets.slice(0, 3).map(function(b) {
-        return '<div onclick="event.stopPropagation(); openModalDetail(\'' + b.name.replace(/'/g, "\\'") + '\')" class="flex items-center justify-between gap-2 text-[11px] px-1.5 py-1 rounded-lg hover:bg-accentAmber/5 cursor-pointer active:scale-[0.97] transition-all">' +
-          '<span class="font-semibold text-slate-700 truncate">' + escapeHtml(b.name) + '</span>' +
-          '<span class="text-slate-400 shrink-0">' + escapeHtml(b.auditor || 'UNASSIGNED') + '</span>' +
-        '</div>';
-      }).join('') + (targets.length > 3 ? '<p class="text-[10px] text-accentAmber font-semibold text-center pt-0.5">+' + (targets.length - 3) + ' more \u2014 click to view all</p>' : '');
     }
 
     // Shared visual defaults so every chart on the dashboard reads as one
@@ -5835,7 +5638,6 @@ body.bg-coolDark{
 
             tempBranchesMap[branchName] = {
               name: branchName,
-              _sheetRow: i + 1, // 1-based row number in DASHBOARDDATA, used by Manage Branches to edit/delete the right row
               accountsMar: parseInt(row[2]) || 0,
               accountsApr: parseInt(row[3]) || 0,
               accountsMay: parseInt(row[4]) || 0,
@@ -5949,6 +5751,7 @@ body.bg-coolDark{
                       const info = branchLastAudit[branchName];
                       tempBranchesMap[branchName].auditor = info.auditor;
                       tempBranchesMap[branchName].lastAuditDate = info.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                      tempBranchesMap[branchName].lastAuditDateRaw = info.date.getTime();
                   }
               });
           }
@@ -6202,230 +6005,6 @@ body.bg-coolDark{
     // with a long random value, and set the SAME value in your Apps
     // Script's Script Properties as API_SHARED_SECRET.
     const appsScriptSecret = "OjJVzkvsH8v2LoJWAHNYU4jU_CUNQ8dTexrgyURVKCA";
-
-    /* ================= MANAGE BRANCHES (write-back to DASHBOARDDATA) =================
-       Posts straight to the same Apps Script deployment used for reading
-       (defaultAppsScriptUrl), hitting its new doPost() endpoint. Sent as
-       text/plain (not application/json) specifically so the browser treats
-       it as a "simple request" and skips the CORS preflight (OPTIONS) that
-       Apps Script web apps don't answer — doPost() still JSON.parses the
-       body normally on the server side. */
-    async function postToAppsScript(action, sheetKey, extra) {
-      const idToken = window.getCurrentIdToken ? await window.getCurrentIdToken() : null;
-      if (!idToken) throw new Error('You need to be signed in to save changes.');
-      const body = Object.assign({
-        secret: appsScriptSecret,
-        idToken: idToken,
-        action: action,
-        sheetKey: sheetKey
-      }, extra || {});
-      const res = await fetch(defaultAppsScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) throw new Error('Network error while saving.');
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      return json;
-    }
-
-    // Exact column layout of the DASHBOARDDATA sheet, in order (0-based,
-    // column A first), reverse-engineered from this file's own
-    // processExcelData() parser above. Any column not listed here (unused/
-    // unknown columns in the original sheet, e.g. A, and a couple of blank
-    // spacer columns) is written as "" so existing spacing/formulas in the
-    // sheet are left undisturbed.
-    const BRANCH_ROW_LENGTH = 40; // columns A .. AN
-    function buildBranchRowValues(f) {
-      const row = new Array(BRANCH_ROW_LENGTH).fill("");
-      row[1] = f.name;
-      row[2] = f.accountsMar; row[3] = f.accountsApr; row[4] = f.accountsMay;
-      row[5] = f.noOfRepoMar; row[6] = f.noOfRepoApr; row[7] = f.noOfRepoLatest;
-      row[8] = f.repoRateMar; row[9] = f.repoRateApr; row[10] = f.repoRateLatest;
-      row[11] = f.effMar; row[12] = f.effApr; row[13] = f.effLatest;
-      row[14] = f.collection;
-      row[15] = f.expectedIns; row[16] = f.expectedCod;
-      row[17] = f.salesMar_ins; row[18] = f.salesMar_cod; row[19] = f.salesMar_ca;
-      row[20] = f.salesApr_ins; row[21] = f.salesApr_cod; row[22] = f.salesApr_ca;
-      row[23] = f.salesMay_ins; row[24] = f.salesMay_cod; row[25] = f.salesMay_ca;
-      row[27] = f.sales;
-      row[28] = f.serviceTarget; row[29] = f.serviceMar; row[30] = f.serviceApr; row[31] = f.serviceMay;
-      row[32] = f.service;
-      row[33] = f.findings2024; row[34] = f.findings2025; row[35] = f.findings2026;
-      row[36] = f.auditStatus;
-      row[39] = f.auditor;
-      return row;
-    }
-
-    let branchFormMode = 'add'; // 'add' | 'edit'
-    let branchFormTargetRow = null; // sheet row number when editing
-
-    function openManageBranchesModal() {
-      renderManageBranchesTable();
-      document.getElementById('manageBranchesModal').classList.remove('hidden');
-    }
-    function closeManageBranchesModal() {
-      document.getElementById('manageBranchesModal').classList.add('hidden');
-    }
-
-    function renderManageBranchesTable() {
-      const branches = (typeof activeData !== 'undefined' && activeData.branches) ? activeData.branches : [];
-      const tbody = document.getElementById('manageBranchesTbody');
-      const empty = document.getElementById('manageBranchesEmpty');
-      tbody.innerHTML = '';
-      empty.classList.toggle('hidden', branches.length > 0);
-      branches.forEach(function(b) {
-        const tr = document.createElement('tr');
-        tr.className = 'border-b border-coolBorder/60 hover:bg-slate-50';
-        tr.innerHTML =
-          '<td class="py-2 pr-2 font-semibold text-slate-700">' + escapeHtml(b.name) + '</td>' +
-          '<td class="py-2 pr-2 text-slate-500">' + escapeHtml(b.auditor || 'UNASSIGNED') + '</td>' +
-          '<td class="py-2 pr-2 text-slate-500">' + escapeHtml(b.auditStatus || 'PENDING') + '</td>' +
-          '<td class="py-2 pr-2 text-slate-500">' + (b.repoRateLatest || 0) + '%</td>' +
-          '<td class="py-2 pr-2 text-right whitespace-nowrap">' +
-            '<button class="text-accentBlue hover:underline text-xs font-semibold mr-3" onclick="openBranchForm(' + JSON.stringify(JSON.stringify(b)).replace(/"/g, '&quot;') + ')">Edit</button>' +
-            '<button class="text-accentRose hover:underline text-xs font-semibold" onclick="deleteBranchRow(' + JSON.stringify(JSON.stringify(b)).replace(/"/g, '&quot;') + ')">Delete</button>' +
-          '</td>';
-        tbody.appendChild(tr);
-      });
-    }
-
-    function escapeHtml(str) {
-      return String(str == null ? '' : str).replace(/[&<>"']/g, function(c) {
-        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
-      });
-    }
-
-    function openBranchForm(branchJsonAttr) {
-      const branch = branchJsonAttr ? JSON.parse(branchJsonAttr) : null;
-      branchFormMode = branch ? 'edit' : 'add';
-      branchFormTargetRow = branch ? branch._sheetRow : null;
-      document.getElementById('branchFormTitle').textContent = branch ? ('Edit ' + branch.name) : 'New Branch';
-      document.getElementById('branchFormError').classList.add('hidden');
-
-      const setVal = function(id, val) { document.getElementById(id).value = (val === undefined || val === null) ? '' : val; };
-      setVal('bf_name', branch ? branch.name : '');
-      setVal('bf_accountsMar', branch ? branch.accountsMar : 0);
-      setVal('bf_accountsApr', branch ? branch.accountsApr : 0);
-      setVal('bf_accountsMay', branch ? branch.accountsMay : 0);
-      setVal('bf_noOfRepoMar', branch ? branch.noOfRepoMar : 0);
-      setVal('bf_noOfRepoApr', branch ? branch.noOfRepoApr : 0);
-      setVal('bf_noOfRepoLatest', branch ? branch.noOfRepoLatest : 0);
-      setVal('bf_repoRateMar', branch ? branch.repoRateMar : 0);
-      setVal('bf_repoRateApr', branch ? branch.repoRateApr : 0);
-      setVal('bf_repoRateLatest', branch ? branch.repoRateLatest : 0);
-      setVal('bf_effMar', branch ? branch.effMar : 0);
-      setVal('bf_effApr', branch ? branch.effApr : 0);
-      setVal('bf_effLatest', branch ? branch.effLatest : 0);
-      document.getElementById('bf_collection').value = branch ? branch.collection : 'Stable';
-      document.getElementById('bf_sales').value = branch ? branch.sales : 'Stable';
-      document.getElementById('bf_service').value = branch ? branch.service : 'Target';
-      document.getElementById('bf_auditStatus').value = branch ? branch.auditStatus : 'PENDING';
-      setVal('bf_auditor', branch ? branch.auditor : 'UNASSIGNED');
-      setVal('bf_findings2024', branch ? branch.findings2024 : 0);
-      setVal('bf_findings2025', branch ? branch.findings2025 : 0);
-      setVal('bf_findings2026', branch ? branch.findings2026 : 0);
-      setVal('bf_serviceTarget', branch ? branch.serviceTarget : 0);
-      setVal('bf_serviceMar', branch ? branch.serviceMar : 0);
-      setVal('bf_serviceApr', branch ? branch.serviceApr : 0);
-      setVal('bf_serviceMay', branch ? branch.serviceMay : 0);
-      setVal('bf_expectedIns', branch ? branch.expectedIns : 0);
-      setVal('bf_expectedCod', branch ? branch.expectedCod : 0);
-      setVal('bf_salesMar_ins', branch && branch.salesMar ? branch.salesMar.ins : 0);
-      setVal('bf_salesMar_cod', branch && branch.salesMar ? branch.salesMar.cod : 0);
-      setVal('bf_salesMar_ca', branch && branch.salesMar ? branch.salesMar.ca : 0);
-      setVal('bf_salesApr_ins', branch && branch.salesApr ? branch.salesApr.ins : 0);
-      setVal('bf_salesApr_cod', branch && branch.salesApr ? branch.salesApr.cod : 0);
-      setVal('bf_salesApr_ca', branch && branch.salesApr ? branch.salesApr.ca : 0);
-      setVal('bf_salesMay_ins', branch && branch.salesMay ? branch.salesMay.ins : 0);
-      setVal('bf_salesMay_cod', branch && branch.salesMay ? branch.salesMay.cod : 0);
-      setVal('bf_salesMay_ca', branch && branch.salesMay ? branch.salesMay.ca : 0);
-
-      document.getElementById('branchFormModal').classList.remove('hidden');
-    }
-    function closeBranchForm() {
-      document.getElementById('branchFormModal').classList.add('hidden');
-    }
-
-    async function submitBranchForm() {
-      const errEl = document.getElementById('branchFormError');
-      errEl.classList.add('hidden');
-      const name = document.getElementById('bf_name').value.trim();
-      if (!name) {
-        errEl.textContent = 'Branch name is required.';
-        errEl.classList.remove('hidden');
-        return;
-      }
-      const num = function(id) { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; };
-      const fields = {
-        name: name,
-        accountsMar: num('bf_accountsMar'), accountsApr: num('bf_accountsApr'), accountsMay: num('bf_accountsMay'),
-        noOfRepoMar: num('bf_noOfRepoMar'), noOfRepoApr: num('bf_noOfRepoApr'), noOfRepoLatest: num('bf_noOfRepoLatest'),
-        repoRateMar: num('bf_repoRateMar'), repoRateApr: num('bf_repoRateApr'), repoRateLatest: num('bf_repoRateLatest'),
-        effMar: num('bf_effMar'), effApr: num('bf_effApr'), effLatest: num('bf_effLatest'),
-        collection: document.getElementById('bf_collection').value,
-        sales: document.getElementById('bf_sales').value,
-        service: document.getElementById('bf_service').value,
-        auditStatus: document.getElementById('bf_auditStatus').value,
-        auditor: document.getElementById('bf_auditor').value.trim() || 'UNASSIGNED',
-        findings2024: num('bf_findings2024'), findings2025: num('bf_findings2025'), findings2026: num('bf_findings2026'),
-        serviceTarget: num('bf_serviceTarget'), serviceMar: num('bf_serviceMar'), serviceApr: num('bf_serviceApr'), serviceMay: num('bf_serviceMay'),
-        expectedIns: num('bf_expectedIns'), expectedCod: num('bf_expectedCod'),
-        salesMar_ins: num('bf_salesMar_ins'), salesMar_cod: num('bf_salesMar_cod'), salesMar_ca: num('bf_salesMar_ca'),
-        salesApr_ins: num('bf_salesApr_ins'), salesApr_cod: num('bf_salesApr_cod'), salesApr_ca: num('bf_salesApr_ca'),
-        salesMay_ins: num('bf_salesMay_ins'), salesMay_cod: num('bf_salesMay_cod'), salesMay_ca: num('bf_salesMay_ca')
-      };
-      const values = buildBranchRowValues(fields);
-
-      const btn = document.getElementById('branchFormSubmitBtn');
-      const label = document.getElementById('branchFormSubmitLabel');
-      btn.disabled = true;
-      const prevLabel = label.textContent;
-      label.textContent = 'Saving\u2026';
-      try {
-        if (branchFormMode === 'edit') {
-          await postToAppsScript('updateRow', 'dashboardData', { rowIndex: branchFormTargetRow, values: values });
-        } else {
-          await postToAppsScript('addRow', 'dashboardData', { values: values });
-        }
-        closeBranchForm();
-        if (typeof showToast === 'function') showToast(branchFormMode === 'edit' ? 'Branch updated in the sheet.' : 'New branch added to the sheet.');
-        await fetchSheet(true);
-        renderManageBranchesTable();
-      } catch (err) {
-        console.error('Save branch failed:', err);
-        errEl.textContent = err && err.message ? err.message : 'Save failed. Please try again.';
-        errEl.classList.remove('hidden');
-      } finally {
-        btn.disabled = false;
-        label.textContent = prevLabel;
-      }
-    }
-
-    async function deleteBranchRow(branchJsonAttr) {
-      const branch = JSON.parse(branchJsonAttr);
-      if (!branch._sheetRow) {
-        if (typeof showToast === 'function') showToast("Can't locate this branch's sheet row \u2014 try refreshing first.");
-        return;
-      }
-      if (!confirm('Delete "' + branch.name + '"? This removes its row from the actual Google Sheet and cannot be undone.')) return;
-      const statusEl = document.getElementById('manageBranchesStatus');
-      statusEl.textContent = 'Deleting ' + branch.name + '\u2026';
-      statusEl.classList.remove('hidden');
-      try {
-        await postToAppsScript('deleteRow', 'dashboardData', { rowIndex: branch._sheetRow });
-        if (typeof showToast === 'function') showToast('Branch deleted from the sheet.');
-        await fetchSheet(true);
-        renderManageBranchesTable();
-      } catch (err) {
-        console.error('Delete branch failed:', err);
-        if (typeof showToast === 'function') showToast(err && err.message ? err.message : 'Delete failed. Please try again.');
-      } finally {
-        statusEl.classList.add('hidden');
-      }
-    }
-    /* ================= END MANAGE BRANCHES ================= */
 
     /* ================= QUICK LINKS (password-gated) =================
        These use a SEPARATE, small Apps Script web app (not the one above)
@@ -6804,7 +6383,8 @@ body.bg-coolDark{
             serviceTarget: 0, serviceDeclining: 0,
             findings2024: 0, findings2025: 0, findings2026: 0,
             totalAccounts: 0, emergencyAuditor: "", recentEmergencyD: "", recentEmergencyE: "", recentEmergencyF: "",
-            trendLabels: ["MARCH", "APRIL", "MAY"]
+            trendLabels: ["MARCH", "APRIL", "MAY"],
+            forAuditBreakdown: [], nextUpBranch: null, lastAuditedBranch: null
         }, 
         branches: [], lowestEfficiency: [], highestRepo: [], highestNoRepo: [], topFindings26: [], topDecliningCollection: [], topDecliningSales: [], topDecliningService: [], auditors: [], dataAudit: {}, emergencyHistory: [] 
       };
