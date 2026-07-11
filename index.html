@@ -2903,37 +2903,27 @@ body.bg-coolDark{
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-      <div onclick="openModal('Audit Findings FY2024 Breakdown', 'findings', 'findings2024')" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-slate-500 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:shadow-lg transition-all shadow-md group">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT FINDINGS FY2024</span>
-          <span class="p-1.5 bg-slate-200 text-slate-600 rounded-lg group-hover:bg-slate-500 group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar w-4 h-4"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path></svg></span>
+          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT FINDINGS (FY24&ndash;FY26)</span>
+          <span class="p-1.5 bg-accentRose/10 text-accentRose rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span>
         </div>
-        <div class="mt-4">
-          <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900" id="stat-findings-2024">197</h3>
-          <p class="text-xs text-slate-500 mt-1">Total recorded incidents</p>
-        </div>
-      </div>
-
-      <div onclick="openModal('Audit Findings FY2025 Breakdown', 'findings', 'findings2025')" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentRose/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT FINDINGS FY2025</span>
-          <span class="p-1.5 bg-accentRose/10 text-accentRose rounded-lg group-hover:bg-accentRose group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span>
-        </div>
-        <div class="mt-4">
-          <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-accentRose" id="stat-findings-2025">280</h3>
-          <p class="text-xs text-accentRose mt-1" id="stat-findings-2025-sub">+42% vs 2024</p>
-        </div>
-      </div>
-
-      <div onclick="openModal('Audit Findings FY2026 Breakdown', 'findings', 'findings2026')" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentCyan/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT FINDINGS FY2026</span>
-          <span class="p-1.5 bg-accentCyan/10 text-accentCyan rounded-lg group-hover:bg-accentCyan group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2 w-4 h-4"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg></span>
-        </div>
-        <div class="mt-4">
-          <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-accentCyan" id="stat-findings-2026">202</h3>
-          <p class="text-xs text-accentEmerald mt-1">YTD (on track)</p>
+        <div class="mt-4 grid grid-cols-3 divide-x divide-coolBorder">
+          <div onclick="event.stopPropagation(); openModal('Audit Findings FY2024 Breakdown', 'findings', 'findings2024')" class="text-center cursor-pointer rounded-lg py-1 hover:bg-slate-50 active:scale-[0.97] transition-all">
+            <p class="text-[10px] font-bold text-slate-400 tracking-wide">FY2024</p>
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 mt-1" id="stat-findings-2024">197</h3>
+          </div>
+          <div onclick="event.stopPropagation(); openModal('Audit Findings FY2025 Breakdown', 'findings', 'findings2025')" class="text-center cursor-pointer rounded-lg py-1 hover:bg-accentRose/5 active:scale-[0.97] transition-all">
+            <p class="text-[10px] font-bold text-slate-400 tracking-wide">FY2025</p>
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentRose mt-1" id="stat-findings-2025">280</h3>
+            <p class="text-[10px] text-accentRose mt-0.5" id="stat-findings-2025-sub">+42% vs 2024</p>
+          </div>
+          <div onclick="event.stopPropagation(); openModal('Audit Findings FY2026 Breakdown', 'findings', 'findings2026')" class="text-center cursor-pointer rounded-lg py-1 hover:bg-accentCyan/5 active:scale-[0.97] transition-all">
+            <p class="text-[10px] font-bold text-slate-400 tracking-wide">FY2026</p>
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentCyan mt-1" id="stat-findings-2026">202</h3>
+            <p class="text-[10px] text-accentEmerald mt-0.5">YTD (on track)</p>
+          </div>
         </div>
       </div>
 
@@ -2947,7 +2937,20 @@ body.bg-coolDark{
           <p class="text-xs text-slate-500 mt-1">Active collection portfolio</p>
         </div>
       </div>
+
+      <div onclick="openModal('Auditor Next Target Plan', 'nextAuditPlan', null)" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentAmber/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDITOR NEXT TARGET PLAN</span>
+          <span class="p-1.5 bg-accentAmber/10 text-accentAmber rounded-lg group-hover:bg-accentAmber group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-clock w-4 h-4"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4.5"></path><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h5"></path><path d="M17.5 17.5 16 16.25V14"></path><path d="M22 16a6 6 0 1 1-12 0 6 6 0 0 1 12 0"></path></svg></span>
+        </div>
+        <div class="mt-4">
+          <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-accentAmber" id="stat-next-audit-count">0 <span class="text-sm font-medium text-slate-500">queued</span></h3>
+          <p class="text-xs text-slate-500 mt-1" id="stat-next-audit-sub">All caught up</p>
+        </div>
+        <div class="mt-3 pt-3 border-t border-coolBorder space-y-1.5" id="next-audit-mini-list"></div>
+      </div>
     </div>
+
 
     <div id="section-charts" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
@@ -3493,6 +3496,51 @@ body.bg-coolDark{
             <div class="flex flex-col gap-3 max-h-80 overflow-y-auto custom-scrollbar pr-2">
                 ${historyHtml}
             </div>
+          </div>`;
+      } else if (type === 'nextAuditPlan') {
+          const targets = getNextAuditTargets();
+
+          // Group by assigned auditor so each auditor's next targets are
+          // easy to scan together, with an "UNASSIGNED" bucket last.
+          const byAuditor = {};
+          targets.forEach(function(b) {
+              const key = b.auditor || 'UNASSIGNED';
+              if (!byAuditor[key]) byAuditor[key] = [];
+              byAuditor[key].push(b);
+          });
+          const auditorNames = Object.keys(byAuditor).sort(function(a, b) {
+              if (a === 'UNASSIGNED') return 1;
+              if (b === 'UNASSIGNED') return -1;
+              return a.localeCompare(b);
+          });
+
+          let groupsHtml = '';
+          if (auditorNames.length > 0) {
+              groupsHtml = auditorNames.map(function(auditorName) {
+                  const rows = byAuditor[auditorName].map(function(b, idx) {
+                      return `<div class="flex items-center gap-2 p-2.5 bg-gray-50 border border-coolBorder rounded-lg hover:border-accentAmber/30 cursor-pointer active:scale-95 transition-all" onclick="openModalDetail('${b.name.replace(/'/g, "\\'")}')">
+                          <div class="w-5 h-5 rounded bg-accentAmber/10 text-accentAmber flex items-center justify-center font-bold flex-shrink-0 text-[10px]">${idx + 1}</div>
+                          <span class="text-xs font-semibold text-slate-700 truncate">${b.name}</span>
+                      </div>`;
+                  }).join('');
+                  return `<div class="mb-4">
+                      <h4 class="text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider flex items-center gap-2">
+                          <span class="w-1.5 h-1.5 rounded-full bg-accentAmber"></span>${auditorName} <span class="text-slate-300 normal-case font-medium">&middot; ${byAuditor[auditorName].length} branch${byAuditor[auditorName].length === 1 ? '' : 'es'}</span>
+                      </h4>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${rows}</div>
+                  </div>`;
+              }).join('');
+          } else {
+              groupsHtml = `<div class="text-sm text-slate-500 italic p-4 text-center bg-gray-50 rounded-xl border border-coolBorder">Nothing queued \u2014 every branch is either done or not yet scheduled.</div>`;
+          }
+
+          modalBody.innerHTML = `
+          <div class="p-5 bg-accentAmber/10 border border-accentAmber/20 text-accentAmber rounded-xl mb-4">
+            <h3 class="font-bold text-lg mb-2">Auditor Next Target Plan</h3>
+            <p class="text-sm text-slate-700"><strong>${targets.length}</strong> branch${targets.length === 1 ? ' is' : 'es are'} marked <strong>FOR AUDIT</strong> and next in line, grouped by assigned auditor.</p>
+          </div>
+          <div class="p-5 bg-white border border-coolBorder rounded-xl shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
+            ${groupsHtml}
           </div>`;
       } else {
           if (type === 'findings') {
@@ -5141,11 +5189,49 @@ body.bg-coolDark{
       
       document.getElementById('stat-findings-2026').innerText = sum.findings2026 || 0;
       document.getElementById('stat-total-accounts').innerText = sum.totalAccounts || 0;
+      updateNextAuditCard();
 
       const labels = activeData.summary.trendLabels || ["MARCH", "APRIL", "LATEST"];
       if(document.getElementById('span-rankings-month')) document.getElementById('span-rankings-month').innerText = labels[2];
       if(document.getElementById('span-accounts-month')) document.getElementById('span-accounts-month').innerText = labels[2];
       if(document.getElementById('th-eff-month')) document.getElementById('th-eff-month').innerText = labels[2];
+    }
+
+    // Builds the "Auditor Next Target Plan" card: which branches are next
+    // in line for audit (auditStatus === 'FOR AUDIT') and who they're
+    // assigned to. Pulls straight from activeData.branches — the same
+    // parsed DASHBOARDDATA rows everything else on the dashboard uses —
+    // so it always mirrors the actual sheet with no separate data source.
+    function getNextAuditTargets() {
+      const branches = (typeof activeData !== 'undefined' && activeData.branches) ? activeData.branches : [];
+      return branches
+        .filter(function(b) { return (b.auditStatus || '').toUpperCase() === 'FOR AUDIT'; })
+        .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+    }
+
+    function updateNextAuditCard() {
+      const targets = getNextAuditTargets();
+      const countEl = document.getElementById('stat-next-audit-count');
+      const subEl = document.getElementById('stat-next-audit-sub');
+      const listEl = document.getElementById('next-audit-mini-list');
+      if (!countEl || !listEl) return;
+
+      countEl.innerHTML = targets.length + ' <span class="text-sm font-medium text-slate-500">queued</span>';
+
+      if (targets.length === 0) {
+        subEl.textContent = 'All caught up \u2014 nothing pending audit right now.';
+        listEl.innerHTML = '';
+        return;
+      }
+
+      subEl.textContent = 'Next up: ' + targets[0].name + ' \u00b7 ' + (targets[0].auditor || 'UNASSIGNED');
+
+      listEl.innerHTML = targets.slice(0, 3).map(function(b) {
+        return '<div onclick="event.stopPropagation(); openModalDetail(\'' + b.name.replace(/'/g, "\\'") + '\')" class="flex items-center justify-between gap-2 text-[11px] px-1.5 py-1 rounded-lg hover:bg-accentAmber/5 cursor-pointer active:scale-[0.97] transition-all">' +
+          '<span class="font-semibold text-slate-700 truncate">' + escapeHtml(b.name) + '</span>' +
+          '<span class="text-slate-400 shrink-0">' + escapeHtml(b.auditor || 'UNASSIGNED') + '</span>' +
+        '</div>';
+      }).join('') + (targets.length > 3 ? '<p class="text-[10px] text-accentAmber font-semibold text-center pt-0.5">+' + (targets.length - 3) + ' more \u2014 click to view all</p>' : '');
     }
 
     // Shared visual defaults so every chart on the dashboard reads as one
