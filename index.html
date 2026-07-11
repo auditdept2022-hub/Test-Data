@@ -2792,8 +2792,6 @@ body.bg-coolDark{
           <span class="p-1.5 bg-accentEmerald/10 text-accentEmerald rounded-lg group-hover:bg-accentEmerald group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-badge-check w-4 h-4"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
         </div>
         <div class="mt-4">
-          <h3 class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 truncate" id="stat-last-audited-name">—</h3>
-          <p class="text-xs text-slate-500 mt-1 mb-2" id="stat-last-audited-sub">No completed audits on record</p>
           <div class="flex flex-col gap-1" id="stat-recent-audited-list"></div>
         </div>
       </div>
@@ -3406,9 +3404,10 @@ body.bg-coolDark{
     }
 
     // Opens the small editable form for a single branch's next-assignment
-    // fields (auditor, expected date, status, remarks). Saving this writes
-    // straight into AUDIT DATA (FINAL) columns AO:AV via the Apps Script
-    // backend, so nobody has to type it into the Sheet by hand.
+    // fields (expected date, rotation rounds). Saving this writes
+    // expectedDate straight into AUDIT DATA (FINAL) column AM, and the
+    // rotation rounds into AUDIT ROTATION (FINAL) columns AO:AV, via the
+    // Apps Script backend, so nobody has to type it into the Sheet by hand.
     function openEditAssignmentModal(branchName) {
       openModal('Edit Assignment — ' + branchName, 'editAssignment', branchName);
     }
@@ -3416,7 +3415,7 @@ body.bg-coolDark{
     // Renders the Edit Assignment form. branchName selects which branch is
     // being edited; the Branch dropdown at the top lets you switch to any
     // other branch without leaving the popup. Auditor + Date pairs for
-    // rotation rounds 1-4 map straight onto AUDIT DATA (FINAL) columns
+    // rotation rounds 1-4 map straight onto AUDIT ROTATION (FINAL) columns
     // AO/AP (1st), AQ/AR (2nd), AS/AT (3rd), AU/AV (4th) — so it's always
     // clear which round a given name/date belongs to. Status is NOT set
     // here: it's driven by the sheet's own formula off the Expected Audit
@@ -3493,10 +3492,6 @@ body.bg-coolDark{
           ${rotationRowHtml(3, '3rd Rotation')}
           ${rotationRowHtml(4, '4th Rotation')}
 
-          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Remarks</label>
-          <textarea id="editAssign-remarks" rows="3" placeholder="Optional notes"
-                    class="w-full mb-4 px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan"></textarea>
-
           <div id="editAssign-error" class="hidden text-xs text-accentRose font-semibold mb-3"></div>
 
           <div class="flex justify-end gap-2">
@@ -3517,7 +3512,6 @@ body.bg-coolDark{
       const val = id => (document.getElementById(id) || {}).value || '';
       const fields = {
           expectedDate: val('editAssign-expectedDate'),
-          remarks: val('editAssign-remarks'),
           rotations: [1, 2, 3, 4].map(n => ({
               round: n,
               auditor: val(`editAssign-auditor${n}`),
@@ -3551,13 +3545,13 @@ body.bg-coolDark{
 
     // Posts the assignment fields to the Apps Script backend, which writes
     // them into AUDIT DATA (FINAL) / AUDIT ROTATION (FINAL) for the matching
-    // branch row: expectedDate -> column AM (drives the status formula),
-    // and each rotation round's auditor/date -> AO/AP, AQ/AR, AS/AT, AU/AV
-    // respectively. Sent as a plain string body (no explicit Content-Type)
-    // so the browser treats it as a "simple request" and skips a CORS
-    // preflight — Apps Script web apps generally don't handle OPTIONS
-    // preflights, and a preflighted POST would otherwise never reach
-    // doPost() at all.
+    // branch row: expectedDate -> AUDIT DATA (FINAL) column AM (drives the
+    // status formula), and each rotation round's auditor/date -> AUDIT
+    // ROTATION (FINAL) columns AO/AP, AQ/AR, AS/AT, AU/AV respectively.
+    // Sent as a plain string body (no explicit Content-Type) so the browser
+    // treats it as a "simple request" and skips a CORS preflight — Apps
+    // Script web apps generally don't handle OPTIONS preflights, and a
+    // preflighted POST would otherwise never reach doPost() at all.
     async function saveAuditorAssignmentRemote(branchName, fields) {
       const idToken = window.getCurrentIdToken ? await window.getCurrentIdToken() : null;
       if (!idToken) throw new Error('Not signed in — please sign in again.');
@@ -3567,7 +3561,6 @@ body.bg-coolDark{
           idToken: idToken,
           branchName: branchName,
           expectedDate: fields.expectedDate || '',
-          remarks: fields.remarks || '',
           // Flat auditor1..4 / date1..4 fields (in addition to the
           // "rotations" array) so a doPost() written to expect either shape
           // can pick this up without extra parsing.
@@ -3623,15 +3616,25 @@ body.bg-coolDark{
     // audits each branch has had (1st, 2nd, 3rd...) and how many days apart
     // they were — used by the "Branch Audit Interval" stack card.
     function openBranchAuditScheduleModal() {
-      window.auditScheduleFilterValue = 'ALL';
+      window.auditScheduleFilterRange = { start: '', end: '' };
       openModal('Branch Audit Interval — Full Schedule', 'auditSchedule', null);
     }
 
-    // Filter value used by the Branch Audit Interval full-schedule modal:
-    // 'ALL' | '1' | '2' | '3' | 'OLDER' | 'NEVER' — where the numbers mean
-    // "last audited within N month(s) ago".
-    function setAuditScheduleFilter(value) {
-      window.auditScheduleFilterValue = value;
+    // Manual date-range filter for the Branch Audit Interval full-schedule
+    // modal (e.g. "July 1" to "July 30") — replaces the old fixed "1/2/3
+    // months ago" buckets with an exact, user-chosen range. A branch
+    // matches if ANY of its recorded audit rounds falls within the
+    // selected range (inclusive). Leaving Start or End blank leaves that
+    // side unbounded; leaving both blank shows every branch.
+    function setAuditScheduleFilterRange(field, value) {
+      if (!window.auditScheduleFilterRange) window.auditScheduleFilterRange = { start: '', end: '' };
+      window.auditScheduleFilterRange[field] = value;
+      const modalBody = document.getElementById('modalBody');
+      if (modalBody) renderAuditScheduleModal(modalBody);
+    }
+
+    function clearAuditScheduleFilterRange() {
+      window.auditScheduleFilterRange = { start: '', end: '' };
       const modalBody = document.getElementById('modalBody');
       if (modalBody) renderAuditScheduleModal(modalBody);
     }
@@ -3650,41 +3653,37 @@ body.bg-coolDark{
           return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
       };
 
-      // Months elapsed since a branch's most recent dated round (null if the
-      // branch has no dated round at all — treated as "never audited").
-      const now = Date.now();
-      const monthsSinceLastAudit = (branchName) => {
-          const rounds = (schedule[branchName].rounds || []).filter(r => r.dateRaw);
-          if (rounds.length === 0) return null;
-          const mostRecent = rounds.reduce((latest, r) => (r.dateRaw > latest.dateRaw ? r : latest), rounds[0]);
-          return (now - mostRecent.dateRaw) / (1000 * 60 * 60 * 24 * 30.44);
-      };
+      // Manual date range (inclusive). A branch matches if any of its
+      // recorded rounds' dates falls inside [start, end]; an unset side is
+      // unbounded, and an unset range shows every branch.
+      const range = window.auditScheduleFilterRange || { start: '', end: '' };
+      const startMs = range.start ? new Date(range.start + 'T00:00:00').getTime() : null;
+      const endMs = range.end ? new Date(range.end + 'T23:59:59').getTime() : null;
 
-      const filterValue = window.auditScheduleFilterValue || 'ALL';
       const branchNames = allBranchNames.filter(branchName => {
-          if (filterValue === 'ALL') return true;
-          const months = monthsSinceLastAudit(branchName);
-          if (filterValue === 'NEVER') return months === null;
-          if (months === null) return false;
-          if (filterValue === '1') return months <= 1;
-          if (filterValue === '2') return months > 1 && months <= 2;
-          if (filterValue === '3') return months > 2 && months <= 3;
-          if (filterValue === 'OLDER') return months > 3;
-          return true;
+          if (startMs === null && endMs === null) return true;
+          const rounds = (schedule[branchName].rounds || []).filter(r => r.dateRaw);
+          return rounds.some(r => {
+              if (startMs !== null && r.dateRaw < startMs) return false;
+              if (endMs !== null && r.dateRaw > endMs) return false;
+              return true;
+          });
       });
 
       const filterBarHtml = `
-          <div class="flex flex-wrap items-center gap-2 mb-4">
-              <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Last audited:</span>
-              <select onchange="setAuditScheduleFilter(this.value)" class="px-3 py-1.5 bg-gray-50 border border-coolBorder rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-accentCyan">
-                <option value="ALL" ${filterValue === 'ALL' ? 'selected' : ''}>All branches</option>
-                <option value="1" ${filterValue === '1' ? 'selected' : ''}>Within the last month</option>
-                <option value="2" ${filterValue === '2' ? 'selected' : ''}>1–2 months ago</option>
-                <option value="3" ${filterValue === '3' ? 'selected' : ''}>2–3 months ago</option>
-                <option value="OLDER" ${filterValue === 'OLDER' ? 'selected' : ''}>More than 3 months ago</option>
-                <option value="NEVER" ${filterValue === 'NEVER' ? 'selected' : ''}>Never audited</option>
-              </select>
-              <span class="text-[11px] text-slate-400">${branchNames.length} of ${allBranchNames.length} branches</span>
+          <div class="flex flex-wrap items-end gap-2 mb-4">
+              <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</label>
+                  <input type="date" value="${range.start || ''}" onchange="setAuditScheduleFilterRange('start', this.value)"
+                         class="px-3 py-1.5 bg-gray-50 border border-coolBorder rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-accentCyan">
+              </div>
+              <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To</label>
+                  <input type="date" value="${range.end || ''}" onchange="setAuditScheduleFilterRange('end', this.value)"
+                         class="px-3 py-1.5 bg-gray-50 border border-coolBorder rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-accentCyan">
+              </div>
+              ${(range.start || range.end) ? `<button onclick="clearAuditScheduleFilterRange()" class="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-coolBorder rounded-lg text-xs font-semibold text-slate-600 transition-colors">Clear</button>` : ''}
+              <span class="text-[11px] text-slate-400 mb-1.5">${branchNames.length} of ${allBranchNames.length} branches</span>
           </div>`;
 
       if (branchNames.length === 0) {
@@ -4982,6 +4981,12 @@ body.bg-coolDark{
       // status noise, and no Auditor column — just what's sourced from the
       // AUDIT FINDINGS sheet for that branch.
       const showAuditorCol = (type !== 'findings');
+      // Edit sits right next to Branch (not tucked away as the last column
+      // after Auditor/Collection/Sales/Service/Audit Status), so it's
+      // immediately visible per row instead of requiring a horizontal
+      // scroll — it was easy to mistake for being part of the modal's
+      // header Download button when it lived way off to the right.
+      const showEditCol = (type === 'all');
 
       let statusHeaders = '';
       if (showCollection) statusHeaders += `<th class="p-2 bg-gray-50 text-center whitespace-nowrap">Collection</th>`;
@@ -5036,7 +5041,7 @@ body.bg-coolDark{
           <th class="p-2 bg-gray-50 text-center cursor-pointer select-none hover:text-accentIndigo transition-colors" onclick="toggleServiceSort()">${trendLbls[2]} <span class="inline-block ml-0.5">${sortIcon}</span></th>`;
         showEffRepo = false;
       } else if (type === 'all') {
-        detailHeaders = `<th class="p-2 bg-gray-50 text-center whitespace-nowrap">Audit Status</th><th class="p-2 bg-gray-50 text-center whitespace-nowrap">Edit</th>`;
+        detailHeaders = `<th class="p-2 bg-gray-50 text-center whitespace-nowrap">Audit Status</th>`;
         showEffRepo = false;
       } else if (type === 'findings') {
         detailHeaders = `
@@ -5052,6 +5057,7 @@ body.bg-coolDark{
               <tr>
                 <th class="p-2 bg-gray-50 text-center w-8 whitespace-nowrap">#</th>
                 <th class="p-2 bg-gray-50 min-w-[140px] whitespace-nowrap">Branch</th>
+                ${showEditCol ? `<th class="p-2 bg-gray-50 text-center whitespace-nowrap">Edit</th>` : ''}
                 ${showAuditorCol ? `<th class="p-2 bg-gray-50 text-center whitespace-nowrap">Auditor</th>` : ''}
                 ${statusHeaders}
                 ${detailHeaders}
@@ -5075,6 +5081,16 @@ body.bg-coolDark{
           const auditorBadge = b.auditor === 'UNASSIGNED' 
               ? `<span class="text-xs text-slate-400 italic">Unassigned</span>` 
               : `<span class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 rounded-md border border-slate-200">${b.auditor}</span>`;
+
+          // Edit Assignment button — right next to the branch name so it's
+          // clearly a per-row list action. stopPropagation keeps the click
+          // from also opening the branch's detail profile.
+          const editCellHtml = showEditCol
+              ? `<td class="p-2 text-center">
+                  <button onclick="event.stopPropagation(); openEditAssignmentModal('${escapeFindingHTML(b.name)}')"
+                          class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-accentAmber text-white rounded-md hover:bg-accentAmber/90 transition-colors">Edit</button>
+                </td>`
+              : '';
 
           let rowBorder = "border-l-4 border-l-transparent";
           if(b.collection === 'Improving' || b.collection === 'Target') rowBorder = "border-l-4 border-l-accentEmerald";
@@ -5140,16 +5156,10 @@ body.bg-coolDark{
                 </div>
               </td>`;
           } else if (type === 'all') {
-            // Edit Assignment lives here now (on the AUDITOR NEXT ASSIGNMENT /
-            // All Branches list) instead of inside the Detailed Profile, so
-            // everything can be seen and edited from one place. stopPropagation
-            // keeps the click from also opening the branch's detail profile.
-            detailCells = `
-              <td class="p-2 text-center">${getAuditStatusBadge(b.auditStatus)}</td>
-              <td class="p-2 text-center">
-                <button onclick="event.stopPropagation(); openEditAssignmentModal('${escapeFindingHTML(b.name)}')"
-                        class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-accentAmber text-white rounded-md hover:bg-accentAmber/90 transition-colors">Edit</button>
-              </td>`;
+            // Audit Status still lives here; the Edit button itself now
+            // renders right after the Branch cell (see editCellHtml below)
+            // so it's visible immediately per row, not scrolled off to the end.
+            detailCells = `<td class="p-2 text-center">${getAuditStatusBadge(b.auditStatus)}</td>`;
           } else if (type === 'findings') {
             detailCells = `
               <td class="p-2 text-center">${getAuditStatusBadge(b.auditStatus)}</td>
@@ -5171,6 +5181,7 @@ body.bg-coolDark{
               <tr class="${index % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-accentCyan/10 cursor-pointer active:scale-[0.99] transition-colors ${rowBorder}" onclick="${rowOnClick}">
                   <td class="p-2 text-center text-xs font-bold text-slate-400">${index + 1}</td>
                   <td class="p-2 font-bold text-slate-800 text-sm break-words">${b.name}</td>
+                  ${editCellHtml}
                   ${showAuditorCol ? `<td class="p-2 text-center">${auditorBadge}</td>` : ''}
                   ${statusCells}
                   ${detailCells}
@@ -5342,21 +5353,10 @@ body.bg-coolDark{
               : 'Nothing queued right now';
       }
 
-      // Branch Last Audited card
-      const lastNameEl = document.getElementById('stat-last-audited-name');
-      const lastSubEl = document.getElementById('stat-last-audited-sub');
-      if (lastNameEl && lastSubEl) {
-          const lastAudited = sum.lastAuditedBranch;
-          if (lastAudited) {
-              lastNameEl.innerText = lastAudited.name;
-              lastSubEl.innerText = `${lastAudited.auditor} · ${lastAudited.lastAuditDate || 'date unknown'} · ${lastAudited.findings2026} findings (FY26)`;
-          } else {
-              lastNameEl.innerText = '—';
-              lastSubEl.innerText = 'No completed audits on record';
-          }
-      }
-      // Show at least 5 of the most recently audited branches (not just the
-      // single most recent one) so it's easy to see what's been covered lately.
+      // Branch Audit Interval card — shows up to 5 of the most recently
+      // audited branches. (Previously this also showed a large standalone
+      // "most recent branch" name/subtext above the list, but that just
+      // duplicated the list's own first row, so it was removed.)
       const recentListEl = document.getElementById('stat-recent-audited-list');
       if (recentListEl) {
           const recent = sum.recentlyAuditedBranches || [];
@@ -5366,7 +5366,7 @@ body.bg-coolDark{
                       <span class="font-semibold text-slate-700 truncate">${b.name}</span>
                       <span class="text-slate-400 whitespace-nowrap">${b.lastAuditDate || '—'}</span>
                   </div>`).join('')
-              : '';
+              : '<p class="text-xs text-slate-500">No completed audits on record</p>';
       }
 
       const labels = activeData.summary.trendLabels || ["MARCH", "APRIL", "LATEST"];
