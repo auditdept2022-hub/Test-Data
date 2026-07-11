@@ -3688,57 +3688,43 @@ body.bg-coolDark{
       }
     }
 
-    // Posts the assignment fields to the Apps Script backend, which writes
+    // Sends the assignment fields to the Apps Script backend, which writes
     // them into AUDIT DATA (FINAL) / AUDIT ROTATION (FINAL) for the matching
     // branch row: expectedDate -> AUDIT DATA (FINAL) column AM (drives the
     // status formula), and each rotation round's auditor/date -> AUDIT
     // ROTATION (FINAL) columns AO/AP, AQ/AR, AS/AT, AU/AV respectively.
-    // Sent as a plain string body (no explicit Content-Type) so the browser
-    // treats it as a "simple request" and skips a CORS preflight — Apps
-    // Script web apps generally don't handle OPTIONS preflights, and a
-    // preflighted POST would otherwise never reach doPost() at all.
+    //
+    // NOTE: this used to POST a JSON body to doPost(). That silently never
+    // reached the sheet: Apps Script /exec URLs respond with a redirect,
+    // and browsers downgrade a redirected POST to a GET, dropping the body
+    // before doPost() ever saw it. The old code also swallowed the
+    // resulting "can't read the response" error as an expected CORS quirk
+    // (which is genuinely expected on the *read* path, since that path
+    // never had a body to lose), so it showed "Assignment saved" even
+    // though nothing was written.
+    //
+    // Fix: send it as a GET (action=saveAssignment) through the exact same
+    // transport already proven reliable for reads — fetchSheetOnce(), which
+    // races a direct fetch against a JSONP <script> tag and remembers
+    // whichever one works on this network/browser. GET has no body to lose
+    // and JSONP bypasses CORS entirely, so this actually reaches the sheet.
     async function saveAuditorAssignmentRemote(branchName, fields) {
       const idToken = window.getCurrentIdToken ? await window.getCurrentIdToken() : null;
       if (!idToken) throw new Error('Not signed in — please sign in again.');
 
-      const payload = JSON.stringify({
+      const params = new URLSearchParams({
+          action: 'saveAssignment',
           secret: appsScriptSecret,
           idToken: idToken,
           branchName: branchName,
           expectedDate: fields.expectedDate || '',
-          // Flat auditor1..4 / date1..4 fields (in addition to the
-          // "rotations" array) so a doPost() written to expect either shape
-          // can pick this up without extra parsing.
-          auditor1: fields.rotations[0].auditor || '',
-          date1: fields.rotations[0].date || '',
-          auditor2: fields.rotations[1].auditor || '',
-          date2: fields.rotations[1].date || '',
-          auditor3: fields.rotations[2].auditor || '',
-          date3: fields.rotations[2].date || '',
-          auditor4: fields.rotations[3].auditor || '',
-          date4: fields.rotations[3].date || '',
-          rotations: fields.rotations
+          rotations: JSON.stringify(fields.rotations)
       });
+      const url = defaultAppsScriptUrl + '?' + params.toString();
 
-      try {
-          const resp = await fetch(defaultAppsScriptUrl, { method: 'POST', body: payload });
-          if (resp) {
-              try {
-                  const json = await resp.json();
-                  if (json && json.error) throw new Error(json.error);
-              } catch (parseErr) {
-                  // Response body unreadable/not JSON — same CORS quirk noted
-                  // elsewhere in this file for the GET path. The POST usually
-                  // still executed server-side even though we can't read the
-                  // reply, so don't treat this alone as a hard failure.
-              }
-          }
-      } catch (networkErr) {
-          if (networkErr instanceof Error && networkErr.message && networkErr.message !== 'Failed to fetch') {
-              throw networkErr; // a real, readable error from the backend (e.g. "Branch not found")
-          }
-          console.warn('Assignment POST response unreadable (expected for Apps Script CORS):', networkErr);
-      }
+      const json = await fetchSheetOnce(url);
+      if (json && json.error) throw new Error(json.error);
+      if (!json || !json.success) throw new Error("Save didn't complete — please try again.");
     }
 
     function openModalDetail(branchName) {
