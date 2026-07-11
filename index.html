@@ -150,6 +150,7 @@
         topDecliningService: [],
         auditors: [],
         dataAudit: {},
+        branchAuditSchedule: {},
         emergencyHistory: []
     };
     let charts = {};
@@ -2777,9 +2778,9 @@ body.bg-coolDark{
         </div>
       </div>
 
-      <div onclick="openLastAuditedBranchDetail()" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentEmerald/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
+      <div onclick="openBranchAuditScheduleModal()" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentEmerald/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold tracking-wider text-slate-500">BRANCH LAST AUDITED</span>
+          <span class="text-xs font-semibold tracking-wider text-slate-500">BRANCH AUDIT INTERVAL</span>
           <span class="p-1.5 bg-accentEmerald/10 text-accentEmerald rounded-lg group-hover:bg-accentEmerald group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-badge-check w-4 h-4"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
         </div>
         <div class="mt-4">
@@ -3269,6 +3270,10 @@ body.bg-coolDark{
 
       if (type === 'branchDetail') {
           renderBranchDetail(filterValue, modalBody);
+      } else if (type === 'auditSchedule') {
+          renderAuditScheduleModal(modalBody);
+      } else if (type === 'editAssignment') {
+          renderEditAssignmentModal(filterValue, modalBody);
       } else if (type === 'auditor') {
           const auditorObj = (activeData.auditors || []).find(a => a.name === filterValue) || { name: filterValue, count: 0, branches: [] };
           const branches = auditorObj.branches || [];
@@ -3391,6 +3396,143 @@ body.bg-coolDark{
       setTimeout(() => { window.print(); }, 50);
     }
 
+    // Opens the small editable form for a single branch's next-assignment
+    // fields (auditor, expected date, status, remarks). Saving this writes
+    // straight into AUDIT DATA (FINAL) columns AO:AV via the Apps Script
+    // backend, so nobody has to type it into the Sheet by hand.
+    function openEditAssignmentModal(branchName) {
+      openModal('Edit Assignment — ' + branchName, 'editAssignment', branchName);
+    }
+
+    function renderEditAssignmentModal(branchName, modalBody) {
+      const b = (activeData.branches || []).find(x => x.name === branchName);
+      const escapeHTML = str => {
+          if (!str) return '';
+          return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+      };
+      const currentAuditor = (b && b.auditor && b.auditor !== 'UNASSIGNED') ? b.auditor : '';
+      const currentStatus = (b && b.auditStatus) ? b.auditStatus.toUpperCase() : 'PENDING';
+
+      modalBody.innerHTML = `
+        <div class="bg-white border border-coolBorder rounded-xl p-5 shadow-sm max-w-lg mx-auto">
+          <p class="text-xs text-slate-500 mb-4">These fields are saved straight to <strong>AUDIT DATA (FINAL)</strong> (columns AO:AV) for <strong>${escapeHTML(branchName)}</strong>. No need to open the Sheet.</p>
+
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assigned Auditor</label>
+          <input id="editAssign-auditor" type="text" value="${escapeHTML(currentAuditor)}" placeholder="e.g. KARL"
+                 class="w-full mb-4 px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan">
+
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Expected Audit Date</label>
+          <input id="editAssign-expectedDate" type="date"
+                 class="w-full mb-4 px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan">
+
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Status</label>
+          <select id="editAssign-status" class="w-full mb-4 px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan">
+            <option value="FOR AUDIT" ${currentStatus === 'FOR AUDIT' ? 'selected' : ''}>For Audit</option>
+            <option value="PENDING" ${currentStatus === 'PENDING' ? 'selected' : ''}>Pending</option>
+            <option value="DONE" ${currentStatus === 'DONE' ? 'selected' : ''}>Done</option>
+          </select>
+
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Date Completed <span class="normal-case font-normal text-slate-400">(if Done)</span></label>
+          <input id="editAssign-dateCompleted" type="date"
+                 class="w-full mb-4 px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan">
+
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Remarks</label>
+          <textarea id="editAssign-remarks" rows="3" placeholder="Optional notes"
+                    class="w-full mb-4 px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan"></textarea>
+
+          <div id="editAssign-error" class="hidden text-xs text-accentRose font-semibold mb-3"></div>
+
+          <div class="flex justify-end gap-2">
+            <button onclick="closeModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+            <button id="editAssign-saveBtn" onclick="submitEditAssignment('${escapeHTML(branchName)}')"
+                    class="px-4 py-2 text-xs font-bold text-white bg-accentIndigo rounded-lg hover:bg-accentIndigo/90 transition-colors">Save Assignment</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function submitEditAssignment(branchName) {
+      const btn = document.getElementById('editAssign-saveBtn');
+      const errEl = document.getElementById('editAssign-error');
+      if (errEl) errEl.classList.add('hidden');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+
+      const fields = {
+          auditor: (document.getElementById('editAssign-auditor') || {}).value || '',
+          expectedDate: (document.getElementById('editAssign-expectedDate') || {}).value || '',
+          status: (document.getElementById('editAssign-status') || {}).value || '',
+          dateCompleted: (document.getElementById('editAssign-dateCompleted') || {}).value || '',
+          remarks: (document.getElementById('editAssign-remarks') || {}).value || ''
+      };
+
+      try {
+          await saveAuditorAssignmentRemote(branchName, fields);
+          showToast('Assignment saved — refreshing data\u2026');
+          closeModal();
+          // Pull the just-saved values back in so the dashboard reflects the
+          // change immediately, without waiting on a full server refresh.
+          const b = (activeData.branches || []).find(x => x.name === branchName);
+          if (b) {
+              if (fields.auditor) b.auditor = fields.auditor;
+              if (fields.status) b.auditStatus = fields.status;
+          }
+          if (typeof initDashboard === 'function') initDashboard();
+          // Refresh from the server shortly after so everyone sees the
+          // authoritative Sheet state (not just this browser's optimistic guess).
+          if (typeof fetchSheet === 'function') setTimeout(function() { fetchSheet(true); }, 2000);
+      } catch (err) {
+          console.error('Saving assignment failed:', err);
+          if (errEl) {
+              errEl.textContent = (err && err.message) ? err.message : "Couldn't save — please try again.";
+              errEl.classList.remove('hidden');
+          }
+      } finally {
+          if (btn) { btn.disabled = false; btn.textContent = 'Save Assignment'; }
+      }
+    }
+
+    // Posts the assignment fields to the Apps Script backend, which writes
+    // them into AUDIT DATA (FINAL) columns AO:AV for the matching branch row.
+    // Sent as a plain string body (no explicit Content-Type) so the browser
+    // treats it as a "simple request" and skips a CORS preflight — Apps
+    // Script web apps generally don't handle OPTIONS preflights, and a
+    // preflighted POST would otherwise never reach doPost() at all.
+    async function saveAuditorAssignmentRemote(branchName, fields) {
+      const idToken = window.getCurrentIdToken ? await window.getCurrentIdToken() : null;
+      if (!idToken) throw new Error('Not signed in — please sign in again.');
+
+      const payload = JSON.stringify({
+          secret: appsScriptSecret,
+          idToken: idToken,
+          branchName: branchName,
+          auditor: fields.auditor || '',
+          expectedDate: fields.expectedDate || '',
+          status: fields.status || '',
+          remarks: fields.remarks || '',
+          dateCompleted: fields.dateCompleted || ''
+      });
+
+      try {
+          const resp = await fetch(defaultAppsScriptUrl, { method: 'POST', body: payload });
+          if (resp) {
+              try {
+                  const json = await resp.json();
+                  if (json && json.error) throw new Error(json.error);
+              } catch (parseErr) {
+                  // Response body unreadable/not JSON — same CORS quirk noted
+                  // elsewhere in this file for the GET path. The POST usually
+                  // still executed server-side even though we can't read the
+                  // reply, so don't treat this alone as a hard failure.
+              }
+          }
+      } catch (networkErr) {
+          if (networkErr instanceof Error && networkErr.message && networkErr.message !== 'Failed to fetch') {
+              throw networkErr; // a real, readable error from the backend (e.g. "Branch not found")
+          }
+          console.warn('Assignment POST response unreadable (expected for Apps Script CORS):', networkErr);
+      }
+    }
+
     function openModalDetail(branchName) {
       const b = activeData.branches.find(x => x.name === branchName);
       if(b) openModal(`${b.name} — Detailed Profile`, 'branchDetail', b);
@@ -3406,11 +3548,62 @@ body.bg-coolDark{
       }
     }
 
-    // Jumps straight to the detailed profile of whichever branch was most
-    // recently audited — used by the Branch Last Audited stack card.
-    function openLastAuditedBranchDetail() {
-      const info = activeData.summary && activeData.summary.lastAuditedBranch;
-      if (info && info.name) openModalDetail(info.name);
+    // Opens the full per-branch audit schedule (every round found in AUDIT
+    // ROTATION (FINAL), not just the most recent one) so it's clear how many
+    // audits each branch has had (1st, 2nd, 3rd...) and how many days apart
+    // they were — used by the "Branch Audit Interval" stack card.
+    function openBranchAuditScheduleModal() {
+      openModal('Branch Audit Interval — Full Schedule', 'auditSchedule', null);
+    }
+
+    function renderAuditScheduleModal(modalBody) {
+      const schedule = activeData.branchAuditSchedule || {};
+      const branchNames = Object.keys(schedule).sort();
+
+      if (branchNames.length === 0) {
+          modalBody.innerHTML = `<div class="p-8 text-center text-sm text-slate-500 font-semibold bg-gray-50 rounded-xl border border-coolBorder">No audit rotation history found in AUDIT ROTATION (FINAL).</div>`;
+          return;
+      }
+
+      const escapeHTML = str => {
+          if (!str) return '';
+          return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+      };
+
+      const rowsHtml = branchNames.map(branchName => {
+          const entry = schedule[branchName];
+          const rounds = entry.rounds || [];
+          const roundsHtml = rounds.map(rnd => `
+              <div class="flex items-center gap-2 bg-gray-50 border border-coolBorder rounded-lg px-2.5 py-1.5 whitespace-nowrap">
+                  <span class="w-5 h-5 rounded bg-accentIndigo/10 text-accentIndigo flex items-center justify-center font-bold flex-shrink-0 text-[10px]">${rnd.round}</span>
+                  <span class="text-xs font-semibold text-slate-700">${escapeHTML(rnd.auditor)}</span>
+                  <span class="text-[11px] text-slate-400">${rnd.date ? escapeHTML(rnd.date) : 'No date'}</span>
+                  ${rnd.intervalDays !== null && rnd.intervalDays !== undefined ? `<span class="text-[10px] font-bold text-accentEmerald">+${rnd.intervalDays}d</span>` : ''}
+              </div>
+          `).join('');
+
+          return `
+              <div class="bg-white border border-coolBorder rounded-xl p-4 shadow-sm mb-3">
+                  <div class="flex items-center justify-between mb-3">
+                      <h4 class="text-sm font-bold text-slate-800 cursor-pointer hover:text-accentIndigo" onclick="openModalDetail('${escapeHTML(branchName)}')">${escapeHTML(branchName)}</h4>
+                      <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${rounds.length} audit${rounds.length === 1 ? '' : 's'} on record</span>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                      ${roundsHtml || '<span class="text-xs text-slate-400 italic">No rounds recorded.</span>'}
+                  </div>
+                  ${entry.note ? `<p class="text-[11px] text-slate-400 italic mt-2">Note (col K): ${escapeHTML(entry.note)}</p>` : ''}
+              </div>
+          `;
+      }).join('');
+
+      modalBody.innerHTML = `
+          <div class="p-4 bg-accentEmerald/10 border border-accentEmerald/20 rounded-xl mb-4 text-xs text-slate-600">
+              Each numbered chip is one audit round for that branch (1st, 2nd, 3rd…), pulled straight from AUDIT ROTATION (FINAL) columns A–K. The green "+Nd" tag is the number of days since the previous round for that branch.
+          </div>
+          <div class="max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
+              ${rowsHtml}
+          </div>
+      `;
     }
 
     // Fired from the "AUDIT FINDINGS" side-menu item. The whole menu row is
@@ -4259,6 +4452,9 @@ body.bg-coolDark{
                           ${riskLevel} <span class="opacity-70 font-semibold">(${riskProfile.score}/100)</span>
                       </span>
                       <span class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-royalBlue shadow-sm">${escapeHTML((b.auditStatus || 'PENDING').toUpperCase())}</span>
+                      <button onclick="openEditAssignmentModal('${escapeHTML(b.name)}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-accentAmber text-white shadow-sm hover:bg-accentAmber/90 transition-colors">
+                          Edit Assignment
+                      </button>
                   </div>
               </div>
 
@@ -5672,6 +5868,7 @@ body.bg-coolDark{
             };
           }
           
+          activeData.branchAuditSchedule = {};
           const rotationSheetName = workbook.SheetNames.find(n => n.toUpperCase().replace(/\\s/g, '').includes("ROTATION"));
           if (rotationSheetName) {
               const rotationSheet = workbook.Sheets[rotationSheetName];
@@ -5695,7 +5892,17 @@ body.bg-coolDark{
               // Tracks, per branch, the most recent (auditor, date) pair found across
               // columns C/D, E/F, G/H, I/J (branch name lives in column B)
               const branchLastAudit = {};
-              
+
+              // Tracks, per branch, EVERY audit round found (not just the most
+              // recent one) so the dashboard can show the full audit schedule /
+              // interval history, not only "last audited". Uses the full
+              // column A -> K range of AUDIT ROTATION (FINAL):
+              //   A = row/serial (kept as-is, not interpreted)
+              //   B = branch name
+              //   C/D, E/F, G/H, I/J = audit round 1, 2, 3, 4 (auditor + date)
+              //   K = free-text note/next-due column (kept as-is, not interpreted)
+              const branchAuditSchedule = {};
+
               for (let i = 1; i < rotRows.length; i++) {
                   const r = rotRows[i];
                   if (!r || r.length === 0) continue;
@@ -5727,21 +5934,52 @@ body.bg-coolDark{
                   const branchName = branchList[branchIdx];
 
                   const candidatePairs = [
-                      { auditor: r[2], date: r[3] },   // C, D
-                      { auditor: r[4], date: r[5] },   // E, F
-                      { auditor: r[6], date: r[7] },   // G, H
-                      { auditor: r[8], date: r[9] }    // I, J
+                      { round: 1, auditor: r[2], date: r[3] },   // C, D
+                      { round: 2, auditor: r[4], date: r[5] },   // E, F
+                      { round: 3, auditor: r[6], date: r[7] },   // G, H
+                      { round: 4, auditor: r[8], date: r[9] }    // I, J
                   ];
 
+                  const scheduleRounds = [];
                   candidatePairs.forEach(pair => {
                       const auditorName = String(pair.auditor || "").trim();
                       const parsedDate = parseRotationDate(pair.date);
-                      if (!auditorName || !parsedDate) return;
-                      const existing = branchLastAudit[branchName];
-                      if (!existing || parsedDate > existing.date) {
-                          branchLastAudit[branchName] = { auditor: auditorName, date: parsedDate };
+                      if (!auditorName && !parsedDate) return;
+                      scheduleRounds.push({
+                          round: pair.round,
+                          auditor: auditorName || 'Unassigned',
+                          date: parsedDate ? parsedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null,
+                          dateRaw: parsedDate ? parsedDate.getTime() : null
+                      });
+
+                      if (auditorName && parsedDate) {
+                          const existing = branchLastAudit[branchName];
+                          if (!existing || parsedDate > existing.date) {
+                              branchLastAudit[branchName] = { auditor: auditorName, date: parsedDate };
+                          }
                       }
                   });
+
+                  if (scheduleRounds.length > 0) {
+                      // Interval (in days) between this round's date and the
+                      // previous dated round, so the dashboard can show "every
+                      // ~N days" per branch, not just raw dates.
+                      let prevDateRaw = null;
+                      scheduleRounds.forEach(rnd => {
+                          if (rnd.dateRaw !== null) {
+                              rnd.intervalDays = (prevDateRaw !== null) ? Math.round((rnd.dateRaw - prevDateRaw) / 86400000) : null;
+                              prevDateRaw = rnd.dateRaw;
+                          } else {
+                              rnd.intervalDays = null;
+                          }
+                      });
+
+                      branchAuditSchedule[branchName] = {
+                          rowId: r[0] !== undefined ? r[0] : null,      // column A, kept as-is
+                          note: r[10] !== undefined ? String(r[10] || '').trim() : '', // column K, kept as-is
+                          rounds: scheduleRounds
+                      };
+                  }
               }
 
               // Apply the most recent (auditor, date) found per branch as the
@@ -5754,6 +5992,10 @@ body.bg-coolDark{
                       tempBranchesMap[branchName].lastAuditDateRaw = info.date.getTime();
                   }
               });
+
+              // Full audit schedule (every round + interval), attached per
+              // branch so it survives into activeData.branches below.
+              activeData.branchAuditSchedule = branchAuditSchedule;
           }
 
           let dataAuditSheetName = workbook.SheetNames.find(n => n.toUpperCase().replace(/[\s_]/g, '').includes("AUDITREPORT"));
@@ -6386,7 +6628,7 @@ body.bg-coolDark{
             trendLabels: ["MARCH", "APRIL", "MAY"],
             forAuditBreakdown: [], nextUpBranch: null, lastAuditedBranch: null
         }, 
-        branches: [], lowestEfficiency: [], highestRepo: [], highestNoRepo: [], topFindings26: [], topDecliningCollection: [], topDecliningSales: [], topDecliningService: [], auditors: [], dataAudit: {}, emergencyHistory: [] 
+        branches: [], lowestEfficiency: [], highestRepo: [], highestNoRepo: [], topFindings26: [], topDecliningCollection: [], topDecliningSales: [], topDecliningService: [], auditors: [], dataAudit: {}, branchAuditSchedule: {}, emergencyHistory: [] 
       };
     }
 
