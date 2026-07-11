@@ -2304,6 +2304,9 @@ body.bg-coolDark{
             <h2 class="text-base sm:text-xl font-bold text-slate-800 flex items-center gap-2 min-w-0" id="modalTitle">BINALONAN — Detailed Profile</h2>
           </div>
           <div class="flex items-center gap-1 flex-shrink-0">
+            <button id="modalEditAssignBtn" onclick="openHeaderEditAssignment()" title="Edit assignment" aria-label="Edit assignment" class="hidden p-2 text-slate-400 hover:text-accentAmber hover:bg-accentAmber/10 active:scale-95 rounded-xl transition-all cursor-pointer">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
+            </button>
             <button onclick="openExportPicker('current')" title="Download this data" aria-label="Download this data" class="p-2 text-slate-400 hover:text-accentEmerald hover:bg-accentEmerald/10 active:scale-95 rounded-xl transition-all cursor-pointer">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
             </button>
@@ -2413,6 +2416,33 @@ body.bg-coolDark{
           <button onclick="cancelQuickLinkPassword()" class="flex-1 text-xs font-semibold text-slate-500 hover:text-slate-700 py-2 rounded-xl border border-coolBorder cursor-pointer">Cancel</button>
           <button id="quickLinkPasswordSubmitBtn" onclick="submitQuickLinkPassword()" class="flex-1 text-xs font-semibold text-white bg-royalBlue hover:bg-blue-700 py-2 rounded-xl transition-colors cursor-pointer disabled:opacity-60">
             <span id="quickLinkPasswordSubmitLabel">Unlock &amp; Open</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="editAssignPasswordModal" class="fixed inset-0 z-[70] hidden">
+    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="cancelEditAssignPassword()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+      <div class="bg-coolCard w-full max-w-xs rounded-2xl shadow-2xl p-5 pointer-events-auto border border-coolBorder">
+        <div class="flex items-start justify-between gap-3 mb-1">
+          <div class="flex items-center gap-2 min-w-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue flex-shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <h3 class="text-sm font-bold text-slate-800 truncate">Confirm Your Password</h3>
+          </div>
+          <button onclick="cancelEditAssignPassword()" title="Close" aria-label="Close" class="p-2 -mr-2 text-slate-400 hover:text-accentRose hover:bg-accentRose/10 active:scale-95 rounded-xl transition-all cursor-pointer flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </button>
+        </div>
+        <p class="text-xs text-slate-500 mb-1">Re-enter your account password to save changes to <span id="editAssignPasswordBranchLabel" class="font-semibold text-slate-600">this assignment</span>.</p>
+        <p class="text-[11px] text-slate-400 mb-3">Signed in as <span id="editAssignPasswordUserLabel" class="font-semibold text-slate-500">\u2014</span></p>
+        <input id="editAssignPasswordInput" type="password" autocomplete="current-password" placeholder="Your password" onkeydown="if(event.key==='Enter'){submitEditAssignPassword();}" class="w-full px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentBlue/40 mb-1" />
+        <p id="editAssignPasswordError" class="text-[11px] text-accentRose mb-1 hidden">Incorrect password. Try again.</p>
+        <div class="flex gap-2 mt-3">
+          <button onclick="cancelEditAssignPassword()" class="flex-1 text-xs font-semibold text-slate-500 hover:text-slate-700 py-2 rounded-xl border border-coolBorder cursor-pointer">Cancel</button>
+          <button id="editAssignPasswordSubmitBtn" onclick="submitEditAssignPassword()" class="flex-1 text-xs font-semibold text-white bg-royalBlue hover:bg-blue-700 py-2 rounded-xl transition-colors cursor-pointer disabled:opacity-60">
+            <span id="editAssignPasswordSubmitLabel">Unlock &amp; Save</span>
           </button>
         </div>
       </div>
@@ -3272,6 +3302,10 @@ body.bg-coolDark{
       const modalBody = document.getElementById('modalBody');
       modalTitle.innerHTML = title;
       modalBody.innerHTML = ''; 
+      // Default the header Edit button off; the 'all' branches-overview
+      // path (renderModalFilteredView, below) turns it back on for its
+      // own list right after this.
+      updateModalEditAssignButton(null);
 
       let branchesToDisplay = [];
 
@@ -3412,6 +3446,36 @@ body.bg-coolDark{
       openModal('Edit Assignment — ' + branchName, 'editAssignment', branchName);
     }
 
+    // Tracks which branch the header Edit button (next to Download) should
+    // open the Edit Assignment form for — i.e. the first branch in whatever
+    // list the Branches Overview table is currently showing.
+    let headerEditAssignBranch = null;
+
+    // Shows/hides the header Edit button for the current modal view. Pass
+    // the currently-filtered branch list to show it (targeting its first
+    // branch), or null/empty to hide it — used for every modal type other
+    // than the Branches Overview table.
+    function updateModalEditAssignButton(list) {
+      const btn = document.getElementById('modalEditAssignBtn');
+      if (!btn) return;
+      if (list && list.length > 0) {
+          headerEditAssignBranch = list[0].name;
+          btn.classList.remove('hidden');
+      } else {
+          headerEditAssignBranch = null;
+          btn.classList.add('hidden');
+      }
+    }
+
+    // Click handler for the header Edit button. Opens the same Edit
+    // Assignment form as the old per-row button used to, pre-filled to the
+    // first branch currently in view — its own Branch dropdown lets you
+    // switch to any other branch on the list without leaving the popup.
+    function openHeaderEditAssignment() {
+      if (!headerEditAssignBranch) return;
+      openEditAssignmentModal(headerEditAssignBranch);
+    }
+
     // Renders the Edit Assignment form. branchName selects which branch is
     // being edited; the Branch dropdown at the top lets you switch to any
     // other branch without leaving the popup. Auditor + Date pairs for
@@ -3503,12 +3567,14 @@ body.bg-coolDark{
       `;
     }
 
-    async function submitEditAssignment(branchName) {
-      const btn = document.getElementById('editAssign-saveBtn');
-      const errEl = document.getElementById('editAssign-error');
-      if (errEl) errEl.classList.add('hidden');
-      if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+    // Step 1: person presses "Save Assignment" -> just collects the form
+    // fields and opens the password gate. Nothing is written to the Sheet
+    // yet — that only happens once the password is verified below, so any
+    // change to an assignment always requires proving it's really the
+    // signed-in user, right now.
+    let pendingEditAssignment = null; // { branchName, fields } awaiting password confirmation
 
+    function submitEditAssignment(branchName) {
       const val = id => (document.getElementById(id) || {}).value || '';
       const fields = {
           expectedDate: val('editAssign-expectedDate'),
@@ -3518,6 +3584,85 @@ body.bg-coolDark{
               date: val(`editAssign-date${n}`)
           }))
       };
+      pendingEditAssignment = { branchName: branchName, fields: fields };
+      openEditAssignPasswordGate(branchName);
+    }
+
+    function openEditAssignPasswordGate(branchName) {
+      const modal = document.getElementById('editAssignPasswordModal');
+      const input = document.getElementById('editAssignPasswordInput');
+      const err = document.getElementById('editAssignPasswordError');
+      const userLabel = document.getElementById('editAssignPasswordUserLabel');
+      const nameLabel = document.getElementById('editAssignPasswordBranchLabel');
+      if (!modal || !input) return;
+      err.classList.add('hidden');
+      input.value = '';
+      if (userLabel) userLabel.textContent = (typeof window.getCurrentUserEmail === 'function' && window.getCurrentUserEmail()) || 'unknown user';
+      if (nameLabel) nameLabel.textContent = branchName ? `the ${branchName} assignment` : 'this assignment';
+      setEditAssignPasswordSubmitting(false);
+      modal.classList.remove('hidden');
+      setTimeout(function() { input.focus(); }, 50);
+    }
+
+    window.cancelEditAssignPassword = function() {
+      const modal = document.getElementById('editAssignPasswordModal');
+      if (modal) modal.classList.add('hidden');
+      pendingEditAssignment = null;
+    };
+
+    function setEditAssignPasswordSubmitting(isSubmitting) {
+      const btn = document.getElementById('editAssignPasswordSubmitBtn');
+      const label = document.getElementById('editAssignPasswordSubmitLabel');
+      const input = document.getElementById('editAssignPasswordInput');
+      if (btn) btn.disabled = isSubmitting;
+      if (input) input.disabled = isSubmitting;
+      if (label) label.textContent = isSubmitting ? 'Verifying\u2026' : 'Unlock & Save';
+    }
+
+    function editAssignPasswordErrorMessage(reason) {
+      if (reason === 'not-signed-in') return 'You\u2019re not signed in \u2014 please sign in first.';
+      if (reason === 'auth/too-many-requests') return 'Too many attempts. Please wait a moment and try again.';
+      if (reason === 'auth/network-request-failed') return 'Network error \u2014 check your connection and try again.';
+      return 'Incorrect password. Try again.';
+    }
+
+    // Step 2: person types their password -> re-authenticate against
+    // Firebase (proves it's really them, right now) -> only THEN write the
+    // change to the Sheet via the Apps Script backend.
+    window.submitEditAssignPassword = async function() {
+      const pending = pendingEditAssignment;
+      const input = document.getElementById('editAssignPasswordInput');
+      const err = document.getElementById('editAssignPasswordError');
+      if (!pending || !input) { window.cancelEditAssignPassword(); return; }
+      if (typeof window.reauthenticateCurrentUser !== 'function') {
+          err.textContent = 'Password check is unavailable right now.';
+          err.classList.remove('hidden');
+          return;
+      }
+      setEditAssignPasswordSubmitting(true);
+      const result = await window.reauthenticateCurrentUser(input.value);
+      if (!result || !result.ok) {
+          setEditAssignPasswordSubmitting(false);
+          err.textContent = editAssignPasswordErrorMessage(result && result.reason);
+          err.classList.remove('hidden');
+          input.value = '';
+          input.focus();
+          return;
+      }
+      const modal = document.getElementById('editAssignPasswordModal');
+      if (modal) modal.classList.add('hidden');
+      pendingEditAssignment = null;
+      setEditAssignPasswordSubmitting(false);
+      await performEditAssignmentSave(pending.branchName, pending.fields);
+    };
+
+    // Actually writes the assignment to the Sheet — only ever called after
+    // the password gate above has confirmed it's really the signed-in user.
+    async function performEditAssignmentSave(branchName, fields) {
+      const btn = document.getElementById('editAssign-saveBtn');
+      const errEl = document.getElementById('editAssign-error');
+      if (errEl) errEl.classList.add('hidden');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
 
       try {
           await saveAuditorAssignmentRemote(branchName, fields);
@@ -3603,12 +3748,10 @@ body.bg-coolDark{
 
     // Opens the "All Branches" modal pre-filtered to the FOR AUDIT queue —
     // used by the Auditor Next Assignment stack card.
+    // Opens the "All Branches" modal showing every branch (not pre-filtered
+    // to the FOR AUDIT queue) — used by the Auditor Next Assignment stack card.
     function openAuditQueueModal() {
-      openModal('Auditor Next Assignments — For Audit Queue', 'all', null);
-      if (window.modalFilterState) {
-          window.modalFilterState.auditStatus = 'FOR AUDIT';
-          renderModalFilteredView();
-      }
+      openModal('All Branches Overview', 'all', null);
     }
 
     // Opens the full per-branch audit schedule (every round found in AUDIT
@@ -3691,39 +3834,53 @@ body.bg-coolDark{
           return;
       }
 
-      const rowsHtml = branchNames.map(branchName => {
+      const rowsHtml = branchNames.map((branchName, idx) => {
           const entry = schedule[branchName];
           const rounds = entry.rounds || [];
           const roundsHtml = rounds.map(rnd => `
-              <div class="flex items-center gap-2 bg-gray-50 border border-coolBorder rounded-lg px-2.5 py-1.5 whitespace-nowrap">
-                  <span class="w-5 h-5 rounded bg-accentIndigo/10 text-accentIndigo flex items-center justify-center font-bold flex-shrink-0 text-[10px]">${rnd.round}</span>
-                  <span class="text-xs font-semibold text-slate-700">${escapeHTML(rnd.auditor)}</span>
-                  <span class="text-[11px] text-slate-400">${rnd.date ? escapeHTML(rnd.date) : 'No date'}</span>
-                  ${rnd.intervalDays !== null && rnd.intervalDays !== undefined ? `<span class="text-[10px] font-bold text-accentEmerald">+${rnd.intervalDays}d</span>` : ''}
-              </div>
+              <span class="inline-flex items-center gap-1 bg-gray-50 border border-coolBorder rounded-md px-1.5 py-0.5 whitespace-nowrap leading-none">
+                  <span class="w-3.5 h-3.5 rounded bg-accentIndigo/10 text-accentIndigo flex items-center justify-center font-bold flex-shrink-0 text-[9px]">${rnd.round}</span>
+                  <span class="text-[11px] font-semibold text-slate-700">${escapeHTML(rnd.auditor)}</span>
+                  <span class="text-[10px] text-slate-400">${rnd.date ? escapeHTML(rnd.date) : 'No date'}</span>
+                  ${rnd.intervalDays !== null && rnd.intervalDays !== undefined ? `<span class="text-[9px] font-bold text-accentEmerald">+${rnd.intervalDays}d</span>` : ''}
+              </span>
           `).join('');
 
           return `
-              <div class="bg-white border border-coolBorder rounded-xl p-4 shadow-sm mb-3">
-                  <div class="flex items-center justify-between mb-3">
-                      <h4 class="text-sm font-bold text-slate-800 cursor-pointer hover:text-accentIndigo" onclick="openModalDetail('${escapeHTML(branchName)}')">${escapeHTML(branchName)}</h4>
-                      <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${rounds.length} audit${rounds.length === 1 ? '' : 's'} on record</span>
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                      ${roundsHtml || '<span class="text-xs text-slate-400 italic">No rounds recorded.</span>'}
-                  </div>
-                  ${entry.note ? `<p class="text-[11px] text-slate-400 italic mt-2">Note (col K): ${escapeHTML(entry.note)}</p>` : ''}
-              </div>
+              <tr class="border-b border-coolBorder hover:bg-gray-50/70 transition-colors align-top">
+                  <td class="p-2 text-center text-[11px] text-slate-400 font-semibold w-7">${idx + 1}</td>
+                  <td class="p-2 min-w-[130px]">
+                      <span class="text-xs font-bold text-slate-800 cursor-pointer hover:text-accentIndigo whitespace-nowrap" onclick="openModalDetail('${escapeHTML(branchName)}')">${escapeHTML(branchName)}</span>
+                      <span class="block text-[10px] font-semibold text-slate-400 mt-0.5">${rounds.length} audit${rounds.length === 1 ? '' : 's'}</span>
+                  </td>
+                  <td class="p-2">
+                      <div class="flex flex-wrap gap-1">
+                          ${roundsHtml || '<span class="text-[11px] text-slate-400 italic">No rounds recorded.</span>'}
+                      </div>
+                      ${entry.note ? `<p class="text-[10px] text-slate-400 italic mt-1">Note (col K): ${escapeHTML(entry.note)}</p>` : ''}
+                  </td>
+              </tr>
           `;
       }).join('');
 
       modalBody.innerHTML = `
           ${filterBarHtml}
-          <div class="p-4 bg-accentEmerald/10 border border-accentEmerald/20 rounded-xl mb-4 text-xs text-slate-600">
-              Each numbered chip is one audit round for that branch (1st, 2nd, 3rd…), pulled straight from AUDIT ROTATION (FINAL) columns A–K. The green "+Nd" tag is the number of days since the previous round for that branch.
+          <div class="p-3 bg-accentEmerald/10 border border-accentEmerald/20 rounded-xl mb-3 text-[11px] text-slate-600">
+              Each chip is one audit round for that branch (1st, 2nd, 3rd…), pulled straight from AUDIT ROTATION (FINAL) columns A–K. The green "+Nd" tag is the number of days since the previous round for that branch.
           </div>
-          <div class="max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
-              ${rowsHtml}
+          <div class="rounded-xl border border-coolBorder max-h-[65vh] overflow-auto custom-scrollbar">
+              <table class="w-full min-w-[560px] text-left border-collapse bg-white">
+                  <thead class="bg-gray-50 border-b border-coolBorder text-[10px] text-slate-500 tracking-wider font-bold uppercase sticky top-0 z-10 shadow-sm">
+                      <tr>
+                          <th class="p-2 bg-gray-50 text-center w-7">#</th>
+                          <th class="p-2 bg-gray-50 min-w-[130px]">Branch</th>
+                          <th class="p-2 bg-gray-50">Schedule</th>
+                      </tr>
+                  </thead>
+                  <tbody class="text-sm">
+                      ${rowsHtml}
+                  </tbody>
+              </table>
           </div>
       `;
     }
@@ -4370,6 +4527,12 @@ body.bg-coolDark{
       }
       modalTitle.innerHTML = titleText;
 
+      // The header Edit button (next to Download) only makes sense for the
+      // Branches Overview table (type 'all') — it opens the Edit Assignment
+      // form for the first branch currently in view, and that form's own
+      // Branch dropdown covers switching to any other one on the list.
+      updateModalEditAssignButton(state.type === 'all' ? list : null);
+
       let barsHtml = '';
       if (state.type === 'sales') {
           barsHtml += buildSalesSummaryBar(list);
@@ -4981,12 +5144,12 @@ body.bg-coolDark{
       // status noise, and no Auditor column — just what's sourced from the
       // AUDIT FINDINGS sheet for that branch.
       const showAuditorCol = (type !== 'findings');
-      // Edit sits right next to Branch (not tucked away as the last column
-      // after Auditor/Collection/Sales/Service/Audit Status), so it's
-      // immediately visible per row instead of requiring a horizontal
-      // scroll — it was easy to mistake for being part of the modal's
-      // header Download button when it lived way off to the right.
-      const showEditCol = (type === 'all');
+      // Edit now lives as a single icon button in the modal's header, right
+      // next to Download (see openHeaderEditAssignment) — not as a per-row
+      // column. A per-row Edit button in a list of dozens of branches was
+      // easy to miss/mis-click; the header button + the Branch dropdown
+      // inside the Edit Assignment form itself covers switching branches.
+      const showEditCol = false;
 
       let statusHeaders = '';
       if (showCollection) statusHeaders += `<th class="p-2 bg-gray-50 text-center whitespace-nowrap">Collection</th>`;
