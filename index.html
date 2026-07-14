@@ -55,10 +55,98 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
+    /* Guarantee the schedule/report modal scrolls internally (not the
+       whole page) so its sticky toolbar (search + date filters) tracks
+       the scroll correctly. Written as plain CSS with an ID selector so
+       it always wins, regardless of whether the Tailwind CDN JIT has
+       generated the flex-1/min-h-0 utility classes yet. */
+    #modalDialog { overflow: hidden; }
+    #modalBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    /* Branch Audit Interval modal: the outer #modalBody must NOT scroll
+       itself here (that created a double scroll region — the toolbar/
+       search bar and stat pills would drift up with the outer scroll
+       instead of staying put). Only the cards grid below scrolls. */
+    #modalBody.audit-schedule-mode { overflow: hidden !important; display: flex; flex-direction: column; }
+    #auditScheduleWrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+    #auditScheduleCards { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
     #scorecardScrollWrap { -webkit-overflow-scrolling: touch; }
     @media (max-width: 767px) {
       #scorecardScrollWrap { scroll-snap-type: x proximity; }
       #scorecardScrollWrap table { min-width: 900px; }
+    }
+
+    /* ============================================================
+       PERFORMANCE — smoother scrolling & snappier open/close animations
+       ============================================================ */
+
+    /* GPU-accelerated compositing for anything that animates in/out, so
+       the browser promotes it to its own layer up front instead of
+       promoting + demoting mid-animation (a common cause of a visible
+       "jump" the first frame a modal/menu opens). These elements only
+       ever animate transform+opacity already, so this is a pure win
+       with no visual change. */
+    #modalDialog, #sideMenu, #menuOverlay, #miniCalendarPopup, #exitConfirmCard {
+      will-change: transform, opacity;
+      backface-visibility: hidden;
+    }
+
+    /* Smooth, native-feeling momentum scrolling on every internal
+       scroll region, plus overscroll-behavior so scrolling a nested
+       panel to its edge doesn't also drag the page behind it — both
+       are common causes of scrolling feeling "janky" on trackpads and
+       phones. */
+    #modalBody, #auditScheduleCards, .custom-scrollbar, #sideMenu {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+
+    /* Tailwind's transition-all utility (used on ~90 cards/buttons
+       across the dashboard) tells the browser to watch every single
+       CSS property for changes, which is more bookkeeping than this
+       app needs since it only ever animates these few. Narrowing it
+       keeps the exact same visual transition but is cheaper to compute
+       on every hover/tap, especially with many cards on screen. */
+    .transition-all {
+      transition-property: transform, opacity, box-shadow, background-color, border-color, color !important;
+    }
+
+    /* Large repeating card grid (Branch Audit Interval modal): skip
+       layout/paint for cards currently scrolled out of view — the same
+       idea as list virtualization, with no JS changes required.
+       contain-intrinsic-size reserves roughly the right amount of space
+       up front so the scrollbar doesn't jump around as cards get
+       measured. */
+    #auditScheduleCards > div {
+      content-visibility: auto;
+      contain-intrinsic-size: 0 90px;
+    }
+
+    /* That modal's toolbar sits sticky above the scrolling card list.
+       backdrop-blur there forces the browser to recomposite a blurred
+       copy of the content beneath it on every single scroll frame —
+       this was the main source of scroll lag inside that modal. A
+       near-opaque solid background reads identically without the
+       per-frame compositing cost. */
+    #auditScheduleWrap .sticky.backdrop-blur-sm {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      background-color: rgba(255,255,255,0.98);
+    }
+
+    /* Chart canvases get their own compositing layer so ApexCharts'
+       SVG redraws (tooltips, resize, zoom) don't force a repaint of the
+       whole card stack around them. */
+    .apexcharts-canvas { will-change: transform; }
+
+    /* Respect the OS-level "reduce motion" accessibility setting. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
     }
 
     /* Fluid container: scales with the actual screen/viewport instead of
@@ -157,6 +245,11 @@
     let currentBranchSort = null;
     let scorecardSortField = 'name';
     let scorecardSortDir = 'asc';
+    // Sort state for the "Assignment Branches Overview" popup (opened from
+    // the AUDITOR NEXT ASSIGNMENT stock card) — mirrors the Branch Scorecard's
+    // sortField/sortDir pattern so every column there is fully sortable too.
+    let assignmentSortField = 'recent';
+    let assignmentSortDir = 'desc';
     const DASH_CACHE_KEY = 'auditDashboard_v1_cachedData';
     const DASH_CACHE_TS_KEY = 'auditDashboard_v1_lastSyncedAt';
 
@@ -195,20 +288,37 @@
             findings2025: tb.reduce((sum, b) => sum + b.findings2025, 0),
             findings2026: tb.reduce((sum, b) => sum + b.findings2026, 0),
             totalAccounts: tb.reduce((sum, b) => sum + b.accountsMay, 0).toLocaleString(),
+            // Raw (non-formatted) latest and previous-month account totals,
+            // used by the Total Accounts stack card to show a small
+            // "previous month" line with an up/down indicator.
+            totalAccountsLatestRaw: tb.reduce((sum, b) => sum + (b.accountsMay || 0), 0),
+            totalAccountsPrevRaw: tb.reduce((sum, b) => sum + (b.accountsApr || 0), 0),
+            // Repo counts for the Total Accounts stack card's small subtext:
+            // totalRepoLatest = sum of "No. of Repo" for the latest month only
+            // (the same month shown in the card's "(JUNE)" label, via
+            // trendLabels[2]/noOfRepoLatest); totalRepoAll = that same figure
+            // summed across all three months on record (Mar + Apr + Latest).
+            totalRepoLatest: tb.reduce((sum, b) => sum + (b.noOfRepoLatest || 0), 0),
+            totalRepoPrevRaw: tb.reduce((sum, b) => sum + (b.noOfRepoApr || 0), 0),
+            totalRepoAll: tb.reduce((sum, b) => sum + (b.noOfRepoMar || 0) + (b.noOfRepoApr || 0) + (b.noOfRepoLatest || 0), 0),
             emergencyAuditor: activeData.summary?.emergencyAuditor || "PENDING",
             trendLabels: activeData.summary?.trendLabels || ["MARCH", "APRIL", "MAY"]
         };
 
         // --- Auditor Next Assignment: who is queued up for a "FOR AUDIT" branch ---
-        // Uses assignedAuditorRaw (column AN, "Assigned Auditor") specifically
-        // — who's actually assigned to do the next audit — rather than
-        // b.auditor, which can reflect whoever did the most recent *past*
-        // round instead. Falls back to b.auditor only if AN is blank.
+        // Uses assignedAuditorRaw (AUDIT DATA (FINAL) column AW, "Up Next
+        // Auditor") ONLY — the auditor explicitly set via the Edit
+        // Assignment form's "Up Next Auditor" field. Deliberately does NOT
+        // fall back to b.auditor (whoever did the most recent *past*
+        // rotation round, shown on the Detailed Profile) — that field is a
+        // record of history, not a decision the person made about what's
+        // next, and mixing the two in made this card show the wrong name
+        // whenever AW was blank but a past round wasn't. A branch shows
+        // "Unassigned" here until an Up Next Auditor is actually saved for
+        // it.
         const forAuditList = tb.filter(b => (b.auditStatus || '').toUpperCase() === "FOR AUDIT");
         const assignedAuditorOf = (b) => {
-            if (b.assignedAuditorRaw && b.assignedAuditorRaw !== 'UNASSIGNED') return b.assignedAuditorRaw;
-            if (b.auditor && b.auditor !== 'UNASSIGNED') return b.auditor;
-            return 'Unassigned';
+            return (b.assignedAuditorRaw && b.assignedAuditorRaw !== 'UNASSIGNED') ? b.assignedAuditorRaw : 'Unassigned';
         };
         const auditorQueueCounts = {};
         forAuditList.forEach(b => {
@@ -276,6 +386,14 @@
             auditor: assignedAuditorOf(nextUpBranch),
             lastAuditDate: nextUpBranch.lastAuditDate || null
         } : null;
+        // Top 5 branches up next in the FOR AUDIT queue (same oldest-waiting-first
+        // order as nextUpBranch above), so the Auditor Next Assignment stack card
+        // can show a short list instead of just the single soonest branch.
+        activeData.summary.nextUpBranches = sortedQueue.slice(0, 5).map(b => ({
+            name: b.name,
+            auditor: assignedAuditorOf(b),
+            lastAuditDate: b.lastAuditDate || null
+        }));
         activeData.summary.lastAuditedBranch = lastAuditedBranch ? {
             name: lastAuditedBranch.name,
             auditor: lastAuditedBranch.auditor || 'Unassigned',
@@ -1225,7 +1343,7 @@ rect.legend-mouseover-inactive,
 
 .apexcharts-disable-transitions * {
   transition: none !important;
-}</style><style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.pointer-events-auto{pointer-events:auto}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0px}.inset-y-0{top:0px;bottom:0px}.bottom-6{bottom:1.5rem}.left-0{left:0px}.right-6{right:1.5rem}.top-0{top:0px}.right-0{right:0px}.z-10{z-index:10}.z-40{z-index:40}.z-50{z-index:50}.-m-1\.5{margin:-0.375rem}.mx-auto{margin-left:auto;margin-right:auto}.mb-2{margin-bottom:0.5rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mb-8{margin-bottom:2rem}.mt-1{margin-top:0.25rem}.mt-4{margin-top:1rem}.mt-8{margin-top:2rem}.mb-1{margin-bottom:0.25rem}.ml-1{margin-left:0.25rem}.mt-2{margin-top:0.5rem}.mt-3{margin-top:0.75rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-1\.5{height:0.375rem}.h-2{height:0.5rem}.h-4{height:1rem}.h-5{height:1.25rem}.h-8{height:2rem}.h-full{height:100%}.max-h-\[600px\]{max-height:600px}.max-h-\[90vh\]{max-height:90vh}.max-h-80{max-height:20rem}.max-h-\[300px\]{max-height:300px}.min-h-screen{min-height:100vh}.min-h-\[5rem\]{min-height:5rem}.w-1\.5{width:0.375rem}.w-12{width:3rem}.w-2{width:0.5rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-8{width:2rem}.w-full{width:100%}.min-w-\[200px\]{min-width:200px}.min-w-\[85px\]{min-width:85px}.max-w-4xl{max-width:56rem}.max-w-7xl{max-width:80rem}.border-collapse{border-collapse:collapse}.translate-y-20{--tw-translate-y:5rem;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.scale-95{--tw-scale-x:.95;--tw-scale-y:.95;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.scale-100{--tw-scale-x:1;--tw-scale-y:1;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.transform{transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@keyframes ping{75%, 100%{transform:scale(2);opacity:0}}.animate-ping{animation:ping 1s cubic-bezier(0, 0, 0.2, 1) infinite}.cursor-pointer{cursor:pointer}.cursor-default{cursor:default}.select-none{-webkit-user-select:none;user-select:none}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.justify-around{justify-content:space-around}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.gap-5{gap:1.25rem}.gap-8{gap:2rem}.gap-6{gap:1.5rem}.space-y-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.375rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-6 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.5rem * var(--tw-space-y-reverse))}.space-y-8 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(2rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(2rem * var(--tw-space-y-reverse))}.divide-y > :not([hidden]) ~ :not([hidden]){--tw-divide-y-reverse:0;border-top-width:calc(1px * calc(1 - var(--tw-divide-y-reverse)));border-bottom-width:calc(1px * var(--tw-divide-y-reverse))}.divide-coolBorder > :not([hidden]) ~ :not([hidden]){--tw-divide-opacity:1;border-color:rgb(229 231 235 / var(--tw-divide-opacity, 1))}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.whitespace-nowrap{white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-md{border-radius:0.375rem}.rounded-xl{border-radius:0.75rem}.rounded-t-2xl{border-top-left-radius:1rem;border-top-right-radius:1rem}.rounded-bl-lg{border-bottom-left-radius:0.5rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-l-4{border-left-width:4px}.border-t{border-top-width:1px}.border-accentAmber\/20{border-color:rgb(217 119 6 / 0.2)}.border-accentBlue\/20{border-color:rgb(37 99 235 / 0.2)}.border-accentCyan\/50{border-color:rgb(8 145 178 / 0.5)}.border-accentEmerald\/20{border-color:rgb(5 150 105 / 0.2)}.border-accentRose\/10{border-color:rgb(225 29 72 / 0.1)}.border-accentRose\/20{border-color:rgb(225 29 72 / 0.2)}.border-blue-800{--tw-border-opacity:1;border-color:rgb(30 64 175 / var(--tw-border-opacity, 1))}.border-coolBorder{--tw-border-opacity:1;border-color:rgb(229 231 235 / var(--tw-border-opacity, 1))}.border-coolBorder\/50{border-color:rgb(229 231 235 / 0.5)}.border-slate-200{--tw-border-opacity:1;border-color:rgb(226 232 240 / var(--tw-border-opacity, 1))}.border-transparent{border-color:transparent}.border-accentBlue\/30{border-color:rgb(37 99 235 / 0.3)}.border-accentCyan\/20{border-color:rgb(8 145 178 / 0.2)}.border-accentCyan\/30{border-color:rgb(8 145 178 / 0.3)}.border-accentIndigo\/20{border-color:rgb(79 70 229 / 0.2)}.border-l-accentAmber{--tw-border-opacity:1;border-left-color:rgb(217 119 6 / var(--tw-border-opacity, 1))}.border-l-accentEmerald{--tw-border-opacity:1;border-left-color:rgb(5 150 105 / var(--tw-border-opacity, 1))}.border-l-accentRose{--tw-border-opacity:1;border-left-color:rgb(225 29 72 / var(--tw-border-opacity, 1))}.border-l-transparent{border-left-color:transparent}.bg-coolDark{--tw-bg-opacity:1;background-color:rgb(243 244 246 / var(--tw-bg-opacity, 1))}.bg-accentAmber\/10{background-color:rgb(217 119 6 / 0.1)}.bg-accentBlue\/10{background-color:rgb(37 99 235 / 0.1)}.bg-accentCyan{--tw-bg-opacity:1;background-color:rgb(8 145 178 / var(--tw-bg-opacity, 1))}.bg-accentCyan\/10{background-color:rgb(8 145 178 / 0.1)}.bg-accentEmerald\/10{background-color:rgb(5 150 105 / 0.1)}.bg-accentIndigo{--tw-bg-opacity:1;background-color:rgb(79 70 229 / var(--tw-bg-opacity, 1))}.bg-accentIndigo\/10{background-color:rgb(79 70 229 / 0.1)}.bg-accentRose{--tw-bg-opacity:1;background-color:rgb(225 29 72 / var(--tw-bg-opacity, 1))}.bg-accentRose\/10{background-color:rgb(225 29 72 / 0.1)}.bg-accentRose\/5{background-color:rgb(225 29 72 / 0.05)}.bg-coolCard{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-gray-100{--tw-bg-opacity:1;background-color:rgb(243 244 246 / var(--tw-bg-opacity, 1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.bg-royalBlue{--tw-bg-opacity:1;background-color:rgb(65 105 225 / var(--tw-bg-opacity, 1))}.bg-slate-100{--tw-bg-opacity:1;background-color:rgb(241 245 249 / var(--tw-bg-opacity, 1))}.bg-slate-200{--tw-bg-opacity:1;background-color:rgb(226 232 240 / var(--tw-bg-opacity, 1))}.bg-slate-900\/40{background-color:rgb(15 23 42 / 0.4)}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-accentBlue{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.bg-gradient-to-r{background-image:linear-gradient(to right, var(--tw-gradient-stops))}.from-accentIndigo{--tw-gradient-from:#4f46e5 var(--tw-gradient-from-position);--tw-gradient-to:rgb(79 70 229 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.to-accentBlue{--tw-gradient-to:#2563eb var(--tw-gradient-to-position)}.p-1\.5{padding:0.375rem}.p-2{padding:0.5rem}.p-2\.5{padding:0.625rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.py-4{padding-top:1rem;padding-bottom:1rem}.pb-16{padding-bottom:4rem}.pl-3{padding-left:0.75rem}.pl-9{padding-left:2.25rem}.pr-4{padding-right:1rem}.pt-4{padding-top:1rem}.pr-2{padding-right:0.5rem}.pb-2{padding-bottom:0.5rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-\[10px\]{font-size:10px}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.text-2xl{font-size:1.5rem;line-height:2rem}.text-\[9px\]{font-size:9px}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.tracking-tight{letter-spacing:-0.025em}.tracking-wider{letter-spacing:0.05em}.text-slate-800{--tw-text-opacity:1;color:rgb(30 41 59 / var(--tw-text-opacity, 1))}.text-accentAmber{--tw-text-opacity:1;color:rgb(217 119 6 / var(--tw-text-opacity, 1))}.text-accentBlue{--tw-text-opacity:1;color:rgb(37 99 235 / var(--tw-text-opacity, 1))}.text-accentCyan{--tw-text-opacity:1;color:rgb(8 145 178 / var(--tw-text-opacity, 1))}.text-accentEmerald{--tw-text-opacity:1;color:rgb(5 150 105 / var(--tw-text-opacity, 1))}.text-accentIndigo{--tw-text-opacity:1;color:rgb(79 70 229 / var(--tw-text-opacity, 1))}.text-accentRose{--tw-text-opacity:1;color:rgb(225 29 72 / var(--tw-text-opacity, 1))}.text-royalBlue{--tw-text-opacity:1;color:rgb(65 105 225 / var(--tw-text-opacity, 1))}.text-slate-400{--tw-text-opacity:1;color:rgb(148 163 184 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-slate-600{--tw-text-opacity:1;color:rgb(71 85 105 / var(--tw-text-opacity, 1))}.text-slate-700{--tw-text-opacity:1;color:rgb(51 65 85 / var(--tw-text-opacity, 1))}.text-slate-900{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.opacity-0{opacity:0}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-md{--tw-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-accentCyan\/10{--tw-shadow-color:rgb(8 145 178 / 0.1);--tw-shadow:var(--tw-shadow-colored)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-1000{transition-duration:1000ms}.duration-200{transition-duration:200ms}.duration-300{transition-duration:300ms}.selection\:bg-accentCyan\/30 *::selection{background-color:rgb(8 145 178 / 0.3)}.selection\:text-slate-900 *::selection{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.selection\:bg-accentCyan\/30::selection{background-color:rgb(8 145 178 / 0.3)}.selection\:text-slate-900::selection{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.hover\:-translate-y-0\.5:hover{--tw-translate-y:-0.125rem;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.hover\:-translate-y-1:hover{--tw-translate-y:-0.25rem;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.hover\:border-accentAmber\/30:hover{border-color:rgb(217 119 6 / 0.3)}.hover\:border-accentAmber\/50:hover{border-color:rgb(217 119 6 / 0.5)}.hover\:border-accentBlue\/50:hover{border-color:rgb(37 99 235 / 0.5)}.hover\:border-accentCyan\/50:hover{border-color:rgb(8 145 178 / 0.5)}.hover\:border-accentEmerald\/50:hover{border-color:rgb(5 150 105 / 0.5)}.hover\:border-accentIndigo\/10:hover{border-color:rgb(79 70 229 / 0.1)}.hover\:border-accentIndigo\/30:hover{border-color:rgb(79 70 229 / 0.3)}.hover\:border-accentIndigo\/50:hover{border-color:rgb(79 70 229 / 0.5)}.hover\:border-accentRose\/30:hover{border-color:rgb(225 29 72 / 0.3)}.hover\:border-accentRose\/50:hover{border-color:rgb(225 29 72 / 0.5)}.hover\:border-slate-500:hover{--tw-border-opacity:1;border-color:rgb(100 116 139 / var(--tw-border-opacity, 1))}.hover\:border-accentCyan\/80:hover{border-color:rgb(8 145 178 / 0.8)}.hover\:border-coolBorder:hover{--tw-border-opacity:1;border-color:rgb(229 231 235 / var(--tw-border-opacity, 1))}.hover\:border-slate-400:hover{--tw-border-opacity:1;border-color:rgb(148 163 184 / var(--tw-border-opacity, 1))}.hover\:bg-accentCyan\/5:hover{background-color:rgb(8 145 178 / 0.05)}.hover\:bg-accentIndigo\/5:hover{background-color:rgb(79 70 229 / 0.05)}.hover\:bg-accentRose\/10:hover{background-color:rgb(225 29 72 / 0.1)}.hover\:bg-gray-200:hover{--tw-bg-opacity:1;background-color:rgb(229 231 235 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-50:hover{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.hover\:bg-white:hover{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.hover\:text-accentRose:hover{--tw-text-opacity:1;color:rgb(225 29 72 / var(--tw-text-opacity, 1))}.hover\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.hover\:shadow-sm:hover{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-1:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-accentCyan:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(8 145 178 / var(--tw-ring-opacity, 1))}.active\:scale-95:active{--tw-scale-x:.95;--tw-scale-y:.95;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.active\:scale-\[0\.98\]:active{--tw-scale-x:0.98;--tw-scale-y:0.98;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.active\:scale-\[0\.99\]:active{--tw-scale-x:0.99;--tw-scale-y:0.99;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.group:hover .group-hover\:bg-accentBlue{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-accentCyan{--tw-bg-opacity:1;background-color:rgb(8 145 178 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-accentEmerald{--tw-bg-opacity:1;background-color:rgb(5 150 105 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-accentIndigo{--tw-bg-opacity:1;background-color:rgb(79 70 229 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-accentRose{--tw-bg-opacity:1;background-color:rgb(225 29 72 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-slate-500{--tw-bg-opacity:1;background-color:rgb(100 116 139 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:text-slate-700{--tw-text-opacity:1;color:rgb(51 65 85 / var(--tw-text-opacity, 1))}.group:hover .group-hover\:text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}@media (min-width: 640px){.sm\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.sm\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.sm\:p-6{padding:1.5rem}.sm\:px-6{padding-left:1.5rem;padding-right:1.5rem}}@media (min-width: 768px){.md\:col-span-2{grid-column:span 2 / span 2}.md\:grid-cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.md\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.md\:flex-row{flex-direction:row}.md\:items-center{align-items:center}}@media (min-width: 1024px){.lg\:col-span-2{grid-column:span 2 / span 2}.lg\:w-auto{width:auto}.lg\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.lg\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.lg\:grid-cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}.lg\:flex-row{flex-direction:row}.lg\:justify-start{justify-content:flex-start}.lg\:px-8{padding-left:2rem;padding-right:2rem}}@media (min-width: 1280px){.xl\:inline{display:inline}}</style><style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.pointer-events-auto{pointer-events:auto}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0px}.inset-y-0{top:0px;bottom:0px}.bottom-6{bottom:1.5rem}.left-0{left:0px}.right-6{right:1.5rem}.top-0{top:0px}.z-10{z-index:10}.z-40{z-index:40}.z-50{z-index:50}.-m-1\.5{margin:-0.375rem}.mx-auto{margin-left:auto;margin-right:auto}.mb-2{margin-bottom:0.5rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mb-8{margin-bottom:2rem}.mt-1{margin-top:0.25rem}.mt-4{margin-top:1rem}.mt-8{margin-top:2rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-1\.5{height:0.375rem}.h-2{height:0.5rem}.h-4{height:1rem}.h-5{height:1.25rem}.h-8{height:2rem}.h-full{height:100%}.max-h-\[600px\]{max-height:600px}.max-h-\[90vh\]{max-height:90vh}.min-h-screen{min-height:100vh}.min-h-\[5rem\]{min-height:5rem}.w-1\.5{width:0.375rem}.w-12{width:3rem}.w-2{width:0.5rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-8{width:2rem}.w-full{width:100%}.min-w-\[200px\]{min-width:200px}.min-w-\[85px\]{min-width:85px}.max-w-4xl{max-width:56rem}.max-w-7xl{max-width:80rem}.border-collapse{border-collapse:collapse}.translate-y-20{--tw-translate-y:5rem;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.scale-95{--tw-scale-x:.95;--tw-scale-y:.95;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.transform{transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@keyframes ping{75%, 100%{transform:scale(2);opacity:0}}.animate-ping{animation:ping 1s cubic-bezier(0, 0, 0.2, 1) infinite}.cursor-pointer{cursor:pointer}.select-none{-webkit-user-select:none;user-select:none}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.gap-5{gap:1.25rem}.gap-8{gap:2rem}.space-y-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.375rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-6 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.5rem * var(--tw-space-y-reverse))}.space-y-8 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(2rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(2rem * var(--tw-space-y-reverse))}.divide-y > :not([hidden]) ~ :not([hidden]){--tw-divide-y-reverse:0;border-top-width:calc(1px * calc(1 - var(--tw-divide-y-reverse)));border-bottom-width:calc(1px * var(--tw-divide-y-reverse))}.divide-coolBorder > :not([hidden]) ~ :not([hidden]){--tw-divide-opacity:1;border-color:rgb(229 231 235 / var(--tw-divide-opacity, 1))}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.whitespace-nowrap{white-space:nowrap}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-md{border-radius:0.375rem}.rounded-xl{border-radius:0.75rem}.rounded-t-2xl{border-top-left-radius:1rem;border-top-right-radius:1rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-l-4{border-left-width:4px}.border-t{border-top-width:1px}.border-accentAmber\/20{border-color:rgb(217 119 6 / 0.2)}.border-accentBlue\/20{border-color:rgb(37 99 235 / 0.2)}.border-accentCyan\/50{border-color:rgb(8 145 178 / 0.5)}.border-accentEmerald\/20{border-color:rgb(5 150 105 / 0.2)}.border-accentRose\/10{border-color:rgb(225 29 72 / 0.1)}.border-accentRose\/20{border-color:rgb(225 29 72 / 0.2)}.border-blue-800{--tw-border-opacity:1;border-color:rgb(30 64 175 / var(--tw-border-opacity, 1))}.border-coolBorder{--tw-border-opacity:1;border-color:rgb(229 231 235 / var(--tw-border-opacity, 1))}.border-coolBorder\/50{border-color:rgb(229 231 235 / 0.5)}.border-slate-200{--tw-border-opacity:1;border-color:rgb(226 232 240 / var(--tw-border-opacity, 1))}.border-transparent{border-color:transparent}.border-l-accentAmber{--tw-border-opacity:1;border-left-color:rgb(217 119 6 / var(--tw-border-opacity, 1))}.border-l-accentEmerald{--tw-border-opacity:1;border-left-color:rgb(5 150 105 / var(--tw-border-opacity, 1))}.border-l-accentRose{--tw-border-opacity:1;border-left-color:rgb(225 29 72 / var(--tw-border-opacity, 1))}.border-l-transparent{border-left-color:transparent}.bg-coolDark{--tw-bg-opacity:1;background-color:rgb(243 244 246 / var(--tw-bg-opacity, 1))}.bg-accentAmber\/10{background-color:rgb(217 119 6 / 0.1)}.bg-accentBlue\/10{background-color:rgb(37 99 235 / 0.1)}.bg-accentCyan{--tw-bg-opacity:1;background-color:rgb(8 145 178 / var(--tw-bg-opacity, 1))}.bg-accentCyan\/10{background-color:rgb(8 145 178 / 0.1)}.bg-accentEmerald\/10{background-color:rgb(5 150 105 / 0.1)}.bg-accentIndigo{--tw-bg-opacity:1;background-color:rgb(79 70 229 / var(--tw-bg-opacity, 1))}.bg-accentIndigo\/10{background-color:rgb(79 70 229 / 0.1)}.bg-accentRose{--tw-bg-opacity:1;background-color:rgb(225 29 72 / var(--tw-bg-opacity, 1))}.bg-accentRose\/10{background-color:rgb(225 29 72 / 0.1)}.bg-accentRose\/5{background-color:rgb(225 29 72 / 0.05)}.bg-coolCard{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-gray-100{--tw-bg-opacity:1;background-color:rgb(243 244 246 / var(--tw-bg-opacity, 1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.bg-royalBlue{--tw-bg-opacity:1;background-color:rgb(65 105 225 / var(--tw-bg-opacity, 1))}.bg-slate-100{--tw-bg-opacity:1;background-color:rgb(241 245 249 / var(--tw-bg-opacity, 1))}.bg-slate-200{--tw-bg-opacity:1;background-color:rgb(226 232 240 / var(--tw-bg-opacity, 1))}.bg-slate-900\/40{background-color:rgb(15 23 42 / 0.4)}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-gradient-to-r{background-image:linear-gradient(to right, var(--tw-gradient-stops))}.from-accentIndigo{--tw-gradient-from:#4f46e5 var(--tw-gradient-from-position);--tw-gradient-to:rgb(79 70 229 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.to-accentBlue{--tw-gradient-to:#2563eb var(--tw-gradient-to-position)}.p-1\.5{padding:0.375rem}.p-2{padding:0.5rem}.p-2\.5{padding:0.625rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.py-4{padding-top:1rem;padding-bottom:1rem}.pb-16{padding-bottom:4rem}.pl-3{padding-left:0.75rem}.pl-9{padding-left:2.25rem}.pr-4{padding-right:1rem}.pt-4{padding-top:1rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-\[10px\]{font-size:10px}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.tracking-tight{letter-spacing:-0.025em}.tracking-wider{letter-spacing:0.05em}.text-slate-800{--tw-text-opacity:1;color:rgb(30 41 59 / var(--tw-text-opacity, 1))}.text-accentAmber{--tw-text-opacity:1;color:rgb(217 119 6 / var(--tw-text-opacity, 1))}.text-accentBlue{--tw-text-opacity:1;color:rgb(37 99 235 / var(--tw-text-opacity, 1))}.text-accentCyan{--tw-text-opacity:1;color:rgb(8 145 178 / var(--tw-text-opacity, 1))}.text-accentEmerald{--tw-text-opacity:1;color:rgb(5 150 105 / var(--tw-text-opacity, 1))}.text-accentIndigo{--tw-text-opacity:1;color:rgb(79 70 229 / var(--tw-text-opacity, 1))}.text-accentRose{--tw-text-opacity:1;color:rgb(225 29 72 / var(--tw-text-opacity, 1))}.text-royalBlue{--tw-text-opacity:1;color:rgb(65 105 225 / var(--tw-text-opacity, 1))}.text-slate-400{--tw-text-opacity:1;color:rgb(148 163 184 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-slate-600{--tw-text-opacity:1;color:rgb(71 85 105 / var(--tw-text-opacity, 1))}.text-slate-700{--tw-text-opacity:1;color:rgb(51 65 85 / var(--tw-text-opacity, 1))}.text-slate-900{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.opacity-0{opacity:0}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-md{--tw-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-accentCyan\/10{--tw-shadow-color:rgb(8 145 178 / 0.1);--tw-shadow:var(--tw-shadow-colored)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-1000{transition-duration:1000ms}.duration-200{transition-duration:200ms}.duration-300{transition-duration:300ms}.selection\:bg-accentCyan\/30 *::selection{background-color:rgb(8 145 178 / 0.3)}.selection\:text-slate-900 *::selection{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.selection\:bg-accentCyan\/30::selection{background-color:rgb(8 145 178 / 0.3)}.selection\:text-slate-900::selection{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.hover\:-translate-y-0\.5:hover{--tw-translate-y:-0.125rem;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.hover\:-translate-y-1:hover{--tw-translate-y:-0.25rem;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.hover\:border-accentAmber\/30:hover{border-color:rgb(217 119 6 / 0.3)}.hover\:border-accentAmber\/50:hover{border-color:rgb(217 119 6 / 0.5)}.hover\:border-accentBlue\/50:hover{border-color:rgb(37 99 235 / 0.5)}.hover\:border-accentCyan\/50:hover{border-color:rgb(8 145 178 / 0.5)}.hover\:border-accentEmerald\/50:hover{border-color:rgb(5 150 105 / 0.5)}.hover\:border-accentIndigo\/10:hover{border-color:rgb(79 70 229 / 0.1)}.hover\:border-accentIndigo\/30:hover{border-color:rgb(79 70 229 / 0.3)}.hover\:border-accentIndigo\/50:hover{border-color:rgb(79 70 229 / 0.5)}.hover\:border-accentRose\/30:hover{border-color:rgb(225 29 72 / 0.3)}.hover\:border-accentRose\/50:hover{border-color:rgb(225 29 72 / 0.5)}.hover\:border-slate-500:hover{--tw-border-opacity:1;border-color:rgb(100 116 139 / var(--tw-border-opacity, 1))}.hover\:bg-accentCyan\/5:hover{background-color:rgb(8 145 178 / 0.05)}.hover\:bg-accentIndigo\/5:hover{background-color:rgb(79 70 229 / 0.05)}.hover\:bg-accentRose\/10:hover{background-color:rgb(225 29 72 / 0.1)}.hover\:bg-gray-200:hover{--tw-bg-opacity:1;background-color:rgb(229 231 235 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-50:hover{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.hover\:text-accentRose:hover{--tw-text-opacity:1;color:rgb(225 29 72 / var(--tw-text-opacity, 1))}.hover\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.hover\:shadow-sm:hover{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-1:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-accentCyan:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(8 145 178 / var(--tw-ring-opacity, 1))}.active\:scale-95:active{--tw-scale-x:.95;--tw-scale-y:.95;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.active\:scale-\[0\.98\]:active{--tw-scale-x:0.98;--tw-scale-y:0.98;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.active\:scale-\[0\.99\]:active{--tw-scale-x:0.99;--tw-scale-y:0.99;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.group:hover .group-hover\:bg-accentBlue{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-accentCyan{--tw-bg-opacity:1;background-color:rgb(8 145 178 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-accentEmerald{--tw-bg-opacity:1;background-color:rgb(5 150 105 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-accentIndigo{--tw-bg-opacity:1;background-color:rgb(79 70 229 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-accentRose{--tw-bg-opacity:1;background-color:rgb(225 29 72 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:bg-slate-500{--tw-bg-opacity:1;background-color:rgb(100 116 139 / var(--tw-bg-opacity, 1))}.group:hover .group-hover\:text-slate-700{--tw-text-opacity:1;color:rgb(51 65 85 / var(--tw-text-opacity, 1))}.group:hover .group-hover\:text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}@media (min-width: 640px){.sm\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.sm\:p-6{padding:1.5rem}.sm\:px-6{padding-left:1.5rem;padding-right:1.5rem}}@media (min-width: 768px){.md\:grid-cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}.md\:flex-row{flex-direction:row}.md\:items-center{align-items:center}}@media (min-width: 1024px){.lg\:col-span-2{grid-column:span 2 / span 2}.lg\:w-auto{width:auto}.lg\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.lg\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.lg\:grid-cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}.lg\:flex-row{flex-direction:row}.lg\:justify-start{justify-content:flex-start}.lg\:px-8{padding-left:2rem;padding-right:2rem}}@media (min-width: 1280px){.xl\:inline{display:inline}}</style>
+}</style>
 
 <style id="print-styles">
   #printArea{display:none;}
@@ -2359,7 +2477,7 @@ body.bg-coolDark{
             </button>
           </div>
         </div>
-        <div class="p-4 sm:p-6 overflow-y-auto custom-scrollbar" id="modalBody"></div>
+        <div class="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0" id="modalBody"></div>
       </div>
     </div>
   </div>
@@ -2557,12 +2675,6 @@ body.bg-coolDark{
           </span>
         </button>
 
-        <label id="uploadFileLabel" title="Upload a spreadsheet" class="group flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer text-sm font-medium transition-colors duration-150 text-white/90 hover:text-white whitespace-nowrap aria-disabled:opacity-40 aria-disabled:cursor-not-allowed">
-          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-spreadsheet shrink-0 transition-transform duration-200 group-active:scale-90"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg>
-          <span id="uploadFileLabelText" class="hidden sm:inline">Upload File</span>
-          <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" class="hidden">
-        </label>
-
         <button id="authLogoutBtn" type="button" title="Log out" aria-label="Log out" class="hidden items-center gap-1.5 ml-1 pl-3 py-2 pr-2.5 border-l border-white/15 text-white/60 hover:text-white active:scale-95 cursor-pointer transition-colors duration-150 text-sm font-medium whitespace-nowrap">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" x2="12" y1="2" y2="12"></line></svg>
           <span id="authLogoutEmail" class="hidden"></span>
@@ -2629,7 +2741,7 @@ body.bg-coolDark{
       <details class="side-menu-group-details">
         <summary class="side-menu-group-summary">
           <span class="side-menu-group-title">Quick actions</span>
-          <span class="side-menu-group-count">7</span>
+          <span class="side-menu-group-count">6</span>
           <svg class="side-menu-group-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
         </summary>
 
@@ -2669,11 +2781,6 @@ body.bg-coolDark{
         <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
-      <div role="button" tabindex="0" onclick="triggerFileUploadFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();triggerFileUploadFromMenu();}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg></span>
-        <span>Upload File</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
       </details>
 
       <details class="side-menu-group-details">
@@ -2840,25 +2947,25 @@ body.bg-coolDark{
         <p class="text-xs text-accentRose mt-3 text-center" id="stat-findings-2025-sub">+42% vs 2024</p>
       </div>
 
-      <div onclick="openAuditQueueModal()" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentAmber/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
+      <div onclick="openAuditQueueModal()" class="bg-coolCard border border-coolBorder rounded-2xl p-3.5 sm:p-4 hover:border-accentAmber/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold tracking-wider text-slate-500">AUDITOR NEXT ASSIGNMENT</span>
           <span class="p-1.5 bg-accentAmber/10 text-accentAmber rounded-lg group-hover:bg-accentAmber group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clipboard-list w-4 h-4"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path></svg></span>
         </div>
-        <div class="mt-4">
-          <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-accentAmber" id="stat-next-assignment-count">0 <span class="text-sm font-medium text-slate-500">queued</span></h3>
-          <p class="text-xs text-slate-500 mt-1" id="stat-next-assignment-sub">No branches for audit</p>
-          <p class="text-xs font-semibold text-slate-700 mt-2 truncate" id="stat-next-assignment-branch">—</p>
+        <div class="mt-3">
+          <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentAmber" id="stat-next-assignment-count">0 <span class="text-xs font-medium text-slate-500">queued</span></h3>
+          <div class="mt-2.5 pt-2.5 border-t border-coolBorder space-y-1.5 cursor-pointer" id="stat-next-assignment-branch-list" onclick="event.stopPropagation(); openAuditQueueModal('upnext');" title="Open Assignment Branches Overview, sorted by Up Next Auditor"></div>
         </div>
       </div>
 
-      <div onclick="openBranchAuditScheduleModal()" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentEmerald/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
+      <div onclick="openBranchAuditScheduleModal()" class="bg-coolCard border border-coolBorder rounded-2xl p-3.5 sm:p-4 hover:border-accentEmerald/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold tracking-wider text-slate-500">BRANCH AUDIT INTERVAL</span>
           <span class="p-1.5 bg-accentEmerald/10 text-accentEmerald rounded-lg group-hover:bg-accentEmerald group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-badge-check w-4 h-4"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
         </div>
-        <div class="mt-4">
-          <div class="flex flex-col gap-1" id="stat-recent-audited-list"></div>
+        <div class="mt-3">
+          <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentEmerald" id="stat-recent-audited-count">0 <span class="text-xs font-medium text-slate-500">recent audit</span></h3>
+          <div class="mt-2.5 pt-2.5 border-t border-coolBorder space-y-1.5" id="stat-recent-audited-list"></div>
         </div>
       </div>
 
@@ -2869,7 +2976,9 @@ body.bg-coolDark{
         </div>
         <div class="mt-4">
           <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900" id="stat-total-accounts">12,924</h3>
-          <p class="text-xs text-slate-500 mt-1">Active collection portfolio</p>
+          <p class="text-xs text-slate-400 mt-1" id="stat-total-accounts-prev">— total accounts (<span id="span-accounts-prev-month">PREV</span>)</p>
+          <p class="text-xs text-slate-400 mt-2" id="stat-total-repo-latest">— total repo (<span id="span-repo-month">LATEST</span>)</p>
+          <p class="text-xs text-slate-400" id="stat-total-repo-prev">— total repo (<span id="span-repo-prev-month">PREV</span>)</p>
         </div>
       </div>
     </div>
@@ -3349,6 +3458,10 @@ body.bg-coolDark{
       const modalBody = document.getElementById('modalBody');
       modalTitle.innerHTML = title;
       modalBody.innerHTML = ''; 
+      // Only the Branch Audit Interval modal uses the fixed-toolbar /
+      // scrolling-cards-only layout; every other modal keeps the normal
+      // whole-body scroll, so make sure this doesn't leak between opens.
+      modalBody.classList.remove('audit-schedule-mode');
       // Default the header Edit button off; the 'all' branches-overview
       // path (renderModalFilteredView, below) turns it back on for its
       // own list right after this.
@@ -3362,7 +3475,11 @@ body.bg-coolDark{
           // point it at this specific branch so it's consistent everywhere.
           updateModalEditAssignButton([filterValue]);
       } else if (type === 'auditSchedule') {
+          modalBody.classList.add('audit-schedule-mode');
           renderAuditScheduleModal(modalBody);
+      } else if (type === 'assignment') {
+          if (!window.assignmentFilterState) window.assignmentFilterState = defaultAssignmentFilterState();
+          renderAssignmentModalView();
       } else if (type === 'editAssignment') {
           renderEditAssignmentModal(filterValue, modalBody);
       } else if (type === 'auditor') {
@@ -3439,11 +3556,9 @@ body.bg-coolDark{
               if (branchesToDisplay.length > 0) renderBranchTable(branchesToDisplay, tableContainer, type, filterValue);
               else tableContainer.innerHTML = '<div class="p-8 text-center text-sm text-slate-500 font-semibold bg-gray-50 rounded-xl border border-coolBorder">No targeted branch parameters found.</div>';
           } else if (type === 'accounts') {
-              branchesToDisplay = [...activeData.branches].sort((a, b) => b.accountsMay - a.accountsMay);
+              window.accountsModalSort = null;
               modalBody.innerHTML = '<div id="modalTableContainer"></div>';
-              const tableContainer = document.getElementById('modalTableContainer');
-              if (branchesToDisplay.length > 0) renderBranchTable(branchesToDisplay, tableContainer, type, filterValue);
-              else tableContainer.innerHTML = '<div class="p-8 text-center text-sm text-slate-500 font-semibold bg-gray-50 rounded-xl border border-coolBorder">No targeted branch parameters found.</div>';
+              renderAccountsModalTable();
           } else {
               // all, collection, sales, service — use combinable filter state (status + audit status)
               window.modalFilterState = {
@@ -3458,11 +3573,15 @@ body.bg-coolDark{
       const modal = document.getElementById('dataModal');
       const modalDialog = document.getElementById('modalDialog');
       modal.classList.remove('hidden');
-      setTimeout(() => {
+      // Double rAF (not a magic-number setTimeout) guarantees the browser
+      // has actually painted the "before" state first, so the transition
+      // reliably kicks in on the very next frame instead of occasionally
+      // racing a slow paint and skipping straight to the end state.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
           modal.classList.remove('opacity-0');
           modalDialog.classList.remove('scale-95');
           modalDialog.classList.add('scale-100');
-      }, 10);
+      }));
     }
 
     // Prints only whatever specific area/data is currently open in the modal
@@ -3555,11 +3674,12 @@ body.bg-coolDark{
           .map(x => `<option value="${escapeHTML(x.name)}" ${x.name === resolvedName ? 'selected' : ''}>${escapeHTML(x.name)}</option>`)
           .join('');
 
-      // "Assigned Auditor" reflects column AN specifically (assignedAuditorRaw)
-      // — who's assigned to do the branch's NEXT audit — as opposed to
-      // b.auditor, which can get overwritten elsewhere with whoever did the
-      // most recent *past* round. Keeping this its own field is what lets
-      // it drive the Auditor Next Assignment card correctly.
+      // "Up Next Auditor" reflects AUDIT DATA (FINAL) column AW specifically
+      // (assignedAuditorRaw) — who's assigned to do the branch's NEXT audit
+      // — as opposed to b.auditor, which can get overwritten elsewhere with
+      // whoever did the most recent *past* round. Keeping this its own
+      // field is what lets it drive the Auditor Next Assignment card
+      // correctly.
       const currentAssigned = (b && b.assignedAuditorRaw && b.assignedAuditorRaw !== 'UNASSIGNED') ? b.assignedAuditorRaw : '';
       const currentAssignedUpper = currentAssigned.toUpperCase();
       const assignedKnownUpper = AUDITOR_NAMES.map(n => n.toUpperCase());
@@ -3603,7 +3723,7 @@ body.bg-coolDark{
 
       modalBody.innerHTML = `
         <div class="bg-white border border-coolBorder rounded-xl p-5 shadow-sm max-w-lg mx-auto">
-          <p class="text-xs text-slate-500 mb-4">Rotation fields save straight to <strong>AUDIT DATA (FINAL)</strong> (auditor names in columns AO/AQ/AS/AU, dates in AP/AR/AT/AV) — no need to open the Sheet. Status updates automatically from the Expected Audit Date formula, so it isn't set here.</p>
+          <p class="text-xs text-slate-500 mb-4">Rotation fields and Up Next Auditor all save straight to <strong>AUDIT DATA (FINAL)</strong> (auditor names in columns AO/AQ/AS/AU, dates in AP/AR/AT/AV, Up Next Auditor in AW) — no need to open the Sheet. Status updates automatically from the Expected Audit Date formula, so it isn't set here.</p>
 
           <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Branch</label>
           <select id="editAssign-branch" onchange="openEditAssignmentModal(this.value)"
@@ -3615,8 +3735,8 @@ body.bg-coolDark{
           <input id="editAssign-expectedDate" type="date" value="${(b && b.expectedAuditDateInput) || ''}"
                  class="w-full mb-5 px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan">
 
-          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assigned Auditor <span class="normal-case font-normal text-slate-400">(col AN — who's up next, shown on the Auditor Next Assignment card)</span></label>
-          <select id="editAssign-assignedAuditor" class="w-full px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan">
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Up Next Auditor <span class="normal-case font-normal text-slate-400">(AUDIT DATA (FINAL) col AW — who's up next, shown on the Auditor Next Assignment card)</span></label>
+          <select id="editAssign-upNextAuditor" class="w-full px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan">
             ${assignedAuditorOptions}
           </select>
 
@@ -3646,10 +3766,10 @@ body.bg-coolDark{
 
     function submitEditAssignment(branchName) {
       const val = id => (document.getElementById(id) || {}).value || '';
-      const assignedAuditorVal = val('editAssign-assignedAuditor');
+      const upNextAuditorVal = val('editAssign-upNextAuditor');
       const fields = {
           expectedDate: val('editAssign-expectedDate'),
-          assignedAuditor: assignedAuditorVal,
+          upNextAuditor: upNextAuditorVal,
           rotations: [1, 2, 3, 4].map(n => ({
               round: n,
               auditor: val(`editAssign-auditor${n}`),
@@ -3745,10 +3865,10 @@ body.bg-coolDark{
           const b = (activeData.branches || []).find(x => x.name === branchName);
           if (b) {
               b.expectedAuditDateInput = fields.expectedDate || '';
-              // Assigned Auditor (column AN) drives the Auditor Next
-              // Assignment card directly — update it independently of the
-              // rotation-round-derived b.auditor below.
-              b.assignedAuditorRaw = fields.assignedAuditor || 'UNASSIGNED';
+              // Up Next Auditor (AUDIT DATA (FINAL) column AW) drives the Auditor
+              // Next Assignment card directly — update it independently of
+              // the rotation-round-derived b.auditor below.
+              b.assignedAuditorRaw = fields.upNextAuditor || 'UNASSIGNED';
               const newRounds = {};
               (fields.rotations || []).forEach(r => {
                   newRounds[r.round] = {
@@ -3763,6 +3883,17 @@ body.bg-coolDark{
               if (dated.length > 0) {
                   dated.sort((x, y) => y.dateRaw - x.dateRaw);
                   b.auditor = dated[0].auditor;
+              }
+              // Optimistic status bump: Audit Status normally comes from a
+              // formula on the Sheet (driven by Expected Audit Date), which
+              // this client can't recompute exactly — but the person just
+              // told us this branch now has an Assigned Auditor, so treat
+              // it as FOR AUDIT immediately (unless it's already DONE) so
+              // the queue/"Up Next" card reflects the save right away
+              // instead of waiting ~2s for the authoritative server refetch
+              // below to correct it.
+              if (b.assignedAuditorRaw && b.assignedAuditorRaw !== 'UNASSIGNED' && (b.auditStatus || '').toUpperCase() !== 'DONE') {
+                  b.auditStatus = 'FOR AUDIT';
               }
           }
           if (typeof updateCalculations === 'function') updateCalculations();
@@ -3782,19 +3913,19 @@ body.bg-coolDark{
     }
 
     // Sends the assignment fields to the Apps Script backend, which writes
-    // them into AUDIT DATA (FINAL) for the matching branch row:
-    // expectedDate -> column AM (drives the status formula), assignedAuditor
-    // -> column AN ("Assigned Auditor" — feeds the Auditor Next Assignment
-    // card), and each rotation round's auditor/date -> columns AO/AP,
-    // AQ/AR, AS/AT, AU/AV respectively.
+    // them to the matching branch row, all within AUDIT DATA (FINAL):
+    // expectedDate -> column AM (drives the status formula), each rotation
+    // round's auditor/date -> columns AO/AP, AQ/AR, AS/AT, AU/AV, and
+    // upNextAuditor -> column AW ("Up Next Auditor" — feeds the Auditor
+    // Next Assignment card).
     //
-    // NOTE: the assignedAuditor param requires the Apps Script doGet/
-    // saveAssignment handler to actually read it and write it to column AN.
-    // That backend script isn't part of this HTML file, so if it doesn't
-    // already accept this param it'll need a matching update there too —
-    // otherwise this field will save fine for the current browser session
-    // (the dashboard updates immediately) but won't persist to the Sheet
-    // across a refresh.
+    // NOTE: the upNextAuditor param requires the Apps Script doGet/
+    // saveAssignment handler to actually read it and write it to
+    // AUDIT DATA (FINAL) column AW. That backend script isn't part of this HTML
+    // file, so if it doesn't already accept this param it'll need a
+    // matching update there too — otherwise this field will save fine for
+    // the current browser session (the dashboard updates immediately) but
+    // won't persist to the Sheet across a refresh.
     //
     // NOTE: this used to POST a JSON body to doPost(). That silently never
     // reached the sheet: Apps Script /exec URLs respond with a redirect,
@@ -3820,7 +3951,7 @@ body.bg-coolDark{
           idToken: idToken,
           branchName: branchName,
           expectedDate: fields.expectedDate || '',
-          assignedAuditor: fields.assignedAuditor || '',
+          upNextAuditor: fields.upNextAuditor || '',
           rotations: JSON.stringify(fields.rotations)
       });
       const url = defaultAppsScriptUrl + '?' + params.toString();
@@ -3835,12 +3966,17 @@ body.bg-coolDark{
       if(b) openModal(`${b.name} — Detailed Profile`, 'branchDetail', b);
     }
 
-    // Opens the "All Branches" modal pre-filtered to the FOR AUDIT queue —
-    // used by the Auditor Next Assignment stack card.
-    // Opens the "All Branches" modal showing every branch (not pre-filtered
-    // to the FOR AUDIT queue) — used by the Auditor Next Assignment stack card.
-    function openAuditQueueModal() {
-      openModal('All Branches Overview', 'all', null);
+    // Opens the "Assignment Branches Overview" popup — used by the Auditor
+    // Next Assignment stack card. Shows the same total/done/for-audit/pending
+    // stock card and audit-status filter as the general All Branches popup,
+    // but its table is scoped to audit scheduling only: last audit round,
+    // most recent audit round, and the day-interval between them — every
+    // column fully sortable (see renderAssignmentModalView / setAssignmentSort).
+    function openAuditQueueModal(sortField) {
+      window.assignmentFilterState = defaultAssignmentFilterState();
+      assignmentSortField = sortField || 'recent';
+      assignmentSortDir = (assignmentSortField === 'name') ? 'asc' : 'desc';
+      openModal('Assignment Branches Overview', 'assignment', null);
     }
 
     // Opens the full per-branch audit schedule (every round found in AUDIT
@@ -3985,7 +4121,6 @@ body.bg-coolDark{
       const cardsHtml = branchNames.map((branchName, idx) => {
           const entry = schedule[branchName];
           const rounds = entry.rounds || [];
-          const initials = branchName.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
 
           const roundsHtml = rounds.map((rnd, rIdx) => {
               const palette = AUDIT_ROUND_COLORS[(rnd.round - 1) % AUDIT_ROUND_COLORS.length] || AUDIT_ROUND_COLORS[0];
@@ -4010,7 +4145,6 @@ body.bg-coolDark{
               <div class="bg-white border border-coolBorder rounded-xl px-3 py-2 shadow-sm hover:shadow-md hover:border-accentIndigo/40 transition-all">
                   <div class="flex items-center justify-between gap-2 mb-1.5">
                       <div class="flex items-center gap-2 min-w-0">
-                          <span class="w-6 h-6 rounded-lg bg-accentIndigo/10 text-accentIndigo flex items-center justify-center font-extrabold text-[10px] flex-shrink-0">${escapeHTML(initials)}</span>
                           <span class="text-xs font-extrabold text-slate-800 cursor-pointer hover:text-accentIndigo truncate" onclick="openModalDetail('${escapeHTML(branchName)}')">${idx + 1}. ${escapeHTML(branchName)}</span>
                       </div>
                       <span class="flex-shrink-0 text-[10px] font-bold bg-accentIndigo/10 text-accentIndigo rounded-full px-2 py-0.5">${rounds.length}</span>
@@ -4024,14 +4158,12 @@ body.bg-coolDark{
       }).join('');
 
       modalBody.innerHTML = `
-          ${toolbarHtml}
-          ${statsHtml}
-          <div class="flex items-start gap-1.5 px-2.5 py-1.5 bg-accentEmerald/10 border border-accentEmerald/20 rounded-lg mb-2 text-[10px] text-slate-600 leading-snug">
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentEmerald flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
-              <span>Numbered badge = audit round. Green "+Nd" = days since the previous round.</span>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[70vh] overflow-auto custom-scrollbar pr-1">
-              ${cardsHtml}
+          <div class="flex flex-col h-full" id="auditScheduleWrap">
+              ${toolbarHtml}
+              ${statsHtml}
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1 flex-1 min-h-0 overflow-y-auto custom-scrollbar" id="auditScheduleCards">
+                  ${cardsHtml}
+              </div>
           </div>
       `;
     }
@@ -4055,14 +4187,6 @@ body.bg-coolDark{
         const top = el.getBoundingClientRect().top + window.pageYOffset - headerOffset;
         window.scrollTo({ top: top, behavior: 'smooth' });
       }
-      if (typeof window.closeSideMenu === 'function') window.closeSideMenu();
-    }
-
-    // Fired from the shortcuts menu's "Upload File" item — reuses the same
-    // hidden file input the header button already wires up.
-    function triggerFileUploadFromMenu() {
-      const fileInput = document.getElementById('excelFile');
-      if (fileInput) fileInput.click();
       if (typeof window.closeSideMenu === 'function') window.closeSideMenu();
     }
 
@@ -4642,6 +4766,356 @@ body.bg-coolDark{
       return `<div class="flex flex-wrap items-center gap-2 mb-4"><span class="text-xs font-semibold text-slate-500 mr-1">Filter by audit status:</span>${buttonsHtml}</div>`;
     }
 
+    // Returns the last-completed round and the most-recently-completed round
+    // for a branch, read straight from activeData.branchAuditSchedule (the
+    // full AUDIT ROTATION (FINAL) history). Falls back to the branch's own
+    // lastAuditDate/auditor (and its queued "assigned auditor") when no
+    // rotation-sheet rounds exist at all, so a never-audited branch still
+    // shows something useful.
+    //
+    // intervalDays here is the "Audit Interval" shown in the Assignment
+    // Branches Overview table: days elapsed from the most recent audit
+    // round up to TODAY (real wall-clock date, recomputed every render) —
+    // not the gap between the last two rounds. That keeps the column
+    // reading as current staleness ("how overdue is this branch right
+    // now") rather than a historical, possibly stale, round-to-round gap.
+    function getBranchAuditRoundInfo(b) {
+      const schedule = (activeData.branchAuditSchedule || {})[b.name];
+      const dated = schedule ? (schedule.rounds || []).filter(r => r.dateRaw !== null && r.dateRaw !== undefined) : [];
+      const today = Date.now();
+
+      // Who's queued for the branch's NEXT audit round — read ONLY from
+      // assignedAuditorRaw (AUDIT DATA (FINAL) column AW, "Up Next Auditor"),
+      // the value the person explicitly sets and saves in the Edit
+      // Assignment form. Deliberately does NOT fall back to b.auditor
+      // (whoever did the most recent *past* round, as shown on the
+      // Detailed Profile) — that's a record of history, not a decision
+      // about what's next, and copying it in here was showing the wrong
+      // name whenever AW was blank.
+      const queuedAuditor = (b.assignedAuditorRaw && b.assignedAuditorRaw !== 'UNASSIGNED')
+          ? b.assignedAuditorRaw
+          : 'Unassigned';
+
+      // "Up Next Auditor" only applies once a branch has actually been set
+      // for audit (Audit Status = FOR AUDIT, saved via Edit Assignment) —
+      // this is the exact same filter the AUDITOR NEXT ASSIGNMENT dashboard
+      // tile uses for its "queued" count/breakdown, so the table column and
+      // that tile always agree on who's really up next. A DONE or PENDING
+      // branch shows nothing here even if column AW has a leftover name.
+      const isForAudit = (b.auditStatus || '').toUpperCase() === 'FOR AUDIT';
+      const upNextAuditor = isForAudit ? queuedAuditor : null;
+
+      // Expected Audit Date (AUDIT DATA (FINAL) column AM) — shown right next
+      // to Up Next Auditor in the Assignment Branches Overview table, so it's
+      // only surfaced for branches actually queued for audit (same isForAudit
+      // gate as upNextAuditor above) rather than every branch on record.
+      const expectedDateRaw = b.expectedAuditDateInput ? new Date(b.expectedAuditDateInput + 'T00:00:00') : null;
+      const expectedDateValid = expectedDateRaw && !isNaN(expectedDateRaw.getTime());
+      const expectedAuditDate = (isForAudit && expectedDateValid)
+          ? expectedDateRaw.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+          : null;
+      const expectedAuditDateRawMs = (isForAudit && expectedDateValid) ? expectedDateRaw.getTime() : null;
+
+      if (dated.length > 0) {
+          const recent = dated[dated.length - 1];
+          const last = dated.length > 1 ? dated[dated.length - 2] : null;
+          return {
+              recentDate: recent.date,
+              recentDateRaw: recent.dateRaw,
+              recentAuditor: recent.auditor || 'Unassigned',
+              lastDate: last ? last.date : null,
+              lastDateRaw: last ? last.dateRaw : null,
+              lastAuditor: last ? (last.auditor || 'Unassigned') : null,
+              intervalDays: Math.round((today - recent.dateRaw) / 86400000),
+              roundsCount: dated.length,
+              upNextAuditor: upNextAuditor,
+              expectedAuditDate: expectedAuditDate,
+              expectedAuditDateRaw: expectedAuditDateRawMs
+          };
+      }
+
+      // No rotation-sheet history — fall back to whatever the branch record
+      // itself carries (b.lastAuditDate/b.auditor), and surface the queued
+      // "up next auditor" (AUDIT DATA (FINAL) column AW) so a not-yet-audited
+      // branch still shows who's up next instead of a blank cell.
+      return {
+          recentDate: b.lastAuditDate || null,
+          recentDateRaw: b.lastAuditDateRaw || null,
+          recentAuditor: b.lastAuditDate ? (b.auditor || 'Unassigned') : queuedAuditor,
+          lastDate: null,
+          lastDateRaw: null,
+          lastAuditor: null,
+          intervalDays: (b.lastAuditDateRaw !== null && b.lastAuditDateRaw !== undefined) ? Math.round((today - b.lastAuditDateRaw) / 86400000) : null,
+          roundsCount: b.lastAuditDate ? 1 : 0,
+          upNextAuditor: upNextAuditor,
+          expectedAuditDate: expectedAuditDate,
+          expectedAuditDateRaw: expectedAuditDateRawMs
+      };
+    }
+
+    function setAssignmentAuditFilter(value) {
+      if (!window.assignmentFilterState) window.assignmentFilterState = defaultAssignmentFilterState();
+      window.assignmentFilterState.auditStatus = value;
+      renderAssignmentModalView();
+    }
+
+    // Default shape for the Assignment popup's filter state — scoped to only
+    // the fields this table actually shows (audit status, the audited-by
+    // auditor, and branch name search), not the Collection/Sales/Service/
+    // Risk filters that belong to the Branch Scorecard's own table.
+    function defaultAssignmentFilterState() {
+      return { auditStatus: 'ALL', auditor: 'ALL', search: '' };
+    }
+
+    function setAssignmentFilter(key, value) {
+      if (!window.assignmentFilterState) window.assignmentFilterState = defaultAssignmentFilterState();
+      window.assignmentFilterState[key] = value;
+      renderAssignmentModalView();
+    }
+
+    // Free-text branch-name search, same debounce-free live-filter as the
+    // scorecard's tableSearch — preserves focus/caret across re-render since
+    // typing itself drives it (same pattern as setAuditScheduleSearchQuery).
+    function setAssignmentSearch(value) {
+      if (!window.assignmentFilterState) window.assignmentFilterState = defaultAssignmentFilterState();
+      window.assignmentFilterState.search = value || '';
+      const activeId = document.activeElement && document.activeElement.id;
+      renderAssignmentModalView();
+      if (activeId === 'assignmentSearchInput') {
+          const input = document.getElementById('assignmentSearchInput');
+          if (input) { input.focus(); const v = input.value; input.value = ''; input.value = v; }
+      }
+    }
+
+    function resetAssignmentFilters() {
+      window.assignmentFilterState = defaultAssignmentFilterState();
+      assignmentSortField = 'recent';
+      assignmentSortDir = 'desc';
+      renderAssignmentModalView();
+    }
+
+    function setAssignmentSort(field) {
+      if (assignmentSortField === field) {
+          assignmentSortDir = assignmentSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+          assignmentSortField = field;
+          // Text column defaults A-Z; every date/interval column defaults to
+          // newest-first / largest-first, same "first click" convention as
+          // the Branch Scorecard's setScorecardSort.
+          assignmentSortDir = (field === 'name') ? 'asc' : 'desc';
+      }
+      renderAssignmentModalView();
+    }
+
+    function assignmentSortIcon(field) {
+      const isActive = assignmentSortField === field;
+      const dir = isActive ? assignmentSortDir : null;
+      const colorClass = isActive ? 'text-accentCyan' : 'text-slate-400 group-hover:text-slate-700';
+      const arrow = dir === 'asc'
+          ? '<path d="m18 15-6-6-6 6"></path>'
+          : dir === 'desc'
+          ? '<path d="m6 9 6 6 6-6"></path>'
+          : '<path d="M7 15l5 5 5-5M7 9l5-5 5 5"></path>';
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 inline-block ${colorClass}">${arrow}</svg>`;
+    }
+
+    // Filter row for the Assignment popup — scoped to only what this table
+    // shows: branch name search, Audit Status, and the auditor who did the
+    // most recent round. The auditor list is built live off the actual data
+    // (every distinct "recent auditor" value currently in play) rather than
+    // a fixed guess list, so every real value is selectable.
+    function buildAssignmentFilterBar(state) {
+      const escapeAttr = str => String(str || '').replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const opt = (value, label, current) => `<option value="${escapeAttr(value)}" ${value === current ? 'selected' : ''}>${label}</option>`;
+
+      const auditorSet = new Set();
+      (activeData.branches || []).forEach(b => {
+          const info = getBranchAuditRoundInfo(b);
+          auditorSet.add(info.recentAuditor || 'Unassigned');
+      });
+      const auditorOptions = Array.from(auditorSet).sort((a, b) => a.localeCompare(b));
+
+      return `
+      <div class="flex flex-col lg:flex-row lg:items-center gap-3 mb-4">
+        <div class="relative flex-1 min-w-[200px]">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-slate-400"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+          </span>
+          <input type="text" id="assignmentSearchInput" value="${escapeAttr(state.search)}" oninput="setAssignmentSearch(this.value)" placeholder="Search branch..." class="w-full pl-9 pr-4 py-2 bg-white border border-coolBorder rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-accentCyan transition-all">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+          <select onchange="setAssignmentFilter('auditStatus', this.value)" class="w-full sm:w-auto px-3 py-2 bg-white border border-coolBorder rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-accentCyan transition-all cursor-pointer">
+            ${opt('ALL', 'All Audit Status', state.auditStatus)}
+            ${opt('PENDING', 'Pending', state.auditStatus)}
+            ${opt('FOR AUDIT', 'For Audit', state.auditStatus)}
+            ${opt('DONE', 'Done', state.auditStatus)}
+          </select>
+
+          <select onchange="setAssignmentFilter('auditor', this.value)" class="w-full sm:w-auto px-3 py-2 bg-white border border-coolBorder rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-accentCyan transition-all cursor-pointer">
+            ${opt('ALL', 'All Auditors', state.auditor)}
+            ${auditorOptions.map(a => opt(a, a, state.auditor)).join('')}
+          </select>
+
+          <button type="button" onclick="resetAssignmentFilters()" class="col-span-2 sm:col-span-1 flex items-center justify-center sm:justify-start gap-1.5 px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-coolBorder rounded-xl text-xs font-semibold text-slate-600 transition-all cursor-pointer active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+            Reset
+          </button>
+        </div>
+      </div>`;
+    }
+
+    // Formats an interval given in days as whole months + leftover days —
+    // e.g. 65 days -> "2 months and 5 days" — using a flat 30-day month so
+    // the "and N days" remainder stays intuitive. Kept as a separate display
+    // step from the raw intervalDays value so sorting still uses the precise
+    // day count underneath.
+    function formatIntervalMonthsDays(days) {
+      if (days === null || days === undefined) return null;
+      const total = Math.max(0, Math.round(days));
+      const months = Math.floor(total / 30);
+      const remDays = total % 30;
+
+      if (months === 0) return `${remDays} day${remDays === 1 ? '' : 's'}`;
+      if (remDays === 0) return `${months} month${months === 1 ? '' : 's'}`;
+      return `${months} month${months === 1 ? '' : 's'} and ${remDays} day${remDays === 1 ? '' : 's'}`;
+    }
+
+    function buildAssignmentTable(list) {
+      const escapeHTML = str => {
+          if (!str) return '';
+          return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+      };
+
+      const rows = list.map(b => ({ b, info: getBranchAuditRoundInfo(b) }));
+
+      const dir = assignmentSortDir === 'asc' ? 1 : -1;
+      const sorters = {
+          name: (x, y) => x.b.name.localeCompare(y.b.name) * dir,
+          last: (x, y) => ((x.info.lastDateRaw ?? -Infinity) - (y.info.lastDateRaw ?? -Infinity)) * dir,
+          recent: (x, y) => ((x.info.recentDateRaw ?? -Infinity) - (y.info.recentDateRaw ?? -Infinity)) * dir,
+          upnext: (x, y) => String(x.info.upNextAuditor || '').localeCompare(String(y.info.upNextAuditor || '')) * dir,
+          expected: (x, y) => ((x.info.expectedAuditDateRaw ?? -Infinity) - (y.info.expectedAuditDateRaw ?? -Infinity)) * dir,
+          // Sorts on the precise day count underneath the "N months and M
+          // days" label, so it orders correctly even though the label
+          // itself is rounded to whole days.
+          interval: (x, y) => ((x.info.intervalDays ?? -Infinity) - (y.info.intervalDays ?? -Infinity)) * dir
+      };
+      rows.sort(sorters[assignmentSortField] || sorters.recent);
+
+      const sortHeader = (field, label, align) => `
+        <th class="p-2.5 bg-gray-50 ${align === 'center' ? 'text-center' : 'text-left'} cursor-pointer hover:bg-gray-200 active:scale-95 transition-all group select-none whitespace-nowrap" onclick="setAssignmentSort('${field}')">
+          <div class="flex items-center ${align === 'center' ? 'justify-center' : ''} gap-1.5">${label} ${assignmentSortIcon(field)}</div>
+        </th>`;
+
+      let html = `
+      <div class="rounded-xl border border-coolBorder max-h-[60vh] overflow-auto custom-scrollbar">
+        <table class="w-full min-w-[880px] text-left border-collapse bg-white relative">
+          <thead class="bg-gray-50 border-b border-coolBorder text-xs text-slate-500 tracking-wider font-semibold uppercase sticky top-0 z-10 shadow-sm">
+            <tr>
+              <th class="p-2.5 bg-gray-50 text-center w-8 whitespace-nowrap">#</th>
+              ${sortHeader('name', 'Branch', 'left')}
+              ${sortHeader('upnext', 'Up Next Auditor', 'center')}
+              ${sortHeader('expected', 'Expected Audit Date', 'center')}
+              ${sortHeader('last', 'Last Audit Date / Auditor', 'center')}
+              ${sortHeader('recent', 'Recent Audit Date / Auditor', 'center')}
+              ${sortHeader('interval', 'Audit Interval (to date)', 'center')}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-coolBorder text-sm">
+      `;
+
+      rows.forEach(({ b, info }, index) => {
+          const auditorPill = (name) => name && name !== 'Unassigned'
+              ? `<span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 rounded-md border border-slate-200">${escapeHTML(name)}</span>`
+              : `<span class="text-xs text-slate-400 italic">Unassigned</span>`;
+
+          const lastCell = info.lastDate
+              ? `<div class="flex flex-col items-center gap-1"><span class="text-xs font-semibold text-slate-700">${escapeHTML(info.lastDate)}</span>${auditorPill(info.lastAuditor)}</div>`
+              : `<span class="text-xs text-slate-400 italic">No prior round</span>`;
+
+          const recentCell = info.recentDate
+              ? `<div class="flex flex-col items-center gap-1"><span class="text-xs font-semibold text-slate-700">${escapeHTML(info.recentDate)}</span>${auditorPill(info.recentAuditor)}</div>`
+              : `<div class="flex flex-col items-center gap-1"><span class="text-xs text-slate-400 italic">Not yet audited</span>${auditorPill(info.recentAuditor)}</div>`;
+
+          // "Up Next Auditor" — who's queued for the branch's NEXT round
+          // (AUDIT DATA (FINAL) column AW, assignedAuditorRaw), but ONLY once
+          // the branch has actually been set for audit and saved
+          // (info.upNextAuditor is null otherwise). Styled amber/queued
+          // rather than the neutral slate pill used for past rounds, so
+          // it's visually distinct as "not done yet" at a glance.
+          const upNextCell = info.upNextAuditor === null
+              ? `<span class="text-xs text-slate-300">—</span>`
+              : (info.upNextAuditor !== 'Unassigned'
+                  ? `<span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-accentAmber/10 text-accentAmber rounded-md border border-accentAmber/20">${escapeHTML(info.upNextAuditor)}</span>`
+                  : `<span class="text-xs text-slate-400 italic">Unassigned</span>`);
+
+          const expectedCell = info.expectedAuditDate
+              ? `<span class="text-xs font-semibold text-slate-700">${escapeHTML(info.expectedAuditDate)}</span>`
+              : `<span class="text-xs text-slate-300">—</span>`;
+
+          const intervalLabel = formatIntervalMonthsDays(info.intervalDays);
+          const intervalCell = intervalLabel !== null
+              ? `<span class="px-2 py-0.5 text-[11px] font-bold bg-accentEmerald/10 text-accentEmerald border border-accentEmerald/20 rounded-lg whitespace-nowrap">${intervalLabel}</span>`
+              : `<span class="text-xs text-slate-400 italic">—</span>`;
+
+          html += `
+              <tr class="${index % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-accentCyan/10 cursor-pointer active:scale-[0.99] transition-colors" onclick="openModalDetail('${escapeFindingHTML(b.name)}')">
+                  <td class="p-2 text-center text-xs font-bold text-slate-400">${index + 1}</td>
+                  <td class="p-2 font-bold text-slate-800 text-sm break-words">${escapeHTML(b.name)}</td>
+                  <td class="p-2 text-center">${upNextCell}</td>
+                  <td class="p-2 text-center">${expectedCell}</td>
+                  <td class="p-2 text-center">${lastCell}</td>
+                  <td class="p-2 text-center">${recentCell}</td>
+                  <td class="p-2 text-center">${intervalCell}</td>
+              </tr>
+          `;
+      });
+
+      html += `</tbody></table></div>`;
+      return html;
+    }
+
+    // Popup opened from the AUDITOR NEXT ASSIGNMENT stock card. Reuses the
+    // same "total/done/for audit/pending" stock card as the general All
+    // Branches popup. Filters are scoped to only what this table shows:
+    // Audit Status, the auditor who did the most recent round, and branch
+    // name search — plus Reset. The table itself covers audit scheduling:
+    // branch, last completed round, most recent completed round, and the
+    // interval between them — every column sortable (setAssignmentSort).
+    function renderAssignmentModalView() {
+      const state = window.assignmentFilterState || (window.assignmentFilterState = defaultAssignmentFilterState());
+
+      let list = activeData.branches;
+      if (state.auditStatus && state.auditStatus !== 'ALL') {
+          list = list.filter(b => (b.auditStatus || '').toUpperCase() === state.auditStatus);
+      }
+      if (state.auditor && state.auditor !== 'ALL') {
+          list = list.filter(b => getBranchAuditRoundInfo(b).recentAuditor === state.auditor);
+      }
+      if (state.search) {
+          const q = state.search.toLowerCase();
+          list = list.filter(b => b.name.toLowerCase().includes(q));
+      }
+
+      const modalTitle = document.getElementById('modalTitle');
+      modalTitle.innerHTML = (state.auditStatus === 'ALL' || !state.auditStatus)
+          ? 'Assignment Branches Overview'
+          : `Assignment Branches Overview — ${state.auditStatus}`;
+
+      updateModalEditAssignButton(list);
+
+      const barsHtml = buildAllBranchesSummaryBar(list, 'setAssignmentAuditFilter', state.auditStatus) + buildAssignmentFilterBar(state);
+
+      const modalBody = document.getElementById('modalBody');
+      modalBody.innerHTML = `${barsHtml}<div id="modalTableContainer"></div>`;
+      const tableContainer = document.getElementById('modalTableContainer');
+
+      tableContainer.innerHTML = list.length > 0
+          ? buildAssignmentTable(list)
+          : '<div class="p-8 text-center text-sm text-slate-500 font-semibold bg-gray-50 rounded-xl border border-coolBorder">No targeted branch parameters found.</div>';
+    }
+
     function renderModalFilteredView() {
       const state = window.modalFilterState;
       if (!state) return;
@@ -4692,7 +5166,7 @@ body.bg-coolDark{
       } else if (state.type === 'service') {
           barsHtml += buildServiceSummaryBar(list);
       } else if (state.type === 'all') {
-          barsHtml += buildAllBranchesSummaryBar(list);
+          barsHtml += buildAllBranchesSummaryBar(list, 'setModalAuditFilter', state.auditStatus);
       }
       if (state.type === 'collection' || state.type === 'sales' || state.type === 'service') {
           barsHtml += buildStatusFilterBar(state.type, state.statusValue);
@@ -4789,12 +5263,6 @@ body.bg-coolDark{
 
       const effAccent = b.effLatest < 50 ? 'text-accentRose' : (b.effLatest < 70 ? 'text-accentAmber' : 'text-accentEmerald');
       const repoAccent = b.repoRate > 7 ? 'text-accentRose' : (b.repoRate > 4 ? 'text-accentAmber' : 'text-accentEmerald');
-
-      const statCard = (label, value, accent) => `
-          <div class="bg-white rounded-xl border border-coolBorder p-4 shadow-sm">
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">${label}</p>
-              <p class="text-2xl font-extrabold ${accent}">${value}</p>
-          </div>`;
 
       const statCardTrend = (label, values, suffix, accent, invert) => {
           const numeric = values.map(v => parseFloat(v));
@@ -5375,6 +5843,29 @@ body.bg-coolDark{
       renderModalFilteredView();
     }
 
+    // Total Active Accounts Breakdown modal (opened from the "TOTAL ACCOUNTS"
+    // stack card). Cycling the sort on the latest-month "No. of Repo" column
+    // lets you surface which branches carry (or picked up) the most repo
+    // accounts, same desc → asc → default cycle as the other sortable tables.
+    function renderAccountsModalTable() {
+      let list = [...activeData.branches];
+      if (window.accountsModalSort === 'desc') list.sort((a, b) => (b.noOfRepoLatest || 0) - (a.noOfRepoLatest || 0));
+      else if (window.accountsModalSort === 'asc') list.sort((a, b) => (a.noOfRepoLatest || 0) - (b.noOfRepoLatest || 0));
+      else list.sort((a, b) => b.accountsMay - a.accountsMay);
+
+      const tableContainer = document.getElementById('modalTableContainer');
+      if (!tableContainer) return;
+      tableContainer.innerHTML = list.length > 0
+          ? ''
+          : '<div class="p-8 text-center text-sm text-slate-500 font-semibold bg-gray-50 rounded-xl border border-coolBorder">No targeted branch parameters found.</div>';
+      if (list.length > 0) renderBranchTable(list, tableContainer, 'accounts', 'accountsMay');
+    }
+
+    function toggleAccountsRepoSort() {
+      window.accountsModalSort = window.accountsModalSort === 'desc' ? 'asc' : (window.accountsModalSort === 'asc' ? null : 'desc');
+      renderAccountsModalTable();
+    }
+
     function buildSalesSummaryBar(list) {
       const improving = list.filter(b => b.sales === 'Improving').length;
       const declining = list.filter(b => b.sales === 'Declining').length;
@@ -5465,26 +5956,38 @@ body.bg-coolDark{
       ${top ? `<div class="text-[11px] text-slate-500 mb-3 px-1">Top performer: <strong class="text-slate-700">${top.name}</strong> <span class="text-accentCyan font-bold">(₱${Number(top.serviceMay).toLocaleString()})</span></div>` : ''}`;
     }
 
-    function buildAllBranchesSummaryBar(list) {
+    // filterSetter is the name of the JS function to call when a pill is
+    // clicked (each modal that shows this bar tracks its own audit-status
+    // filter state under a different key, so the caller passes in whichever
+    // setter matches — setAssignmentAuditFilter for the Assignment Branches
+    // Overview popup, setModalAuditFilter for the general All Branches
+    // popup). activeValue highlights whichever pill is currently applied,
+    // same visual language as buildAuditStatusFilterBar's own buttons.
+    function buildAllBranchesSummaryBar(list, filterSetter, activeValue) {
       const done = list.filter(b => (b.auditStatus || '').toUpperCase() === 'DONE').length;
       const pending = list.filter(b => (b.auditStatus || '').toUpperCase() === 'PENDING').length;
       const forAudit = list.filter(b => (b.auditStatus || '').toUpperCase() === 'FOR AUDIT').length;
 
+      const clickable = !!filterSetter;
+      const active = activeValue || 'ALL';
+      const pillClass = (isActive) => `${clickable ? 'cursor-pointer active:scale-95 transition-all' : ''} ${isActive ? 'ring-2 ring-offset-1' : ''}`;
+      const pillAttrs = (value) => clickable ? `onclick="${filterSetter}('${value}')" role="button" tabindex="0"` : '';
+
       return `
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <div class="p-3 bg-slate-100 border border-coolBorder rounded-xl text-center">
+        <div ${pillAttrs('ALL')} class="p-3 bg-slate-100 border border-coolBorder rounded-xl text-center ${pillClass(active === 'ALL')} ${clickable ? 'ring-slate-400 hover:bg-slate-200' : ''}">
           <div class="text-2xl font-extrabold text-slate-700">${list.length}</div>
           <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Branches</div>
         </div>
-        <div class="p-3 bg-accentBlue/10 border border-accentBlue/20 rounded-xl text-center">
+        <div ${pillAttrs('DONE')} class="p-3 bg-accentBlue/10 border border-accentBlue/20 rounded-xl text-center ${pillClass(active === 'DONE')} ${clickable ? 'ring-accentBlue hover:bg-accentBlue/20' : ''}">
           <div class="text-2xl font-extrabold text-accentBlue">${done}</div>
           <div class="text-[10px] font-bold text-accentBlue/80 uppercase tracking-wider">Done</div>
         </div>
-        <div class="p-3 bg-accentAmber/10 border border-accentAmber/20 rounded-xl text-center">
+        <div ${pillAttrs('FOR AUDIT')} class="p-3 bg-accentAmber/10 border border-accentAmber/20 rounded-xl text-center ${pillClass(active === 'FOR AUDIT')} ${clickable ? 'ring-accentAmber hover:bg-accentAmber/20' : ''}">
           <div class="text-2xl font-extrabold text-accentAmber">${forAudit}</div>
           <div class="text-[10px] font-bold text-accentAmber/80 uppercase tracking-wider">For Audit</div>
         </div>
-        <div class="p-3 bg-slate-50 border border-coolBorder rounded-xl text-center">
+        <div ${pillAttrs('PENDING')} class="p-3 bg-slate-50 border border-coolBorder rounded-xl text-center ${pillClass(active === 'PENDING')} ${clickable ? 'ring-slate-400 hover:bg-slate-100' : ''}">
           <div class="text-2xl font-extrabold text-slate-500">${pending}</div>
           <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending</div>
         </div>
@@ -5503,10 +6006,12 @@ body.bg-coolDark{
       // Only show the status column(s) relevant to what was clicked.
       // Clicking the Collection card should show ONLY Collection status,
       // clicking Sales should show ONLY Sales, clicking Service should show ONLY Service.
-      // Broader views (All Branches, Findings, Accounts) still show all three for context.
-      const showCollection = (type === 'collection' || type === 'all' || type === 'accounts');
-      const showSales = (type === 'sales' || type === 'all' || type === 'accounts');
-      const showService = (type === 'service' || type === 'all' || type === 'accounts');
+      // The broader "All Branches" view still shows all three for context.
+      // The Total Accounts breakdown ("accounts") shows the 3-month repo
+      // trend instead (see detailHeaders below) rather than these statuses.
+      const showCollection = (type === 'collection' || type === 'all');
+      const showSales = (type === 'sales' || type === 'all');
+      const showService = (type === 'service' || type === 'all');
       // Audit Findings breakdowns are audit-data-only: no Collection/Sales/Service
       // status noise, and no Auditor column — just what's sourced from the
       // AUDIT FINDINGS sheet for that branch.
@@ -5577,6 +6082,18 @@ body.bg-coolDark{
         detailHeaders = `
           <th class="p-2 bg-gray-50 text-center whitespace-nowrap">Audit Status</th>
           <th class="p-2 bg-gray-50 text-center whitespace-nowrap" title="Findings by year — from AUDIT FINDINGS sheet">Findings ('24 · '25 · '26)</th>`;
+        showEffRepo = false;
+      } else if (type === 'accounts') {
+        // Repo count trend across the last 3 months, in place of the
+        // Collection/Sales/Service status columns — lets you see at a
+        // glance which branches are picking up repo accounts. Sorting is
+        // on the latest month only (see toggleAccountsRepoSort).
+        const sortState = window.accountsModalSort || null;
+        const sortIcon = sortState === 'desc' ? '↓' : (sortState === 'asc' ? '↑' : '↕');
+        detailHeaders = `
+          <th class="p-2 bg-gray-50 text-center border-l border-coolBorder whitespace-nowrap">Repo ${trendLbls[0]}</th>
+          <th class="p-2 bg-gray-50 text-center whitespace-nowrap">Repo ${trendLbls[1]}</th>
+          <th class="p-2 bg-gray-50 text-center border-r border-coolBorder whitespace-nowrap cursor-pointer select-none hover:text-accentIndigo transition-colors" onclick="toggleAccountsRepoSort()">Repo ${trendLbls[2]} <span class="inline-block ml-0.5">${sortIcon}</span></th>`;
         showEffRepo = false;
       }
 
@@ -5697,6 +6214,20 @@ body.bg-coolDark{
                 <span class="inline-flex items-center gap-1 text-[11px] font-bold tabular-nums">
                   <span class="text-slate-400">${b.findings2024}</span>·<span class="text-slate-400">${b.findings2025}</span>·<span class="text-accentCyan">${b.findings2026}</span>
                 </span>
+              </td>`;
+          } else if (type === 'accounts') {
+            const repoMar = b.noOfRepoMar || 0, repoApr = b.noOfRepoApr || 0, repoLatest = b.noOfRepoLatest || 0;
+            const repoUp = repoLatest > repoMar, repoFlat = repoLatest === repoMar;
+            const repoIcon = repoFlat ? '→' : (repoUp ? '▲' : '▼');
+            const repoColor = repoFlat ? 'text-slate-400' : (repoUp ? 'text-accentRose' : 'text-accentEmerald');
+            detailCells = `
+              <td class="p-2 text-center text-slate-600 border-l border-coolBorder">${repoMar}</td>
+              <td class="p-2 text-center text-slate-600">${repoApr}</td>
+              <td class="p-2 text-center border-r border-coolBorder">
+                <div class="flex items-center justify-center gap-1.5">
+                  <span class="font-semibold text-slate-800">${repoLatest}</span>
+                  <span class="${repoColor} text-[10px]">${repoIcon}</span>
+                </div>
               </td>`;
           }
 
@@ -5864,37 +6395,79 @@ body.bg-coolDark{
       
       document.getElementById('stat-findings-2026').innerText = sum.findings2026 || 0;
       document.getElementById('stat-total-accounts').innerText = sum.totalAccounts || 0;
+      const repoMonthLabel = (sum.trendLabels || ["MARCH", "APRIL", "MAY"])[2];
+      const repoPrevMonthLabel = (sum.trendLabels || ["MARCH", "APRIL", "MAY"])[1];
+      const repoLatestEl = document.getElementById('stat-total-repo-latest');
+      const repoPrevEl = document.getElementById('stat-total-repo-prev');
+      const repoLatest = sum.totalRepoLatest || 0;
+      const repoPrev = sum.totalRepoPrevRaw || 0;
+      if (repoLatestEl) repoLatestEl.innerHTML = `${repoLatest.toLocaleString()} total repo (<span id="span-repo-month">${repoMonthLabel}</span>)`;
+      if (repoPrevEl) {
+          const repoDiff = repoLatest - repoPrev;
+          // A repo *increase* is the bad direction (more repossessions), so
+          // it's rose, not emerald — flipped vs the accounts indicator.
+          const repoTrendColor = repoDiff > 0 ? 'text-accentRose' : (repoDiff < 0 ? 'text-accentEmerald' : 'text-slate-400');
+          const repoTrendIcon = repoDiff > 0 ? '▲' : (repoDiff < 0 ? '▼' : '→');
+          repoPrevEl.innerHTML = `${repoPrev.toLocaleString()} total repo (<span id="span-repo-prev-month">${repoPrevMonthLabel}</span>) <span class="${repoTrendColor} font-semibold">${repoTrendIcon}</span>`;
+      }
+
+      // Previous-month total accounts, with an up/down indicator comparing
+      // it to the latest month shown in the big number above — a quick
+      // read on whether the active account base is growing or shrinking.
+      const prevAccountsMonthLabel = (sum.trendLabels || ["MARCH", "APRIL", "MAY"])[1];
+      const prevAccountsEl = document.getElementById('stat-total-accounts-prev');
+      if (prevAccountsEl) {
+          const latest = sum.totalAccountsLatestRaw || 0;
+          const prev = sum.totalAccountsPrevRaw || 0;
+          const diff = latest - prev;
+          const trendColor = diff > 0 ? 'text-accentEmerald' : (diff < 0 ? 'text-accentRose' : 'text-slate-400');
+          const trendIcon = diff > 0 ? '▲' : (diff < 0 ? '▼' : '→');
+          prevAccountsEl.innerHTML = `${prev.toLocaleString()} total accounts (<span id="span-accounts-prev-month">${prevAccountsMonthLabel}</span>) <span class="${trendColor} font-semibold">${trendIcon}</span>`;
+      }
 
       // Auditor Next Assignment card
       const queueCountEl = document.getElementById('stat-next-assignment-count');
-      const queueSubEl = document.getElementById('stat-next-assignment-sub');
-      const queueBranchEl = document.getElementById('stat-next-assignment-branch');
-      if (queueCountEl) queueCountEl.innerHTML = `${sum.forAuditCount || 0} <span class="text-sm font-medium text-slate-500">queued</span>`;
-      if (queueSubEl) {
-          const breakdown = sum.forAuditBreakdown || [];
-          queueSubEl.innerText = breakdown.length > 0
-              ? breakdown.map(a => `${a.count} ${a.name}`).join(' · ')
-              : 'No branches for audit';
-      }
-      if (queueBranchEl) {
-          const nextUp = sum.nextUpBranch;
-          queueBranchEl.innerText = nextUp
-              ? `Up next: ${nextUp.name} — ${nextUp.auditor}`
-              : 'Nothing queued right now';
+      const queueBranchListEl = document.getElementById('stat-next-assignment-branch-list');
+      if (queueCountEl) queueCountEl.innerHTML = `${sum.forAuditCount || 0} <span class="text-xs font-medium text-slate-500">queued</span>`;
+      if (queueBranchListEl) {
+          // Top 5 branches up next in the queue, oldest-waiting-first (same
+          // order/source as the old single-line "Up next" branch). Auditor
+          // is sourced from assignedAuditorRaw (DASHBOARDDATA column AW,
+          // "Up Next Auditor") via assignedAuditorOf() — the auditor
+          // actually set/queued for that branch's NEXT round, not whoever
+          // did the most recent past round. Clicking any row opens the
+          // Assignment Branches Overview popup sorted by Up Next Auditor
+          // (see openAuditQueueModal('upnext') on the container itself).
+          // Kept minimal (muted, no per-row color/underline) and compact
+          // (text-[10px], truncated) so the card stays close to its
+          // original footprint while fitting all 5 rows.
+          const nextUpList = sum.nextUpBranches || [];
+          queueBranchListEl.innerHTML = nextUpList.length
+              ? nextUpList.map(b => `
+                  <div class="flex items-center justify-between gap-2 text-[10px] leading-tight">
+                      <span class="font-medium text-slate-600 truncate">${b.name}</span>
+                      <span class="text-slate-400 whitespace-nowrap truncate max-w-[45%]">${b.auditor}</span>
+                  </div>`).join('')
+              : '<p class="text-xs text-slate-500">Nothing queued right now</p>';
       }
 
       // Branch Audit Interval card — shows up to 5 of the most recently
       // audited branches. (Previously this also showed a large standalone
       // "most recent branch" name/subtext above the list, but that just
       // duplicated the list's own first row, so it was removed.)
+      const recentCountEl = document.getElementById('stat-recent-audited-count');
       const recentListEl = document.getElementById('stat-recent-audited-list');
+      if (recentCountEl) {
+          const recentCount = (sum.recentlyAuditedBranches || []).length;
+          recentCountEl.innerHTML = `${recentCount} <span class="text-xs font-medium text-slate-500">recent audit${recentCount === 1 ? '' : 's'}</span>`;
+      }
       if (recentListEl) {
           const recent = sum.recentlyAuditedBranches || [];
           recentListEl.innerHTML = recent.length
               ? recent.map(b => `
-                  <div class="flex items-center justify-between gap-2 text-[11px]">
-                      <span class="font-semibold text-slate-700 truncate">${b.name}</span>
-                      <span class="text-slate-400 whitespace-nowrap">${b.lastAuditDate || '—'}</span>
+                  <div class="flex items-center justify-between gap-2 text-[10px] leading-tight">
+                      <span class="font-medium text-slate-600 truncate">${b.name}</span>
+                      <span class="text-slate-400 whitespace-nowrap truncate max-w-[45%]">${b.lastAuditDate || '—'}</span>
                   </div>`).join('')
               : '<p class="text-xs text-slate-500">No completed audits on record</p>';
       }
@@ -6509,7 +7082,13 @@ body.bg-coolDark{
             if(auditStatRaw.includes("DONE")) finalAuditStat = "DONE";
             else if(auditStatRaw.includes("FOR AUDIT")) finalAuditStat = "FOR AUDIT";
             
-            const assignedAuditor = String(row[39] || "UNASSIGNED").trim();
+            // "Up Next Auditor" — the Edit Assignment form saves this
+            // straight into AUDIT DATA (FINAL) column AW (see
+            // saveAuditorAssignmentRemote). This sheet (DASHBOARDDATA)
+            // mirrors AUDIT DATA (FINAL) column-for-column, so its own
+            // column AW (index 48) carries the same value — that's what's
+            // read here.
+            const upNextAuditor = String(row[48] || "UNASSIGNED").trim();
 
             // Expected Audit Date (column AM, index 38) and the 4 rotation
             // round auditor/date pairs (AO/AP, AQ/AR, AS/AT, AU/AV — indices
@@ -6580,13 +7159,14 @@ body.bg-coolDark{
               findings2025: parseInt(row[34]) || 0,
               findings2026: parseInt(row[35]) || 0,
               auditStatus: finalAuditStat,
-              auditor: assignedAuditor,
-              // Untouched copy of column AN ("Assigned Auditor") — b.auditor
-              // above gets overwritten further down with whoever did the most
-              // recent *past* rotation round, but this field always stays
-              // exactly what's in AN, so the Edit Assignment form and the
-              // Auditor Next Assignment card can rely on it specifically.
-              assignedAuditorRaw: assignedAuditor,
+              auditor: upNextAuditor,
+              // Untouched copy of AUDIT DATA (FINAL) column AW ("Up Next
+              // Auditor") — b.auditor above gets overwritten further down
+              // with whoever did the most recent *past* rotation round, but
+              // this field always stays exactly what's in AW, so the Edit
+              // Assignment form and the Auditor Next Assignment card can
+              // rely on it specifically.
+              assignedAuditorRaw: upNextAuditor,
               salesMar: { ins: parseInt(row[17])||0, cod: parseInt(row[18])||0, ca: parseInt(row[19])||0 }, 
               salesApr: { ins: parseInt(row[20])||0, cod: parseInt(row[21])||0, ca: parseInt(row[22])||0 }, 
               salesMay: { ins: parseInt(row[23])||0, cod: parseInt(row[24])||0, ca: parseInt(row[25])||0 },
@@ -6893,50 +7473,6 @@ body.bg-coolDark{
           console.error(err);
           showToast("Error reading spreadsheet structure.");
         }
-    }
-
-    // Guards against picking a second file while the first is still being
-    // read/parsed, and gives Upload its own wording/busy state so it's never
-    // confused with the separate "Update data" server refresh above.
-    let isProcessingUpload = false;
-
-    function handleExcel(file) {
-      if (isProcessingUpload) {
-        showToast("Still processing the previous file\u2026 hang tight.");
-        return;
-      }
-      isProcessingUpload = true;
-      const uploadLabel = document.getElementById('uploadFileLabel');
-      const uploadLabelText = document.getElementById('uploadFileLabelText');
-      const originalLabelText = uploadLabelText ? uploadLabelText.textContent : '';
-      if (uploadLabel) uploadLabel.setAttribute('aria-disabled', 'true');
-      if (uploadLabelText) uploadLabelText.textContent = 'Reading file\u2026';
-      showToast("Reading " + file.name + "\u2026");
-
-      function finish() {
-        isProcessingUpload = false;
-        if (uploadLabel) uploadLabel.removeAttribute('aria-disabled');
-        if (uploadLabelText) uploadLabelText.textContent = originalLabelText;
-      }
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          processExcelData(e.target.result);
-          showToast("\u201c" + file.name + "\u201d loaded successfully!");
-        } catch (err) {
-          console.error('Local file processing failed:', err);
-          showToast("Couldn't read that file \u2014 check it's a valid Excel/CSV export.");
-        } finally {
-          finish();
-        }
-      };
-      reader.onerror = function() {
-        console.error('FileReader failed:', reader.error);
-        showToast("Couldn't read \u201c" + file.name + "\u201d from disk. Try again.");
-        finish();
-      };
-      reader.readAsArrayBuffer(file);
     }
 
     // JSONP loader: bypasses CORS entirely by loading the Apps Script
@@ -7388,9 +7924,9 @@ body.bg-coolDark{
             salesImproving: 0, salesDeclining: 0, salesStable: 0,
             serviceTarget: 0, serviceDeclining: 0,
             findings2024: 0, findings2025: 0, findings2026: 0,
-            totalAccounts: 0, emergencyAuditor: "", recentEmergencyD: "", recentEmergencyE: "", recentEmergencyF: "",
+            totalAccounts: 0, totalAccountsLatestRaw: 0, totalAccountsPrevRaw: 0, totalRepoLatest: 0, totalRepoPrevRaw: 0, totalRepoAll: 0, emergencyAuditor: "", recentEmergencyD: "", recentEmergencyE: "", recentEmergencyF: "",
             trendLabels: ["MARCH", "APRIL", "MAY"],
-            forAuditBreakdown: [], nextUpBranch: null, lastAuditedBranch: null, recentlyAuditedBranches: []
+            forAuditBreakdown: [], nextUpBranch: null, nextUpBranches: [], lastAuditedBranch: null, recentlyAuditedBranches: []
         }, 
         branches: [], lowestEfficiency: [], highestRepo: [], highestNoRepo: [], topFindings26: [], topDecliningCollection: [], topDecliningSales: [], topDecliningService: [], auditors: [], dataAudit: {}, branchAuditSchedule: {}, emergencyHistory: [] 
       };
@@ -7495,13 +8031,6 @@ body.bg-coolDark{
       document.getElementById('filterService').addEventListener('change', renderScorecardTable);
       document.getElementById('filterAuditStatus').addEventListener('change', renderScorecardTable);
       document.getElementById('filterRisk').addEventListener('change', renderScorecardTable);
-      
-      const fileInput = document.getElementById('excelFile');
-      if (fileInput) {
-        fileInput.addEventListener('change', function(e) {
-          if (e.target.files.length > 0) handleExcel(e.target.files[0]);
-        });
-      }
 
       // ---------- hamburger side menu ----------
       const hamburgerBtn = document.getElementById('hamburgerBtn');
