@@ -6967,12 +6967,13 @@ body.bg-coolDark{
         fill: { type: 'gradient', gradient: { shade: 'light', type: 'diagonal1', shadeIntensity: 0.35, inverseColors: false, opacityFrom: 1, opacityTo: 0.82, stops: [0, 100] } },
         states: { hover: { filter: { type: 'darken', value: 0.9 } } },
         plotOptions: { pie: { donut: { size: '72%', labels: donutCenterTotal('TOTAL') } } },
-        legend: { position: 'bottom', fontSize: '11px', fontWeight: 600, labels: { colors: '#475569' }, markers: { size: 6, offsetX: -2 }, itemMargin: { horizontal: 8, vertical: 4 } },
+        legend: { position: 'bottom', height: 52, fontSize: '11px', fontWeight: 600, labels: { colors: '#475569' }, markers: { size: 6, offsetX: -2 }, itemMargin: { horizontal: 8, vertical: 3 } },
         dataLabels: {
           enabled: true,
           formatter: (val, opts) => { const v = opts.w.config.series[opts.seriesIndex]; return v ? v : ''; },
-          dropShadow: { enabled: true, top: 1, left: 1, blur: 2, opacity: 0.35 },
-          style: { fontSize: '12px', fontWeight: 700, colors: ['#ffffff'] }
+          dropShadow: { enabled: false },
+          style: { fontSize: '12px', fontWeight: 800, colors: ['#ffffff'] },
+          background: { enabled: true, foreColor: '#0f172a', opacity: 0.45, padding: 4, borderRadius: 4, borderWidth: 0 }
         },
         tooltip: { theme: 'light', y: { formatter: (val) => `${val} branch${val === 1 ? '' : 'es'} (${total ? Math.round(val/total*100) : 0}%)` } }
       };
@@ -7006,12 +7007,13 @@ body.bg-coolDark{
         fill: { type: 'gradient', gradient: { shade: 'light', type: 'diagonal1', shadeIntensity: 0.35, opacityFrom: 1, opacityTo: 0.82, stops: [0, 100] } },
         states: { hover: { filter: { type: 'darken', value: 0.9 } } },
         plotOptions: { pie: { donut: { size: '72%', labels: donutCenterTotal('TOTAL') } } },
-        legend: { position: 'bottom', fontSize: '11px', fontWeight: 600, labels: { colors: '#475569' }, markers: { size: 6, offsetX: -2 }, itemMargin: { horizontal: 8, vertical: 4 } },
+        legend: { position: 'bottom', height: 52, fontSize: '11px', fontWeight: 600, labels: { colors: '#475569' }, markers: { size: 6, offsetX: -2 }, itemMargin: { horizontal: 8, vertical: 3 } },
         dataLabels: {
           enabled: true,
           formatter: (val, opts) => { const v = opts.w.config.series[opts.seriesIndex]; return v ? v : ''; },
-          dropShadow: { enabled: true, top: 1, left: 1, blur: 2, opacity: 0.35 },
-          style: { fontSize: '12px', fontWeight: 700, colors: ['#ffffff'] }
+          dropShadow: { enabled: false },
+          style: { fontSize: '12px', fontWeight: 800, colors: ['#ffffff'] },
+          background: { enabled: true, foreColor: '#0f172a', opacity: 0.45, padding: 4, borderRadius: 4, borderWidth: 0 }
         },
         tooltip: { theme: 'light', y: { formatter: (val) => `${val} branch${val === 1 ? '' : 'es'} (${total ? Math.round(val/total*100) : 0}%)` } }
       };
@@ -7045,12 +7047,13 @@ body.bg-coolDark{
         fill: { type: 'gradient', gradient: { shade: 'light', type: 'diagonal1', shadeIntensity: 0.35, opacityFrom: 1, opacityTo: 0.82, stops: [0, 100] } },
         states: { hover: { filter: { type: 'darken', value: 0.9 } } },
         plotOptions: { pie: { donut: { size: '72%', labels: donutCenterTotal('TOTAL') } } },
-        legend: { position: 'bottom', fontSize: '11px', fontWeight: 600, labels: { colors: '#475569' }, markers: { size: 6, offsetX: -2 }, itemMargin: { horizontal: 8, vertical: 4 } },
+        legend: { position: 'bottom', height: 52, fontSize: '11px', fontWeight: 600, labels: { colors: '#475569' }, markers: { size: 6, offsetX: -2 }, itemMargin: { horizontal: 8, vertical: 3 } },
         dataLabels: {
           enabled: true,
           formatter: (val, opts) => { const v = opts.w.config.series[opts.seriesIndex]; return v ? v : ''; },
-          dropShadow: { enabled: true, top: 1, left: 1, blur: 2, opacity: 0.35 },
-          style: { fontSize: '12px', fontWeight: 700, colors: ['#ffffff'] }
+          dropShadow: { enabled: false },
+          style: { fontSize: '12px', fontWeight: 800, colors: ['#ffffff'] },
+          background: { enabled: true, foreColor: '#0f172a', opacity: 0.45, padding: 4, borderRadius: 4, borderWidth: 0 }
         },
         tooltip: { theme: 'light', y: { formatter: (val) => `${val} branch${val === 1 ? '' : 'es'} (${total ? Math.round(val/total*100) : 0}%)` } }
       };
@@ -7772,22 +7775,6 @@ body.bg-coolDark{
                   if (branchIdx === -1) continue;
                   const branchName = branchList[branchIdx];
 
-                  // Column V — free-text "current auditor" field for this branch
-                  // row. Any name typed here is picked up automatically and
-                  // shown on the Auditor Active Engagements card (Operations
-                  // Highpoints) once it has at least one branch — no manual
-                  // "Add Auditor" step needed. Names not already tracked by
-                  // the 4 fixed columns above (N/P/R/T) become new entries
-                  // on their own.
-                  const colVRaw = r[21];
-                  if (colVRaw) {
-                      const colVName = String(colVRaw).trim().toUpperCase();
-                      if (colVName && colVName.length > 1) {
-                          if (!auditorMap[colVName]) auditorMap[colVName] = [];
-                          auditorMap[colVName].push(branchName);
-                      }
-                  }
-
                   const candidatePairs = [
                       { round: 1, auditor: r[2], date: r[3] },   // C, D
                       { round: 2, auditor: r[4], date: r[5] },   // E, F
@@ -7834,6 +7821,30 @@ body.bg-coolDark{
                           note: r[10] !== undefined ? String(r[10] || '').trim() : '', // column K, kept as-is
                           rounds: scheduleRounds
                       };
+                  }
+              }
+
+              // Column V — a dedicated free-text block for one extra/dynamic
+              // auditor beyond the 4 fixed columns above: V2 holds the
+              // auditor's name, and V3 downward holds that auditor's
+              // assigned branches, one per row, for as many rows as are
+              // filled in. Only added to the Auditor Active Engagements
+              // card (Operations Highpoints) once BOTH the name and at
+              // least one branch are actually present — an empty V column
+              // shows nothing, no manual "Add Auditor" step needed.
+              const colVName = String((rotRows[1] && rotRows[1][21]) || "").trim().toUpperCase();
+              if (colVName) {
+                  const colVBranches = [];
+                  for (let vi = 2; vi < rotRows.length; vi++) {
+                      const rawVBranch = String((rotRows[vi] && rotRows[vi][21]) || "").trim();
+                      if (!rawVBranch) continue; // skip blank rows, keep scanning to the end
+                      const normalizedVBranch = normalizeName(rawVBranch);
+                      const vMatchIdx = branchNormalized.indexOf(normalizedVBranch);
+                      colVBranches.push(vMatchIdx !== -1 ? branchList[vMatchIdx] : rawVBranch);
+                  }
+                  if (colVBranches.length > 0) {
+                      if (!auditorMap[colVName]) auditorMap[colVName] = [];
+                      auditorMap[colVName].push(...colVBranches);
                   }
               }
 
