@@ -15,62 +15,6 @@
   <link rel="dns-prefetch" href="https://www.gstatic.com">
   <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com">
   <script id="saved-data-script">window.DEFAULT_DATA = {"summary":{},"branches":[],"lowestEfficiency":[],"highestRepo":[],"highestNoRepo":[],"topFindings26":[],"auditors":[],"dataAudit":{},"emergencyHistory":[],"auditFindingsDetail":{}};</script>
-  <script>
-    // ============================================================
-    // CENTRALIZED PAGE-SCROLL LOCK
-    // ------------------------------------------------------------
-    // Every popup/modal in this dashboard (data modal, export picker,
-    // password gates, side menu, branch filter panel) shares this one
-    // reference-counted lock instead of each one independently poking
-    // document.body.style.overflow. Two problems this fixes:
-    //
-    //  1. "Popup doesn't follow when you scroll" — a popup is
-    //     `position: fixed`, so it should always stay put in the
-    //     viewport. If the *background page* is still scrollable while
-    //     the popup is open, touch/trackpad scrolling can move the
-    //     page under the fixed popup (and on iOS Safari specifically,
-    //     rubber-band over-scroll can drag the whole layout, popup
-    //     included, out of alignment for a frame). Fully pinning the
-    //     body in place — position:fixed at the negative scroll
-    //     offset, not just overflow:hidden — removes the background
-    //     motion that causes this, on every browser/device.
-    //
-    //  2. Nested popups clobbering each other — e.g. opening the
-    //     Export picker from inside the data modal, then closing just
-    //     the picker. A bare `overflow = ''` on that close would
-    //     unlock the whole page even though the data modal underneath
-    //     is still open, so the dashboard behind it starts scrolling
-    //     while a popup is still up. The counter only truly unlocks
-    //     once every open popup has called unlockPageScroll().
-    window.__pageScrollLockCount = 0;
-    window.__pageScrollY = 0;
-    window.lockPageScroll = function () {
-      if (window.__pageScrollLockCount === 0) {
-        window.__pageScrollY = window.scrollY || window.pageYOffset || 0;
-        const body = document.body.style;
-        body.position = 'fixed';
-        body.top = '-' + window.__pageScrollY + 'px';
-        body.left = '0';
-        body.right = '0';
-        body.width = '100%';
-        body.overflow = 'hidden';
-      }
-      window.__pageScrollLockCount++;
-    };
-    window.unlockPageScroll = function () {
-      window.__pageScrollLockCount = Math.max(0, window.__pageScrollLockCount - 1);
-      if (window.__pageScrollLockCount === 0) {
-        const body = document.body.style;
-        body.position = '';
-        body.top = '';
-        body.left = '';
-        body.right = '';
-        body.width = '';
-        body.overflow = '';
-        window.scrollTo(0, window.__pageScrollY);
-      }
-    };
-  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -2532,8 +2476,8 @@ body.bg-coolDark{
 
   <div id="dataModal" class="fixed inset-0 z-50 transition-opacity duration-300 opacity-0 hidden">
     <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal()"></div>
-    <div class="absolute inset-0 flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4 py-6 pointer-events-none">
-      <div class="bg-coolCard w-full max-w-5xl max-h-[85vh] max-h-[85dvh] my-auto rounded-2xl shadow-2xl flex flex-col pointer-events-auto transform transition-transform duration-300 border border-coolBorder scale-95" id="modalDialog">
+    <div class="absolute inset-0 flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4 py-6" onclick="closeModal()">
+      <div class="bg-coolCard w-full max-w-5xl max-h-[85vh] max-h-[85dvh] my-auto rounded-2xl shadow-2xl flex flex-col transform transition-transform duration-300 border border-coolBorder scale-95" id="modalDialog" onclick="event.stopPropagation()">
         <div class="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-coolBorder flex justify-between items-center gap-3 bg-gray-50 rounded-t-2xl">
           <div class="flex items-center gap-2 min-w-0">
             <button id="modalBackBtn" onclick="modalGoBack()" title="Back" aria-label="Back to previous view" class="hidden p-2 -ml-1 text-slate-400 hover:text-accentBlue hover:bg-accentBlue/10 active:scale-95 rounded-xl transition-all cursor-pointer flex-shrink-0">
@@ -2682,6 +2626,38 @@ body.bg-coolDark{
           <button id="editAssignPasswordSubmitBtn" onclick="submitEditAssignPassword()" class="flex-1 text-xs font-semibold text-white bg-royalBlue hover:bg-blue-700 py-2 rounded-xl transition-colors cursor-pointer disabled:opacity-60">
             <span id="editAssignPasswordSubmitLabel">Unlock &amp; Save</span>
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ADD AUDITOR (Operations Highpoints) =================
+       Adds a name to the on-screen "Auditor Active Engagements" list only.
+       This does NOT write to the AUDIT ROTATION (FINAL) Google Sheet — it's
+       a local, session-only placeholder (shown with a "Pending sync" badge)
+       until the real sheet (column V) is updated and the file is re-synced. -->
+  <div id="addAuditorModal" class="fixed inset-0 z-[70] hidden">
+    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeAddAuditorModal()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4" onclick="closeAddAuditorModal()">
+      <div class="bg-coolCard w-full max-w-xs rounded-2xl shadow-2xl p-5 border border-coolBorder" onclick="event.stopPropagation()">
+        <div class="flex items-start justify-between gap-3 mb-1">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-8 h-8 rounded-xl bg-accentIndigo/10 text-accentIndigo flex items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg>
+            </span>
+            <h3 class="text-sm font-bold text-slate-800 truncate">Add Auditor</h3>
+          </div>
+          <button onclick="closeAddAuditorModal()" title="Close" aria-label="Close" class="p-2 -mr-2 -mt-1 text-slate-400 hover:text-accentRose hover:bg-accentRose/10 active:scale-95 rounded-xl transition-all cursor-pointer flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </button>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">Adds this name to the auditor list on this screen for now. It won't change your live AUDIT ROTATION (FINAL) sheet — send the updated file when you're ready to sync it for real.</p>
+        <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1">Auditor Name</label>
+        <input id="addAuditorInput" type="text" autocomplete="off" placeholder="e.g. MARIA" maxlength="60" onkeydown="if(event.key==='Enter'){submitAddAuditor();}" class="w-full px-3 py-2 rounded-xl border border-coolBorder text-sm focus:outline-none focus:ring-2 focus:ring-accentIndigo/40 mb-1 uppercase placeholder:normal-case" />
+        <p id="addAuditorError" class="text-[11px] text-accentRose mb-1 hidden">Please enter a name.</p>
+        <div class="flex gap-2 mt-3">
+          <button onclick="closeAddAuditorModal()" class="flex-1 text-xs font-semibold text-slate-500 hover:text-slate-700 py-2 rounded-xl border border-coolBorder cursor-pointer">Cancel</button>
+          <button onclick="submitAddAuditor()" class="flex-1 text-xs font-semibold text-white bg-accentIndigo hover:bg-accentIndigo/90 py-2 rounded-xl transition-colors cursor-pointer">Add</button>
         </div>
       </div>
     </div>
@@ -3073,27 +3049,58 @@ body.bg-coolDark{
 
     <div id="section-charts" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       
-      <div class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md lg:col-span-2 flex flex-col justify-between hover:shadow-lg transition-all">
-        <h3 class="text-lg font-bold tracking-tight text-slate-900 mb-4 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pie-chart w-5 h-5 text-accentCyan"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"></path><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path></svg>
-          COLLECTION, SALES, SERVICE &amp; AUDIT OVERVIEW
-        </h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 h-full items-center">
-          <div onclick="if(!event.target.closest('.apexcharts-canvas')){openModal('Collection Status Overview', 'collection', 'ALL');}" title="View all collection branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentEmerald/50 hover:shadow-md hover:-translate-y-0.5 hover:bg-accentEmerald/5 p-2">
-            <span class="text-xs font-semibold text-slate-500 tracking-wider uppercase flex items-center justify-center gap-1 mb-3 text-center">Collection Status Breakdown<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentEmerald shrink-0"><path d="m9 18 6-6-6-6"></path></svg></span>
-            <div id="collectionDonutChart" style="min-height: 200px;"></div>
+      <div class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 shadow-md lg:col-span-2 flex flex-col justify-between hover:shadow-lg transition-all">
+        <div class="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-coolBorder">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="hidden sm:flex w-10 h-10 rounded-xl bg-gradient-to-br from-accentIndigo/15 to-accentCyan/15 items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-accentCyan"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"></path><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path></svg>
+            </span>
+            <div class="min-w-0">
+              <h3 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 leading-tight">Collection, Sales, Service &amp; Audit Overview</h3>
+              <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5">Branch-level status mix across all four performance pillars</p>
+            </div>
           </div>
-          <div onclick="if(!event.target.closest('.apexcharts-canvas')){openModal('Sales Status Overview', 'sales', 'ALL');}" title="View all sales branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentIndigo/50 hover:shadow-md hover:-translate-y-0.5 hover:bg-accentIndigo/5 p-2">
-            <span class="text-xs font-semibold text-slate-500 tracking-wider uppercase flex items-center justify-center gap-1 mb-3 text-center">Sales Status Breakdown<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentIndigo shrink-0"><path d="m9 18 6-6-6-6"></path></svg></span>
-            <div id="salesDonutChart" style="min-height: 200px;"></div>
+          <span class="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-accentEmerald uppercase bg-accentEmerald/10 px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap">
+            <span class="w-1.5 h-1.5 rounded-full bg-accentEmerald animate-pulse"></span>
+            Live
+          </span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 h-full items-stretch">
+          <div onclick="if(!event.target.closest('.apexcharts-canvas')){openModal('Collection Status Overview', 'collection', 'ALL');}" title="View all collection branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentEmerald/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentEmerald/[0.04] to-transparent p-3 flex flex-col relative overflow-hidden group">
+            <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentEmerald/70 group-hover:bg-accentEmerald transition-colors"></span>
+            <span class="text-[11px] font-bold text-slate-600 tracking-wider uppercase flex items-center justify-center gap-1.5 mb-2 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-accentEmerald shrink-0"><path d="M16 7h6v6"></path><path d="m22 7-8.5 8.5-5-5L2 17"></path></svg>
+              Collection Status
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentEmerald shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><path d="m9 18 6-6-6-6"></path></svg>
+            </span>
+            <div id="collectionDonutChart" class="flex-1" style="min-height: 200px;"></div>
           </div>
-          <div onclick="if(!event.target.closest('.apexcharts-canvas')){openModal('Service Status Overview', 'service', 'ALL');}" title="View all service branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentCyan/50 hover:shadow-md hover:-translate-y-0.5 hover:bg-accentCyan/5 p-2">
-            <span class="text-xs font-semibold text-slate-500 tracking-wider uppercase flex items-center justify-center gap-1 mb-3 text-center">Service Status Breakdown<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentCyan shrink-0"><path d="m9 18 6-6-6-6"></path></svg></span>
-            <div id="serviceDonutChart" style="min-height: 200px;" class=""></div>
+          <div onclick="if(!event.target.closest('.apexcharts-canvas')){openModal('Sales Status Overview', 'sales', 'ALL');}" title="View all sales branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentIndigo/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentIndigo/[0.04] to-transparent p-3 flex flex-col relative overflow-hidden group">
+            <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentIndigo/70 group-hover:bg-accentIndigo transition-colors"></span>
+            <span class="text-[11px] font-bold text-slate-600 tracking-wider uppercase flex items-center justify-center gap-1.5 mb-2 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-accentIndigo shrink-0"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>
+              Sales Status
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentIndigo shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><path d="m9 18 6-6-6-6"></path></svg>
+            </span>
+            <div id="salesDonutChart" class="flex-1" style="min-height: 200px;"></div>
           </div>
-          <div class="active:scale-[0.98] transition-all rounded-xl border border-coolBorder p-2">
-            <span class="text-xs font-semibold text-slate-500 tracking-wider uppercase block mb-3 text-center">Audit Findings Trend</span>
-            <div id="findingsBarChart" style="min-height: 215px;"></div>
+          <div onclick="if(!event.target.closest('.apexcharts-canvas')){openModal('Service Status Overview', 'service', 'ALL');}" title="View all service branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentCyan/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentCyan/[0.04] to-transparent p-3 flex flex-col relative overflow-hidden group">
+            <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentCyan/70 group-hover:bg-accentCyan transition-colors"></span>
+            <span class="text-[11px] font-bold text-slate-600 tracking-wider uppercase flex items-center justify-center gap-1.5 mb-2 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-accentCyan shrink-0"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+              Service Status
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentCyan shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><path d="m9 18 6-6-6-6"></path></svg>
+            </span>
+            <div id="serviceDonutChart" class="flex-1" style="min-height: 200px;"></div>
+          </div>
+          <div onclick="openModal('Audit Findings FY2026 Breakdown', 'findings', 'findings2026')" title="View audit findings breakdown" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentRose/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentRose/[0.04] to-transparent p-3 flex flex-col relative overflow-hidden group">
+            <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentRose/70 group-hover:bg-accentRose transition-colors"></span>
+            <span class="text-[11px] font-bold text-slate-600 tracking-wider uppercase flex items-center justify-center gap-1.5 mb-2 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-accentRose shrink-0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+              Audit Findings Trend
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><path d="m9 18 6-6-6-6"></path></svg>
+            </span>
+            <div id="findingsBarChart" class="flex-1" style="min-height: 215px;"></div>
           </div>
         </div>
       </div>
@@ -3106,7 +3113,13 @@ body.bg-coolDark{
           </h3>
           <div class="space-y-4">
             <div>
-              <span class="text-xs font-semibold text-slate-500 tracking-wider uppercase block mb-2">Auditor Active Engagements</span>
+              <div class="flex items-center justify-between mb-2 gap-2">
+                <span class="text-xs font-semibold text-slate-500 tracking-wider uppercase">Auditor Active Engagements</span>
+                <button type="button" onclick="openAddAuditorModal()" title="Add a new auditor to this list" aria-label="Add auditor" class="flex items-center gap-1 text-[11px] font-bold text-accentIndigo bg-accentIndigo/10 hover:bg-accentIndigo/20 px-2 py-1 rounded-lg transition-all active:scale-95 cursor-pointer shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                  Add Auditor
+                </button>
+              </div>
               <div class="space-y-4" id="auditor-workload-list"><div class="space-y-1.5 cursor-pointer active:scale-95 transition-all p-1.5 -m-1.5 rounded-lg hover:bg-accentIndigo/5 border border-coolBorder hover:border-accentIndigo/40 hover:shadow-sm" onclick="openModal('Auditor Workload: LAURENCE', 'auditor', 'LAURENCE')">
           <div class="flex items-center justify-between text-xs font-semibold pointer-events-none">
             <span class="text-slate-700 flex items-center gap-1.5">
@@ -3414,8 +3427,8 @@ body.bg-coolDark{
 
       <div id="branchFilterPanel" class="hidden fixed inset-0 z-50">
         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="toggleBranchFilterPanel('close')"></div>
-        <div class="absolute inset-0 flex items-start sm:items-center justify-center overflow-y-auto p-4 py-6 pointer-events-none">
-          <div class="bg-white w-full max-w-xs sm:max-w-sm max-h-[68vh] max-h-[68dvh] my-auto rounded-2xl shadow-2xl flex flex-col pointer-events-auto border border-coolBorder overflow-hidden">
+        <div class="absolute inset-0 flex items-start sm:items-center justify-center overflow-y-auto p-4 py-6" onclick="toggleBranchFilterPanel('close')">
+          <div class="bg-white w-full max-w-xs sm:max-w-sm max-h-[68vh] max-h-[68dvh] my-auto rounded-2xl shadow-2xl flex flex-col border border-coolBorder overflow-hidden" onclick="event.stopPropagation()">
             <div class="p-4 border-b border-coolBorder shrink-0">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-sm text-slate-700">Select Branches</span>
@@ -3578,7 +3591,7 @@ body.bg-coolDark{
         if (!panel) return;
         if (forceState === 'close') {
             panel.classList.add('hidden');
-            if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
+            document.body.style.overflow = '';
             return;
         }
         if (forceState === 'open' || panel.classList.contains('hidden')) {
@@ -3586,11 +3599,11 @@ body.bg-coolDark{
             scorecardDraftFilterActive = scorecardBranchFilterActive;
             scorecardDraftSelectedBranches = new Set(scorecardSelectedBranches);
             panel.classList.remove('hidden');
-            if (typeof window.lockPageScroll === 'function') window.lockPageScroll();
+            document.body.style.overflow = 'hidden';
             renderBranchFilterList();
         } else {
             panel.classList.add('hidden');
-            if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
+            document.body.style.overflow = '';
         }
     }
 
@@ -3723,10 +3736,6 @@ body.bg-coolDark{
       navOpts = navOpts || {};
       const modalEl = document.getElementById('dataModal');
       const wasAlreadyOpen = modalEl && !modalEl.classList.contains('hidden');
-      // Lock the background page in place for the life of this popup
-      // session — only once per open (drilling into a branch from a
-      // list re-uses this same #dataModal and must not stack the lock).
-      if (!wasAlreadyOpen && typeof window.lockPageScroll === 'function') window.lockPageScroll();
 
       if (!navOpts.fromBack) {
           if (wasAlreadyOpen && modalCurrentState) {
@@ -3864,6 +3873,13 @@ body.bg-coolDark{
       const modal = document.getElementById('dataModal');
       const modalDialog = document.getElementById('modalDialog');
       modal.classList.remove('hidden');
+      // Always start at the top of the new view — without this, opening a
+      // fresh item (or navigating Back) could silently keep the previous
+      // item's scroll offset, making the popup feel like it "doesn't
+      // follow" / jumps to a random spot instead of showing from the top.
+      modalBody.scrollTop = 0;
+      const modalScrollWrap = modal.querySelector(':scope > div.overflow-y-auto');
+      if (modalScrollWrap) modalScrollWrap.scrollTop = 0;
       // Double rAF (not a magic-number setTimeout) guarantees the browser
       // has actually painted the "before" state first, so the transition
       // reliably kicks in on the very next frame instead of occasionally
@@ -4277,33 +4293,7 @@ body.bg-coolDark{
     function openBranchAuditScheduleModal() {
       window.auditScheduleFilterRange = { start: '', end: '' };
       window.auditScheduleSearchQuery = '';
-      window.auditScheduleAuditorFilter = '';
-      window.auditScheduleRoundFilter = '';
-      window.auditScheduleSortBy = 'name';
       openModal('Branch Audit Interval — Full Schedule', 'auditSchedule', null);
-    }
-
-    // Filter by a specific auditor — only branches with at least one
-    // recorded round assigned to this auditor are shown.
-    function setAuditScheduleAuditorFilter(value) {
-      window.auditScheduleAuditorFilter = value || '';
-      const modalBody = document.getElementById('modalBody');
-      if (modalBody) renderAuditScheduleModal(modalBody);
-    }
-
-    // Filter by round number (1st audit, 2nd audit, etc.) — only branches
-    // that have that specific round recorded are shown.
-    function setAuditScheduleRoundFilter(value) {
-      window.auditScheduleRoundFilter = value || '';
-      const modalBody = document.getElementById('modalBody');
-      if (modalBody) renderAuditScheduleModal(modalBody);
-    }
-
-    // Reorders (doesn't hide/show) the branch cards currently in view.
-    function setAuditScheduleSortBy(value) {
-      window.auditScheduleSortBy = value || 'name';
-      const modalBody = document.getElementById('modalBody');
-      if (modalBody) renderAuditScheduleModal(modalBody);
     }
 
     // Manual date-range filter for the Branch Audit Interval full-schedule
@@ -4337,8 +4327,6 @@ body.bg-coolDark{
     function clearAuditScheduleFilterRange() {
       window.auditScheduleFilterRange = { start: '', end: '' };
       window.auditScheduleSearchQuery = '';
-      window.auditScheduleAuditorFilter = '';
-      window.auditScheduleRoundFilter = '';
       const modalBody = document.getElementById('modalBody');
       if (modalBody) renderAuditScheduleModal(modalBody);
     }
@@ -4376,43 +4364,17 @@ body.bg-coolDark{
       const startMs = range.start ? new Date(range.start + 'T00:00:00').getTime() : null;
       const endMs = range.end ? new Date(range.end + 'T23:59:59').getTime() : null;
       const searchQuery = (window.auditScheduleSearchQuery || '').trim().toLowerCase();
-      const auditorFilter = window.auditScheduleAuditorFilter || '';
-      const roundFilter = window.auditScheduleRoundFilter || '';
-      const sortBy = window.auditScheduleSortBy || 'name';
-
-      // Distinct auditor names across every branch/round, for the Auditor
-      // filter dropdown — built from the full unfiltered set so switching
-      // one filter never makes another filter's own options disappear.
-      const auditorSet = new Set();
-      let maxRoundNumber = 0;
-      allBranchNames.forEach(n => (schedule[n].rounds || []).forEach(r => {
-          if (r.auditor) auditorSet.add(r.auditor);
-          if (r.round && r.round > maxRoundNumber) maxRoundNumber = r.round;
-      }));
-      const auditorOptions = Array.from(auditorSet).sort();
 
       const branchNames = allBranchNames.filter(branchName => {
           if (searchQuery && !branchName.toLowerCase().includes(searchQuery)) return false;
-          const rounds = schedule[branchName].rounds || [];
-          if (auditorFilter && !rounds.some(r => r.auditor === auditorFilter)) return false;
-          if (roundFilter && !rounds.some(r => String(r.round) === String(roundFilter))) return false;
           if (startMs === null && endMs === null) return true;
-          const datedRounds = rounds.filter(r => r.dateRaw);
-          return datedRounds.some(r => {
+          const rounds = (schedule[branchName].rounds || []).filter(r => r.dateRaw);
+          return rounds.some(r => {
               if (startMs !== null && r.dateRaw < startMs) return false;
               if (endMs !== null && r.dateRaw > endMs) return false;
               return true;
           });
       });
-
-      // Reorder (never hides/shows) the branches currently in view.
-      if (sortBy === 'rounds_desc') {
-          branchNames.sort((a, b) => (schedule[b].rounds || []).length - (schedule[a].rounds || []).length || a.localeCompare(b));
-      } else if (sortBy === 'recent') {
-          const latestDate = n => (schedule[n].rounds || []).reduce((max, r) => (r.dateRaw && r.dateRaw > max) ? r.dateRaw : max, 0);
-          branchNames.sort((a, b) => latestDate(b) - latestDate(a) || a.localeCompare(b));
-      }
-      // 'name' (default) is already alphabetical from allBranchNames.sort().
 
       // Header summary stats — total branches/audits in view + average
       // interval — give an at-a-glance read before scanning individual rows.
@@ -4424,7 +4386,7 @@ body.bg-coolDark{
       }));
       const avgInterval = allIntervals.length ? Math.round(allIntervals.reduce((a, b) => a + b, 0) / allIntervals.length) : null;
 
-      const isFiltered = !!(range.start || range.end || searchQuery || auditorFilter || roundFilter);
+      const isFiltered = !!(range.start || range.end || searchQuery);
 
       const statPill = (label, value, colorClass) => `
           <div class="flex-1 min-w-[100px] bg-white border border-coolBorder rounded-lg px-3 py-1.5 shadow-sm">
@@ -4454,22 +4416,6 @@ body.bg-coolDark{
                          class="px-2 py-1.5 bg-gray-50 border border-coolBorder rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-accentIndigo/40 focus:border-accentIndigo">
                   <input type="date" value="${range.end || ''}" onchange="setAuditScheduleFilterRange('end', this.value)" title="To"
                          class="px-2 py-1.5 bg-gray-50 border border-coolBorder rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-accentIndigo/40 focus:border-accentIndigo">
-                  <select onchange="setAuditScheduleAuditorFilter(this.value)" title="Filter by auditor"
-                          class="px-2 py-1.5 bg-gray-50 border border-coolBorder rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-accentIndigo/40 focus:border-accentIndigo max-w-[140px]">
-                      <option value="">All auditors</option>
-                      ${auditorOptions.map(a => `<option value="${escapeHTML(a)}" ${auditorFilter === a ? 'selected' : ''}>${escapeHTML(a)}</option>`).join('')}
-                  </select>
-                  <select onchange="setAuditScheduleRoundFilter(this.value)" title="Filter by round number"
-                          class="px-2 py-1.5 bg-gray-50 border border-coolBorder rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-accentIndigo/40 focus:border-accentIndigo">
-                      <option value="">All rounds</option>
-                      ${Array.from({ length: maxRoundNumber }, (_, i) => i + 1).map(r => `<option value="${r}" ${String(roundFilter) === String(r) ? 'selected' : ''}>Round ${r}</option>`).join('')}
-                  </select>
-                  <select onchange="setAuditScheduleSortBy(this.value)" title="Sort"
-                          class="px-2 py-1.5 bg-gray-50 border border-coolBorder rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-accentIndigo/40 focus:border-accentIndigo">
-                      <option value="name" ${sortBy === 'name' ? 'selected' : ''}>Sort: Branch A–Z</option>
-                      <option value="rounds_desc" ${sortBy === 'rounds_desc' ? 'selected' : ''}>Sort: Most audit rounds</option>
-                      <option value="recent" ${sortBy === 'recent' ? 'selected' : ''}>Sort: Most recently audited</option>
-                  </select>
                   ${isFiltered ? `<button onclick="clearAuditScheduleFilterRange()" class="flex items-center gap-1 px-2.5 py-1.5 bg-accentRose/10 hover:bg-accentRose/20 border border-accentRose/20 rounded-lg text-xs font-bold text-accentRose transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>Clear</button>` : ''}
               </div>
           </div>`;
@@ -4572,7 +4518,6 @@ body.bg-coolDark{
       setTimeout(() => {
           modal.classList.add('hidden');
       }, 300);
-      if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
       // Fully closing the popup means the next open should be treated as
       // fresh, not a continuation of whatever screen history built up.
       modalHistory = [];
@@ -4624,7 +4569,6 @@ body.bg-coolDark{
       }
       renderExportSectionList();
       document.getElementById('exportPickerModal').classList.remove('hidden');
-      if (typeof window.lockPageScroll === 'function') window.lockPageScroll();
       if (typeof window.closeSideMenu === 'function') window.closeSideMenu();
     }
 
@@ -4668,7 +4612,6 @@ body.bg-coolDark{
 
     function closeExportPicker() {
       document.getElementById('exportPickerModal').classList.add('hidden');
-      if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
       pendingExportKind = null;
       pendingExportPayload = null;
       exportSectionSelection = {};
@@ -4705,14 +4648,12 @@ body.bg-coolDark{
       if (userLabel) userLabel.textContent = (typeof window.getCurrentUserEmail === 'function' && window.getCurrentUserEmail()) || 'unknown user';
       setExportPasswordSubmitting(false);
       modal.classList.remove('hidden');
-      if (typeof window.lockPageScroll === 'function') window.lockPageScroll();
       setTimeout(function() { input.focus(); }, 50);
     }
 
     function cancelExportPassword() {
       const modal = document.getElementById('exportPasswordModal');
       if (modal) modal.classList.add('hidden');
-      if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
       pendingExportAfterPassword = null;
     }
 
@@ -4723,7 +4664,6 @@ body.bg-coolDark{
       const pending = pendingExportAfterPassword;
       const modal = document.getElementById('exportPasswordModal');
       if (modal) modal.classList.add('hidden');
-      if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
       pendingExportAfterPassword = null;
       if (pending && pending.kind) {
           openExportPicker(pending.kind);
@@ -4770,7 +4710,6 @@ body.bg-coolDark{
       }
       const modal = document.getElementById('exportPasswordModal');
       if (modal) modal.classList.add('hidden');
-      if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
       pendingExportAfterPassword = null;
       try {
           await runExport(pending.kind, pending.format, pending.payload);
@@ -7347,6 +7286,28 @@ body.bg-coolDark{
         workloadContainer.appendChild(bar);
       });
 
+      // Auditors added locally via the "+ Add Auditor" button (not yet
+      // present in the AUDIT ROTATION (FINAL) source sheet). Shown with an
+      // amber "pending sync" badge instead of an engagement bar/percentage,
+      // since there's no real workload data for them until the sheet
+      // is updated and re-synced.
+      (window.manualAuditors || []).forEach(name => {
+        if (activeData.auditors.some(a => a.name.toUpperCase() === name.toUpperCase())) return; // already in real data now
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between p-1.5 -m-1.5 rounded-lg border border-dashed border-accentAmber/40 bg-accentAmber/5";
+        row.innerHTML = `
+          <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-accentAmber"></span>
+            ${name}
+          </span>
+          <span class="text-[10px] font-bold uppercase tracking-wide text-accentAmber bg-accentAmber/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-2.5 h-2.5"><path d="M12 8v4l3 3"></path><circle cx="12" cy="12" r="10"></circle></svg>
+            Pending sync
+          </span>
+        `;
+        workloadContainer.appendChild(row);
+      });
+
       let emerName = activeData.summary.emergencyAuditor || "PENDING";
       document.getElementById('emergency-auditor-name').innerText = emerName;
       document.getElementById('emergency-auditor-initial').innerText = emerName && emerName !== "PENDING" && emerName.length > 0 ? emerName[0].toUpperCase() : "?";
@@ -8150,6 +8111,68 @@ body.bg-coolDark{
     // this file for AUDIT ROTATION (FINAL)).
     const AUDITOR_NAMES = ["KARL", "GENESIS", "EDISON", "LAURENCE"];
 
+    // ================= ADD AUDITOR (Operations Highpoints) =================
+    // Names added here are LOCAL / SESSION-ONLY — they show up in the
+    // Auditor Active Engagements list (with a "Pending sync" badge) and in
+    // the Edit Assignment dropdowns, but nothing is written back to the
+    // AUDIT ROTATION (FINAL) Google Sheet. They reset on page reload. The
+    // real, permanent fix is updating column V in that sheet directly (or
+    // sending the updated file to sync) — this is just a same-session
+    // placeholder so the name is usable on-screen right away.
+    window.manualAuditors = window.manualAuditors || [];
+
+    window.openAddAuditorModal = function() {
+      const modal = document.getElementById('addAuditorModal');
+      const input = document.getElementById('addAuditorInput');
+      const err = document.getElementById('addAuditorError');
+      if (!modal || !input) return;
+      err.classList.add('hidden');
+      input.value = '';
+      modal.classList.remove('hidden');
+      setTimeout(function() { input.focus(); }, 50);
+    };
+
+    window.closeAddAuditorModal = function() {
+      const modal = document.getElementById('addAuditorModal');
+      if (modal) modal.classList.add('hidden');
+    };
+
+    window.submitAddAuditor = function() {
+      const input = document.getElementById('addAuditorInput');
+      const err = document.getElementById('addAuditorError');
+      if (!input) return;
+      const name = input.value.trim().toUpperCase();
+      if (!name) {
+        err.textContent = 'Please enter a name.';
+        err.classList.remove('hidden');
+        input.focus();
+        return;
+      }
+      const alreadyExists = AUDITOR_NAMES.some(n => n.toUpperCase() === name) ||
+        (activeData.auditors || []).some(a => a.name.toUpperCase() === name) ||
+        window.manualAuditors.some(n => n.toUpperCase() === name);
+      if (alreadyExists) {
+        err.textContent = 'That auditor is already in the list.';
+        err.classList.remove('hidden');
+        input.focus();
+        return;
+      }
+      window.manualAuditors.push(name);
+      AUDITOR_NAMES.push(name); // so Edit Assignment dropdowns pick it up too
+      window.closeAddAuditorModal();
+      if (typeof renderListings === 'function') renderListings();
+      if (typeof showToast === 'function') {
+        showToast(name + ' added to this screen. Send the updated AUDIT ROTATION (FINAL) file (column V) to make it permanent.');
+      }
+    };
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key !== 'Escape') return;
+      const modal = document.getElementById('addAuditorModal');
+      if (modal && !modal.classList.contains('hidden')) window.closeAddAuditorModal();
+    });
+    // ================= END ADD AUDITOR =================
+
     const defaultAppsScriptUrl = "https://script.google.com/macros/s/AKfycbxHO5MkF8JQjnzJni6yF1EWwwCJQykIC8VsXXKlD-wd1eY9gf4VDku-tlbkbjDPdNsaxA/exec";
     // Must match API_SHARED_SECRET set in your Apps Script's Script Properties.
     // SECURITY: anyone with view-source access to this page can read this
@@ -8200,14 +8223,12 @@ body.bg-coolDark{
       if (nameLabel && pendingQuickLink) nameLabel.textContent = pendingQuickLink.label;
       setQuickLinkPasswordSubmitting(false);
       modal.classList.remove('hidden');
-      if (typeof window.lockPageScroll === 'function') window.lockPageScroll();
       setTimeout(function() { input.focus(); }, 50);
     }
 
     window.cancelQuickLinkPassword = function() {
       const modal = document.getElementById('quickLinkPasswordModal');
       if (modal) modal.classList.add('hidden');
-      if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
       pendingQuickLink = null;
     };
 
@@ -8267,7 +8288,6 @@ body.bg-coolDark{
         window.open(openUrl, '_blank', 'noopener');
         const modal = document.getElementById('quickLinkPasswordModal');
         if (modal) modal.classList.add('hidden');
-        if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
         pendingQuickLink = null;
       } catch (e2) {
         console.error('Opening quick link failed:', e2);
@@ -8658,7 +8678,7 @@ body.bg-coolDark{
         sideMenu.classList.remove('-translate-x-full');
         menuOverlay.classList.remove('hidden');
         requestAnimationFrame(() => menuOverlay.classList.remove('opacity-0'));
-        if (typeof window.lockPageScroll === 'function') window.lockPageScroll();
+        document.body.style.overflow = 'hidden';
         if (hamburgerBtn) {
           hamburgerBtn.classList.add('is-open');
           hamburgerBtn.setAttribute('aria-expanded', 'true');
@@ -8668,7 +8688,7 @@ body.bg-coolDark{
       function closeSideMenu() {
         sideMenu.classList.add('-translate-x-full');
         menuOverlay.classList.add('opacity-0');
-        if (typeof window.unlockPageScroll === 'function') window.unlockPageScroll();
+        document.body.style.overflow = '';
         setTimeout(() => menuOverlay.classList.add('hidden'), 300);
         if (hamburgerBtn) {
           hamburgerBtn.classList.remove('is-open');
