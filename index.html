@@ -3099,8 +3099,7 @@ body.bg-coolDark{
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-5 h-5 text-accentIndigo"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg>
             Operations Highpoints
           </h3>
-          <div class="space-y-4">
-            <div>
+          <div>
               <span class="text-xs font-semibold text-slate-500 tracking-wider uppercase block mb-2">Auditor Active Engagements</span>
               <div class="space-y-4" id="auditor-workload-list"><div class="space-y-1.5 cursor-pointer active:scale-95 transition-all p-1.5 -m-1.5 rounded-lg hover:bg-accentIndigo/5 border border-coolBorder hover:border-accentIndigo/40 hover:shadow-sm" onclick="openModal('Auditor Workload: LAURENCE', 'auditor', 'LAURENCE')">
           <div class="flex items-center justify-between text-xs font-semibold pointer-events-none">
@@ -6956,13 +6955,6 @@ body.bg-coolDark{
     // coherent, professional system rather than seven separately-styled
     // widgets. Colors are intentionally untouched from the original palette.
     const CHART_FONT = 'Plus Jakarta Sans, sans-serif';
-    function donutCenterTotal(label) {
-      return {
-        show: true, showAlways: true,
-        name: { show: true, fontSize: '10px', fontWeight: 700, color: '#94a3b8', offsetY: -6, formatter: () => label },
-        value: { show: true, fontSize: '22px', fontWeight: 800, color: '#0f172a', offsetY: 4, formatter: (val) => val }
-      };
-    }
 
     // Shared builder for the Collection/Sales/Service "stat + segmented bar"
     // panels — replaces the old cramped donut+legend widgets with plain HTML
