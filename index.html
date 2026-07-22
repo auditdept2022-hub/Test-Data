@@ -61,6 +61,53 @@
        it always wins, regardless of whether the Tailwind CDN JIT has
        generated the flex-1/min-h-0 utility classes yet. */
     #modalDialog { overflow: hidden; }
+  /* Fullscreen toggle for the main data popup: breaks the dialog out of
+     its centred/padded wrapper to fill the viewport edge-to-edge. Uses
+     !important because it has to win over the inline max-w-5xl /
+     max-h-[85vh] / rounded-2xl utility classes already on the element. */
+  #modalDialog.modal-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+  /* Fullscreen used to just blow up the outer frame while the content
+     inside stayed locked to the same widths it used in the small windowed
+     popup — so it "went fullscreen" but the data itself never got any
+     bigger/wider, which read as a static preview instead of a real page.
+     These rules let the actual content use the extra room: */
+  #modalDialog.modal-fullscreen #modalBody {
+    max-width: none !important;
+  }
+  /* Any max-w-* wrapper left over from the windowed layout (e.g. the Edit
+     Assignment form's max-w-lg) gets a much roomier ceiling instead of no
+     ceiling at all, so a single form doesn't stretch edge-to-edge on an
+     ultrawide monitor while still genuinely using the extra fullscreen space. */
+  #modalDialog.modal-fullscreen #modalBody [class*="max-w-"] {
+    max-width: min(100%, 1400px) !important;
+  }
+  /* Same problem, but vertically: several popups (Total Active Accounts
+     Breakdown, Service/Sales/Collection/All Branches Overview, Auditor
+     Workload, Emergency History, the per-branch findings table) wrap
+     their list/table in a short, fixed-height scroll box — e.g.
+     h-[500px]/max-h-[60vh], max-h-64, max-h-80 — sized for the small
+     windowed popup. Going fullscreen resized the dialog but left these
+     inner boxes just as short, so the data area itself never grew and
+     fullscreen looked like it did nothing. In fullscreen, let every such
+     box grow to use the real available height instead of staying capped. */
+  #modalDialog.modal-fullscreen #modalBody [class*="h-[500px]"] {
+    height: calc(100dvh - 230px) !important;
+  }
+  #modalDialog.modal-fullscreen #modalBody [class*="max-h-"] {
+    max-height: calc(100dvh - 230px) !important;
+  }
     #modalBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     /* Branch Audit Interval modal: the outer #modalBody must NOT scroll
        itself here (that created a double scroll region — the toolbar/
@@ -1872,6 +1919,23 @@ body.bg-coolDark{
     background: linear-gradient(90deg,#3355d8,#4169E1); color: #fff; font-weight: 700;
   }
   #miniCalGrid .mini-cal-day.is-muted { color: #cbd5e1; }
+  /* Philippine holidays: a small coloured dot under the day number so the
+     day itself stays legible; regular holidays (fixed by law, e.g. RA 9849)
+     use royal blue, special non-working days use amber. The dot sits under
+     "today"'s number too (white, since today's background is already blue). */
+  #miniCalGrid .mini-cal-day { position: relative; flex-direction: column; gap: 1px; padding-top: 2px; }
+  #miniCalGrid .mini-cal-day.is-holiday-regular,
+  #miniCalGrid .mini-cal-day.is-holiday-special { font-weight: 700; }
+  #miniCalGrid .mini-cal-day.is-holiday-regular:not(.is-today) { color: #4169E1; }
+  #miniCalGrid .mini-cal-day.is-holiday-special:not(.is-today) { color: #b45309; }
+  #miniCalGrid .mini-cal-day .ph-holiday-dot {
+    width: 4px; height: 4px; border-radius: 50%; margin-top: 1px;
+  }
+  #miniCalGrid .mini-cal-day.is-holiday-regular .ph-holiday-dot { background: #4169E1; }
+  #miniCalGrid .mini-cal-day.is-holiday-special .ph-holiday-dot { background: #d97706; }
+  #miniCalGrid .mini-cal-day.is-today .ph-holiday-dot { background: #fff; }
+  #miniCalHolidayList::-webkit-scrollbar { width: 4px; }
+  #miniCalHolidayList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   #liveTimeText, #liveDateText {
     transition: color .3s ease;
   }
@@ -1899,6 +1963,69 @@ body.bg-coolDark{
       transition-duration: 0.001ms !important;
       scroll-behavior: auto !important;
     }
+  }
+</style>
+<style>
+  /* Patch: the compiled Tailwind build below never generated the ring-*
+     utilities used by the status filter pills (Improving/Declining/Stable/
+     Recovering, etc). Without these, clicking a status only showed the
+     active:scale click animation with no visible "selected" state. */
+  .ring-1{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}
+  .ring-2{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}
+  .ring-inset{--tw-ring-inset:inset}
+  .ring-offset-1{--tw-ring-offset-width:1px}
+  .ring-current\/20{--tw-ring-color:currentColor}
+  .ring-slate-400{--tw-ring-opacity:1;--tw-ring-color:rgb(148 163 184 / var(--tw-ring-opacity,1))}
+  .ring-accentBlue{--tw-ring-opacity:1;--tw-ring-color:rgb(37 99 235 / var(--tw-ring-opacity,1))}
+  .ring-accentBlue\/40{--tw-ring-color:rgb(37 99 235 / 0.4)}
+  .ring-accentCyan{--tw-ring-opacity:1;--tw-ring-color:rgb(8 145 178 / var(--tw-ring-opacity,1))}
+  .ring-accentEmerald{--tw-ring-opacity:1;--tw-ring-color:rgb(5 150 105 / var(--tw-ring-opacity,1))}
+  .ring-accentEmerald\/40{--tw-ring-color:rgb(5 150 105 / 0.4)}
+  .ring-accentIndigo\/40{--tw-ring-color:rgb(79 70 229 / 0.4)}
+  .ring-accentRose{--tw-ring-opacity:1;--tw-ring-color:rgb(225 29 72 / var(--tw-ring-opacity,1))}
+  .ring-accentRose\/20{--tw-ring-color:rgb(225 29 72 / 0.2)}
+  .ring-accentAmber{--tw-ring-opacity:1;--tw-ring-color:rgb(217 119 6 / var(--tw-ring-opacity,1))}
+  .ring-accentAmber\/20{--tw-ring-color:rgb(217 119 6 / 0.2)}
+  .ring-accentAmber\/40{--tw-ring-color:rgb(217 119 6 / 0.4)}
+  .p-1{padding:0.25rem}
+  .-m-1{margin:-0.25rem}
+  .mb-1\.5{margin-bottom:0.375rem}
+  .text-base{font-size:1rem;line-height:1.5rem}
+  .text-\[13px\]{font-size:13px}
+  .w-7{width:1.75rem}
+  .h-7{height:1.75rem}
+  .space-y-1 > :not([hidden]) ~ :not([hidden]){margin-top:0.25rem}
+  .space-y-2 > :not([hidden]) ~ :not([hidden]){margin-top:0.5rem}
+  .pt-2\.5{padding-top:0.625rem}
+  .gap-2\.5{gap:0.625rem}
+  .flex-1{flex:1 1 0%}
+  .shrink-0{flex-shrink:0}
+  .min-w-0{min-width:0px}
+  .items-start{align-items:flex-start}
+  .items-baseline{align-items:baseline}
+  .leading-tight{line-height:1.25}
+  .tracking-wide{letter-spacing:0.025em}
+  .mt-0\.5{margin-top:0.125rem}
+
+  /* Make the selected filter pill unmistakable: a bold colored ring plus a
+     slight lift/scale and deeper tint, instead of a thin ring that's easy
+     to miss against the pill's already-tinted background. !important guards
+     against cascade-order fights with the base color/bg utility classes. */
+  .ring-2.ring-offset-1{
+    transform: translateY(-1px) scale(1.03) !important;
+    font-weight: 800 !important;
+  }
+  .ring-accentEmerald.ring-2{box-shadow:0 0 0 2px #fff, 0 0 0 4px rgb(5 150 105), 0 2px 6px rgb(5 150 105 / 0.35) !important;background-color:rgb(5 150 105 / 0.18) !important;}
+  .ring-accentRose.ring-2{box-shadow:0 0 0 2px #fff, 0 0 0 4px rgb(225 29 72), 0 2px 6px rgb(225 29 72 / 0.35) !important;background-color:rgb(225 29 72 / 0.18) !important;}
+  .ring-slate-400.ring-2{box-shadow:0 0 0 2px #fff, 0 0 0 4px rgb(100 116 139), 0 2px 6px rgb(100 116 139 / 0.35) !important;background-color:rgb(226 232 240) !important;}
+  .ring-accentAmber.ring-2{box-shadow:0 0 0 2px #fff, 0 0 0 4px rgb(217 119 6), 0 2px 6px rgb(217 119 6 / 0.35) !important;background-color:rgb(217 119 6 / 0.18) !important;}
+  .ring-accentBlue.ring-2{box-shadow:0 0 0 2px #fff, 0 0 0 4px rgb(37 99 235), 0 2px 6px rgb(37 99 235 / 0.35) !important;background-color:rgb(37 99 235 / 0.18) !important;}
+  .ring-accentCyan.ring-2{box-shadow:0 0 0 2px #fff, 0 0 0 4px rgb(8 145 178), 0 2px 6px rgb(8 145 178 / 0.35) !important;background-color:rgb(8 145 178 / 0.18) !important;}
+  .row-hover-strong:hover{background-color:rgb(241 245 249) !important;}
+  @media (min-width:640px){
+    .sm\:flex{display:flex}
+    .sm\:inline-flex{display:inline-flex}
+    .sm\:text-base{font-size:1rem;line-height:1.5rem}
   }
 </style>
 </head>
@@ -2169,6 +2296,131 @@ body.bg-coolDark{
   </script>
 
   <script>
+    // ============================================================
+    // PHILIPPINE HOLIDAYS ENGINE
+    // ------------------------------------------------------------
+    // Computes PH regular & special (non-working) holidays for any
+    // year automatically, so the mini calendar stays correct every
+    // year without needing to be hand-edited.
+    //
+    // - Fixed-date holidays (New Year's Day, Independence Day, etc.)
+    //   and rule-based ones (Maundy Thursday/Good Friday/Black
+    //   Saturday via the Easter Computus algorithm; National Heroes
+    //   Day = last Monday of August) are calculated exactly, forever.
+    // - Chinese New Year, Eid'l Fitr and Eid'l Adha follow the lunar/
+    //   Hijri calendar and can't be derived from a formula the same
+    //   way, so they're looked up from PH_LUNAR_HOLIDAYS below. That
+    //   table is filled in through 2036 using published astronomical
+    //   dates. Philippine Eid dates are only made official once the
+    //   National Commission on Muslim Filipinos confirms the moon
+    //   sighting, so those (and the exact Chinese New Year "special
+    //   day" designation) are marked as estimates until the yearly
+    //   Presidential Proclamation confirms them — this only ever
+    //   affects Eid/CNY, not the fixed or Easter-based holidays.
+    // ============================================================
+    (function () {
+      // month is 0-indexed to match JS Date
+      var PH_LUNAR_HOLIDAYS = {
+        2024: { cny: [1, 10], eidFitr: [[3, 10]], eidAdha: [[5, 17]] },
+        2025: { cny: [0, 29], eidFitr: [[2, 31]], eidAdha: [[5, 6]] },
+        2026: { cny: [1, 17], eidFitr: [[2, 20]], eidAdha: [[4, 27]] },
+        2027: { cny: [1, 6],  eidFitr: [[2, 9]],  eidAdha: [[4, 16]] },
+        2028: { cny: [0, 26], eidFitr: [[1, 26]], eidAdha: [[4, 5]] },
+        2029: { cny: [1, 13], eidFitr: [[1, 14]], eidAdha: [[3, 24]] },
+        2030: { cny: [1, 3],  eidFitr: [[1, 4]],  eidAdha: [[3, 13]] },
+        2031: { cny: [0, 23], eidFitr: [[0, 24]], eidAdha: [[3, 2]] },
+        2032: { cny: [1, 11], eidFitr: [[0, 14]], eidAdha: [[2, 22]] },
+        2033: { cny: [0, 31], eidFitr: [[0, 2], [11, 23]], eidAdha: [[2, 11]] },
+        2034: { cny: [1, 19], eidFitr: [[11, 12]], eidAdha: [[1, 1]] },
+        2035: { cny: [1, 8],  eidFitr: [[11, 1]],  eidAdha: [[1, 18]] },
+        2036: { cny: [0, 28], eidFitr: [[10, 19]], eidAdha: [[1, 7]] }
+      };
+
+      function easterSunday(year) {
+        // Anonymous Gregorian algorithm (Meeus/Jones/Butcher) — exact
+        // for any Gregorian year, no lookup table needed.
+        var a = year % 19, b = Math.floor(year / 100), c = year % 100;
+        var d = Math.floor(b / 4), e = b % 4;
+        var f = Math.floor((b + 8) / 25);
+        var g = Math.floor((b - f + 1) / 3);
+        var h = (19 * a + b - d - g + 15) % 30;
+        var i = Math.floor(c / 4), k = c % 4;
+        var l = (32 + 2 * e + 2 * i - h - k) % 7;
+        var m = Math.floor((a + 11 * h + 22 * l) / 451);
+        var month = Math.floor((h + l - 7 * m + 114) / 31); // 3=Mar, 4=Apr
+        var day = ((h + l - 7 * m + 114) % 31) + 1;
+        return new Date(year, month - 1, day);
+      }
+      function addDays(date, n) {
+        var d = new Date(date);
+        d.setDate(d.getDate() + n);
+        return d;
+      }
+      function lastWeekdayOfMonth(year, month, weekday) {
+        // weekday: 0=Sun..6=Sat. Returns a Date for the last occurrence
+        // of that weekday in the given month.
+        var last = new Date(year, month + 1, 0);
+        var diff = (last.getDay() - weekday + 7) % 7;
+        return new Date(year, month, last.getDate() - diff);
+      }
+
+      // Returns an array of { month, day, name, type } for the given year.
+      // type is 'regular' or 'special'.
+      function getPHHolidays(year) {
+        var list = [];
+        function reg(m, d, name) { list.push({ month: m, day: d, name: name, type: 'regular' }); }
+        function spec(m, d, name) { list.push({ month: m, day: d, name: name, type: 'special' }); }
+
+        // ---- Regular holidays (fixed dates) ----
+        reg(0, 1, "New Year's Day");
+        reg(3, 9, "Araw ng Kagitingan");
+        reg(4, 1, "Labor Day");
+        reg(5, 12, "Independence Day");
+        reg(10, 30, "Bonifacio Day");
+        reg(11, 25, "Christmas Day");
+        reg(11, 30, "Rizal Day");
+
+        // National Heroes Day — last Monday of August
+        var heroesDay = lastWeekdayOfMonth(year, 7, 1);
+        reg(heroesDay.getMonth(), heroesDay.getDate(), "National Heroes Day");
+
+        // Holy Week — computed from Easter Sunday
+        var easter = easterSunday(year);
+        var maundyThu = addDays(easter, -3);
+        var goodFri = addDays(easter, -2);
+        var blackSat = addDays(easter, -1);
+        reg(maundyThu.getMonth(), maundyThu.getDate(), "Maundy Thursday");
+        reg(goodFri.getMonth(), goodFri.getDate(), "Good Friday");
+        spec(blackSat.getMonth(), blackSat.getDate(), "Black Saturday");
+
+        // ---- Special (non-working) holidays (fixed dates) ----
+        spec(7, 21, "Ninoy Aquino Day");
+        spec(10, 1, "All Saints' Day");
+        spec(10, 2, "All Souls' Day");
+        spec(11, 8, "Feast of the Immaculate Conception");
+        spec(11, 24, "Christmas Eve");
+        spec(11, 31, "Last Day of the Year");
+        // EDSA anniversary's working/non-working status is re-decided
+        // every year by proclamation (e.g. it was a special *working*
+        // day in 2026) — shown as an observance, not styled as a
+        // day off, so it's never wrong.
+        list.push({ month: 1, day: 25, name: "EDSA People Power Anniversary (observance)", type: 'observance' });
+
+        // ---- Lunar/Hijri holidays (looked up, see note above) ----
+        var lunar = PH_LUNAR_HOLIDAYS[year];
+        if (lunar) {
+          spec(lunar.cny[0], lunar.cny[1], "Chinese New Year");
+          lunar.eidFitr.forEach(function (md) { reg(md[0], md[1], "Eid'l Fitr (estimated)"); });
+          lunar.eidAdha.forEach(function (md) { reg(md[0], md[1], "Eid'l Adha (estimated)"); });
+        }
+
+        return list;
+      }
+      window.getPHHolidays = getPHHolidays;
+    })();
+  </script>
+
+  <script>
     // Small calendar popup that opens when the header time/date card is
     // clicked. Purely a display/navigation aid — it doesn't read or write
     // any dashboard data, so it's safe to init independently of everything
@@ -2179,6 +2431,7 @@ body.bg-coolDark{
         const popup = document.getElementById('miniCalendarPopup');
         const label = document.getElementById('miniCalLabel');
         const grid = document.getElementById('miniCalGrid');
+        const holidayListEl = document.getElementById('miniCalHolidayList');
         const prevBtn = document.getElementById('miniCalPrev');
         const nextBtn = document.getElementById('miniCalNext');
         const todayBtn = document.getElementById('miniCalToday');
@@ -2197,22 +2450,74 @@ body.bg-coolDark{
           const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
           const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
 
+          // PH holidays for this year, keyed by "month-day" for quick lookup.
+          // Also pull in December of the previous year / January of the next
+          // year so holidays still show correctly on the muted lead/trail days.
+          const holidaysByDay = {};
+          [viewYear - 1, viewYear, viewYear + 1].forEach(function (y) {
+            if (!window.getPHHolidays) return;
+            window.getPHHolidays(y).forEach(function (h) {
+              const key = y + '-' + h.month + '-' + h.day;
+              holidaysByDay[key] = h;
+            });
+          });
+          function holidayFor(y, m, d) { return holidaysByDay[y + '-' + m + '-' + d]; }
+
           let html = '';
           // Trailing days from previous month, muted, to fill the first row
+          const prevMonthYear = viewMonth === 0 ? viewYear - 1 : viewYear;
+          const prevMonth = viewMonth === 0 ? 11 : viewMonth - 1;
           for (let i = startDay - 1; i >= 0; i--) {
-            html += '<span class="mini-cal-day is-muted">' + (daysInPrevMonth - i) + '</span>';
+            const d = daysInPrevMonth - i;
+            const h = holidayFor(prevMonthYear, prevMonth, d);
+            const dot = h && h.type !== 'observance' ? '<span class="ph-holiday-dot"></span>' : '';
+            html += '<span class="mini-cal-day is-muted" title="' + (h ? h.name : '') + '"><span>' + d + '</span>' + dot + '</span>';
           }
+          const monthHolidays = [];
           for (let d = 1; d <= daysInMonth; d++) {
             const isToday = d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
-            html += '<span class="mini-cal-day' + (isToday ? ' is-today' : '') + '">' + d + '</span>';
+            const h = holidayFor(viewYear, viewMonth, d);
+            let cls = 'mini-cal-day' + (isToday ? ' is-today' : '');
+            let dot = '';
+            let title = '';
+            if (h) {
+              title = h.name;
+              if (h.type !== 'observance') {
+                cls += h.type === 'regular' ? ' is-holiday-regular' : ' is-holiday-special';
+                dot = '<span class="ph-holiday-dot"></span>';
+              }
+              monthHolidays.push({ day: d, name: h.name, type: h.type });
+            }
+            html += '<span class="' + cls + '" title="' + title + '"><span>' + d + '</span>' + dot + '</span>';
           }
           // Leading days of next month so the grid always fills complete weeks
           const totalCells = startDay + daysInMonth;
           const trailing = (7 - (totalCells % 7)) % 7;
+          const nextMonthYear = viewMonth === 11 ? viewYear + 1 : viewYear;
+          const nextMonth = viewMonth === 11 ? 0 : viewMonth + 1;
           for (let d = 1; d <= trailing; d++) {
-            html += '<span class="mini-cal-day is-muted">' + d + '</span>';
+            const h = holidayFor(nextMonthYear, nextMonth, d);
+            const dot = h && h.type !== 'observance' ? '<span class="ph-holiday-dot"></span>' : '';
+            html += '<span class="mini-cal-day is-muted" title="' + (h ? h.name : '') + '"><span>' + d + '</span>' + dot + '</span>';
           }
           grid.innerHTML = html;
+
+          // Below-grid list so holidays are readable (not just a hover
+          // tooltip, which doesn't work on touch devices).
+          if (holidayListEl) {
+            if (monthHolidays.length === 0) {
+              holidayListEl.innerHTML = '<p class="text-[10px] text-slate-400 px-1">No PH holidays this month</p>';
+            } else {
+              holidayListEl.innerHTML = monthHolidays.map(function (h) {
+                const dotColor = h.type === 'observance' ? '#94a3b8' : (h.type === 'regular' ? '#4169E1' : '#d97706');
+                return '<div class="flex items-center gap-1.5 px-1 py-0.5 rounded-lg hover:bg-slate-50">' +
+                  '<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background:' + dotColor + '"></span>' +
+                  '<span class="text-[10px] font-bold text-slate-500 tabular-nums w-9 shrink-0">' + MONTH_NAMES[viewMonth].slice(0,3) + ' ' + h.day + '</span>' +
+                  '<span class="text-[10px] text-slate-600 truncate">' + h.name + '</span>' +
+                '</div>';
+              }).join('');
+            }
+          }
         }
 
         // The popup is `position: absolute` inside #liveDateTime and defaults
@@ -2494,6 +2799,10 @@ body.bg-coolDark{
             </button>
             <button onclick="printModalContent()" title="Print this data" aria-label="Print this data" class="p-2 text-slate-400 hover:text-accentBlue hover:bg-accentBlue/10 active:scale-95 rounded-xl transition-all cursor-pointer">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            </button>
+            <button id="modalFullscreenBtn" onclick="toggleModalFullscreen()" title="Fullscreen" aria-label="Toggle fullscreen" class="p-2 text-slate-400 hover:text-accentIndigo hover:bg-accentIndigo/10 active:scale-95 rounded-xl transition-all cursor-pointer">
+              <svg id="modalFullscreenIconExpand" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M21 8V5a2 2 0 0 0-2-2h-3"></path><path d="M3 16v3a2 2 0 0 0 2 2h3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>
+              <svg id="modalFullscreenIconCollapse" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 hidden"><path d="M8 3v3a2 2 0 0 1-2 2H3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M16 21v-3a2 2 0 0 1 2-2h3"></path></svg>
             </button>
             <button onclick="closeModal()" class="p-2 text-slate-400 hover:text-accentRose hover:bg-accentRose/10 active:scale-95 rounded-xl transition-all cursor-pointer">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
@@ -2850,9 +3159,14 @@ body.bg-coolDark{
         <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
       </div>
 
-      <!-- NEW: Audit Report -> maps to id 'auditreport' in Quick_Links.gs,
-           which must hold the real Drive folder URL server-side (see chat
-           for the .gs snippet to add). -->
+      <!-- AUDIT REPORT (Audit Vault) -> now merged into the SAME Apps
+           Script deployment as the rest of the dashboard, instead of a
+           separate audit-vault-launcher /exec app. It goes through the
+           exact same password re-check + Quick_Links backend lookup
+           (openQuickLink -> action=open&id=auditreport) as the other
+           Quick Links above, using the "auditreport" entry already
+           defined in QUICK_LINKS in the merged Code.gs. One script, one
+           deployment, one auth path for all seven links. -->
       <div role="button" tabindex="0" onclick="openQuickLink('auditreport','AUDIT REPORT')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('auditreport','AUDIT REPORT');}" class="side-menu-link cursor-pointer select-none">
         <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
         <span>AUDIT REPORT</span>
@@ -2905,6 +3219,11 @@ body.bg-coolDark{
             <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
           </div>
           <div id="miniCalGrid" class="grid grid-cols-7 gap-y-1 text-center text-xs"></div>
+          <div class="flex items-center gap-3 mt-2 px-1 text-[9px] font-semibold text-slate-400">
+            <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full" style="background:#4169E1"></span>Regular holiday</span>
+            <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full" style="background:#d97706"></span>Special day</span>
+          </div>
+          <div id="miniCalHolidayList" class="mt-1.5 max-h-24 overflow-y-auto custom-scrollbar space-y-1 text-left"></div>
           <button type="button" id="miniCalToday" class="mt-2 w-full py-1.5 text-xs font-semibold text-accentBlue hover:bg-accentBlue/10 rounded-lg transition-all">Today</button>
         </div>
       </div>
@@ -3017,78 +3336,77 @@ body.bg-coolDark{
 
     <div id="section-charts" class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
       
-      <div class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 shadow-md lg:col-span-2 flex flex-col hover:shadow-lg transition-all">
-        <div class="flex items-start justify-between gap-3 mb-3 pb-3 border-b border-coolBorder">
+      <div class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-3 shadow-md lg:col-span-2 flex flex-col hover:shadow-lg transition-all">
+        <div class="flex items-start justify-between gap-3 mb-2 pb-2 border-b border-coolBorder">
           <div class="flex items-center gap-3 min-w-0">
-            <span class="hidden sm:flex w-10 h-10 rounded-xl bg-gradient-to-br from-accentIndigo/15 to-accentCyan/15 items-center justify-center shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-accentCyan"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"></path><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path></svg>
+            <span class="hidden sm:flex w-8 h-8 rounded-xl bg-gradient-to-br from-accentIndigo/15 to-accentCyan/15 items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-accentCyan"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"></path><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path></svg>
             </span>
             <div class="min-w-0">
-              <h3 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 leading-tight">Collection, Sales, Service &amp; Audit Overview</h3>
-              <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Branch-level status mix across all four performance pillars</p>
+              <h3 class="text-sm sm:text-base font-bold tracking-tight text-slate-900 leading-tight">Collection, Sales, Service &amp; Audit Overview</h3>
             </div>
           </div>
-          <span class="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-accentEmerald uppercase bg-accentEmerald/10 px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap">
+          <span class="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-accentEmerald uppercase bg-accentEmerald/10 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">
             <span class="w-1.5 h-1.5 rounded-full bg-accentEmerald animate-pulse"></span>
             Live
           </span>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div onclick="openModal('Collection Status Overview', 'collection', 'ALL')" title="View all collection branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentEmerald/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentEmerald/[0.04] to-transparent p-3 sm:p-4 relative overflow-hidden group">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div onclick="openModal('Collection Status Overview', 'collection', 'ALL')" title="View all collection branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentEmerald/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentEmerald/[0.04] to-transparent p-2.5 relative overflow-hidden group">
             <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentEmerald/70 group-hover:bg-accentEmerald transition-colors"></span>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs sm:text-sm font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-accentEmerald shrink-0"><path d="M16 7h6v6"></path><path d="m22 7-8.5 8.5-5-5L2 17"></path></svg>
                 Collection Status
               </span>
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentEmerald shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><path d="m9 18 6-6-6-6"></path></svg>
             </div>
-            <div class="flex items-baseline gap-1.5 mb-2.5">
-              <span id="collectionStatusTotal" class="text-3xl font-extrabold text-slate-900">0</span>
+            <div class="flex items-baseline gap-1.5 mb-2">
+              <span id="collectionStatusTotal" class="text-2xl font-extrabold text-slate-900">0</span>
               <span class="text-xs font-semibold text-slate-400">branches tracked</span>
             </div>
-            <div id="collectionStatusRows" class="space-y-2"></div>
+            <div id="collectionStatusRows" class="space-y-1.5"></div>
           </div>
-          <div onclick="openModal('Sales Status Overview', 'sales', 'ALL')" title="View all sales branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentIndigo/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentIndigo/[0.04] to-transparent p-3 sm:p-4 relative overflow-hidden group">
+          <div onclick="openModal('Sales Status Overview', 'sales', 'ALL')" title="View all sales branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentIndigo/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentIndigo/[0.04] to-transparent p-2.5 relative overflow-hidden group">
             <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentIndigo/70 group-hover:bg-accentIndigo transition-colors"></span>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs sm:text-sm font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-accentIndigo shrink-0"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>
                 Sales Status
               </span>
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentIndigo shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><path d="m9 18 6-6-6-6"></path></svg>
             </div>
-            <div class="flex items-baseline gap-1.5 mb-2.5">
-              <span id="salesStatusTotal" class="text-3xl font-extrabold text-slate-900">0</span>
+            <div class="flex items-baseline gap-1.5 mb-2">
+              <span id="salesStatusTotal" class="text-2xl font-extrabold text-slate-900">0</span>
               <span class="text-xs font-semibold text-slate-400">branches tracked</span>
             </div>
-            <div id="salesStatusRows" class="space-y-2"></div>
+            <div id="salesStatusRows" class="space-y-1.5"></div>
           </div>
-          <div onclick="openModal('Service Status Overview', 'service', 'ALL')" title="View all service branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentCyan/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentCyan/[0.04] to-transparent p-3 sm:p-4 relative overflow-hidden group">
+          <div onclick="openModal('Service Status Overview', 'service', 'ALL')" title="View all service branches" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentCyan/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentCyan/[0.04] to-transparent p-2.5 relative overflow-hidden group">
             <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentCyan/70 group-hover:bg-accentCyan transition-colors"></span>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs sm:text-sm font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-accentCyan shrink-0"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
                 Service Status
               </span>
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentCyan shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><path d="m9 18 6-6-6-6"></path></svg>
             </div>
-            <div class="flex items-baseline gap-1.5 mb-2.5">
-              <span id="serviceStatusTotal" class="text-3xl font-extrabold text-slate-900">0</span>
+            <div class="flex items-baseline gap-1.5 mb-2">
+              <span id="serviceStatusTotal" class="text-2xl font-extrabold text-slate-900">0</span>
               <span class="text-xs font-semibold text-slate-400">branches tracked</span>
             </div>
-            <div id="serviceStatusRows" class="space-y-2"></div>
+            <div id="serviceStatusRows" class="space-y-1.5"></div>
           </div>
-          <div onclick="openModal('Audit Findings FY2026 Breakdown', 'findings', 'findings2026')" title="View audit findings breakdown" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentRose/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentRose/[0.04] to-transparent p-3 sm:p-4 flex flex-col relative overflow-hidden group">
+          <div onclick="openModal('Audit Findings FY2026 Breakdown', 'findings', 'findings2026')" title="View audit findings breakdown" class="cursor-pointer active:scale-[0.98] transition-all rounded-xl border border-coolBorder hover:border-accentRose/50 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-b from-accentRose/[0.04] to-transparent p-2.5 flex flex-col relative overflow-hidden group">
             <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentRose/70 group-hover:bg-accentRose transition-colors"></span>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs sm:text-sm font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-accentRose shrink-0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
                 Audit Findings Trend
               </span>
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"><path d="m9 18 6-6-6-6"></path></svg>
             </div>
-            <div id="findingsBarChart" class="flex-1" style="min-height: 200px;"></div>
+            <div id="findingsBarChart" class="flex-1" style="min-height: 170px;"></div>
           </div>
         </div>
       </div>
@@ -3411,7 +3729,7 @@ body.bg-coolDark{
         <div class="absolute inset-0 flex items-start sm:items-center justify-center overflow-y-auto p-4 py-6" onclick="toggleBranchFilterPanel('close')">
           <div class="bg-white w-full max-w-xs sm:max-w-sm max-h-[68vh] max-h-[68dvh] my-auto rounded-2xl shadow-2xl flex flex-col border border-coolBorder overflow-hidden" onclick="event.stopPropagation()">
             <div class="p-4 border-b border-coolBorder shrink-0">
-              <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center justify-between mb-1.5">
                 <span class="text-sm text-slate-700">Select Branches</span>
                 <button type="button" onclick="toggleBranchFilterPanel('close')" class="p-1 text-slate-400 hover:text-slate-600 hover:bg-gray-100 rounded-lg transition-all cursor-pointer">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
@@ -3995,7 +4313,7 @@ body.bg-coolDark{
       };
 
       const rotationRowHtml = (roundNum, label) => `
-          <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-4 no-fs-grid">
             <div>
               <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">${label} Auditor</label>
               <select id="editAssign-auditor${roundNum}" class="w-full px-3 py-2 bg-gray-50 border border-coolBorder rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-accentCyan">
@@ -4490,12 +4808,43 @@ body.bg-coolDark{
       if (typeof window.closeSideMenu === 'function') window.closeSideMenu();
     }
 
+    function toggleModalFullscreen() {
+      const dialog = document.getElementById('modalDialog');
+      const btn = document.getElementById('modalFullscreenBtn');
+      const expandIcon = document.getElementById('modalFullscreenIconExpand');
+      const collapseIcon = document.getElementById('modalFullscreenIconCollapse');
+      if (!dialog) return;
+      const isFullscreen = dialog.classList.toggle('modal-fullscreen');
+      if (expandIcon) expandIcon.classList.toggle('hidden', isFullscreen);
+      if (collapseIcon) collapseIcon.classList.toggle('hidden', !isFullscreen);
+      if (btn) {
+        const label = isFullscreen ? 'Exit fullscreen' : 'Fullscreen';
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+      }
+      // The dialog's own width/height change via CSS, but anything that
+      // measured its container size when it first rendered (scroll areas,
+      // any chart that might get added to a modal later) won't know the
+      // available space just changed unless something tells it to. A
+      // resize event is the standard way to nudge that kind of code to
+      // re-measure — fired after the fullscreen CSS transition finishes
+      // so it reads the final size, not the mid-transition one.
+      setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 320);
+    }
+
     function closeModal() {
       const modal = document.getElementById('dataModal');
       const modalDialog = document.getElementById('modalDialog');
       modal.classList.add('opacity-0');
       modalDialog.classList.remove('scale-100');
       modalDialog.classList.add('scale-95');
+      // Always leave fullscreen behind when the popup fully closes, so the
+      // next thing opened (even a different report) starts at normal size.
+      modalDialog.classList.remove('modal-fullscreen');
+      const expandIcon = document.getElementById('modalFullscreenIconExpand');
+      const collapseIcon = document.getElementById('modalFullscreenIconCollapse');
+      if (expandIcon) expandIcon.classList.remove('hidden');
+      if (collapseIcon) collapseIcon.classList.add('hidden');
       setTimeout(() => {
           modal.classList.add('hidden');
       }, 300);
@@ -4846,14 +5195,19 @@ body.bg-coolDark{
 
       const branchRows = (activeData.branches || []).map(function(b, i) {
           const info = getBranchAuditRoundInfo(b);
+          const sales = m => (b[m] ? (b[m].ins || 0) + '/' + (b[m].cod || 0) + '/' + (b[m].ca || 0) : '');
           return [
               i + 1, b.name, b.auditStatus, b.auditor, b.lastAuditDate || '',
               info.upNextAuditor === null ? '' : info.upNextAuditor,
               info.expectedAuditDate || '',
               b.collection, b.sales, b.service,
               b.effMar, b.effApr, b.effLatest,
-              b.repoRateLatest, b.noOfRepoLatest,
-              b.accountsMay,
+              b.repoRateMar, b.repoRateApr, b.repoRateLatest,
+              b.noOfRepoMar, b.noOfRepoApr, b.noOfRepoLatest,
+              b.accountsMar, b.accountsApr, b.accountsMay,
+              sales('salesMar'), sales('salesApr'), sales('salesMay'),
+              b.expectedIns, b.expectedCod,
+              b.serviceTarget, b.serviceMar, b.serviceApr, b.serviceMay,
               b.findings2024, b.findings2025, b.findings2026
           ];
       });
@@ -4898,7 +5252,7 @@ body.bg-coolDark{
 
       const sheets = [
           { name: 'Summary', headers: ['Metric', 'Value'], rows: summaryRows },
-          { name: 'Branches', headers: ['#', 'Branch', 'Audit Status', 'Auditor', 'Last Audit Date', 'Up Next Auditor', 'Expected Audit Date', 'Collection', 'Sales', 'Service', 'Eff Mar %', 'Eff Apr %', 'Eff Latest %', 'Repo Rate Latest %', 'No. of Repo Latest', 'Accounts (May)', 'Findings 2024', 'Findings 2025', 'Findings 2026'], rows: branchRows },
+          { name: 'Branches', headers: ['#', 'Branch', 'Audit Status', 'Auditor', 'Last Audit Date', 'Up Next Auditor', 'Expected Audit Date', 'Collection', 'Sales', 'Service', 'Eff Mar %', 'Eff Apr %', 'Eff Latest %', 'Repo Rate Mar %', 'Repo Rate Apr %', 'Repo Rate Latest %', 'No. of Repo Mar', 'No. of Repo Apr', 'No. of Repo Latest', 'Accounts Mar', 'Accounts Apr', 'Accounts May', 'Sales Mar (INS/COD/CA)', 'Sales Apr (INS/COD/CA)', 'Sales May (INS/COD/CA)', 'Expected INS', 'Expected COD', 'Service Target', 'Service Mar', 'Service Apr', 'Service May', 'Findings 2024', 'Findings 2025', 'Findings 2026'], rows: branchRows },
           { name: 'Assignment Queue', headers: ['Branch', 'Up Next Auditor', 'Expected Audit Date', 'Last Audit Date', 'Last Auditor', 'Recent Audit Date', 'Recent Auditor', 'Audit Interval (to date)'], rows: assignmentQueueRows },
           { name: 'Lowest Efficiency', headers: ['Branch', 'Efficiency %'], rows: (activeData.lowestEfficiency || []).map(function(x) { return [x.branch, x.rate]; }) },
           { name: 'Highest Repo Rate', headers: ['Branch', 'Repo Rate %'], rows: (activeData.highestRepo || []).map(function(x) { return [x.branch, x.rate]; }) },
@@ -5807,7 +6161,7 @@ body.bg-coolDark{
           </div>
       `;
       const __defaultFindingsYears = getBranchFindingYears(b.name);
-      renderProfileFindingsPanel(b.name, __defaultFindingsYears.length ? __defaultFindingsYears[__defaultFindingsYears.length - 1] : ALLOWED_FINDING_YEARS[ALLOWED_FINDING_YEARS.length - 1]);
+      renderProfileFindingsPanel(b.name, __defaultFindingsYears.length ? __defaultFindingsYears[__defaultFindingsYears.length - 1] : getAllowedFindingYears()[getAllowedFindingYears().length - 1]);
     }
 
     // Returns the sorted list of distinct years that actually have logged
@@ -5818,14 +6172,39 @@ body.bg-coolDark{
     // The dashboard only tracks findings for these years. Any other year
     // value that shows up in the data source (e.g. a mis-typed 2021 entry)
     // is ignored here so it can't add a stray card to the findings history.
-    const ALLOWED_FINDING_YEARS = [2024, 2025, 2026];
+    //
+    // The year TABS shown across all branches (getAllowedFindingYears,
+    // below) always include 2024-2026, and only add a later year (2027,
+    // 2028, ...) once at least one row for that year actually exists
+    // somewhere in the sheet — so updating the data with 2027 findings is
+    // what makes the "2027" tab appear, rather than it showing up ahead of
+    // time with nothing in it.
+    const BASE_FINDING_YEARS = [2024, 2025, 2026];
+    // Sanity cap so a mis-typed year (e.g. "2072") in the sheet can't spawn
+    // a bogus far-future tab — anything beyond ~5 years out is ignored.
+    const MAX_FUTURE_FINDING_YEAR = new Date().getFullYear() + 5;
+
+    function getAllowedFindingYears() {
+        const years = new Set(BASE_FINDING_YEARS);
+        const allBranchDetail = (activeData && activeData.auditFindingsDetail) || {};
+        Object.keys(allBranchDetail).forEach(branchName => {
+            (allBranchDetail[branchName] || []).forEach(r => {
+                const y = getRecordYear(r);
+                if (!isNaN(y) && y > BASE_FINDING_YEARS[BASE_FINDING_YEARS.length - 1] && y <= MAX_FUTURE_FINDING_YEAR) {
+                    years.add(y);
+                }
+            });
+        });
+        return Array.from(years).sort((a, b) => a - b);
+    }
 
     function getBranchFindingYears(branchName) {
+        const allowedYears = getAllowedFindingYears();
         const allDetail = (activeData.auditFindingsDetail && activeData.auditFindingsDetail[branchName]) || [];
         const years = new Set();
         allDetail.forEach(r => {
             const y = getRecordYear(r);
-            if (ALLOWED_FINDING_YEARS.includes(y)) years.add(y);
+            if (allowedYears.includes(y)) years.add(y);
         });
         return Array.from(years).sort((a, b) => a - b);
     }
@@ -6086,9 +6465,21 @@ body.bg-coolDark{
 
 
     function formatFindingDate(dateStr, fallbackYear) {
-        // Per AUDIT FINDINGS column E: show the fiscal year label (e.g. "FY2026")
-        // instead of a month/day/year date.
+        // The AUDIT FINDINGS sheet only started logging a real per-finding
+        // date starting FY2026 — years before that only ever have the
+        // fiscal-year column populated, so those keep showing the
+        // "FY2024"/"FY2025" label as before. FY2026 onward shows the
+        // actual date (e.g. "Jun 15, 2026") now that it's available.
         const y = Number(fallbackYear);
+        if (dateStr && (isNaN(y) || y >= 2026)) {
+            const parts = String(dateStr).split('-').map(Number);
+            if (parts.length === 3 && !parts.some(isNaN)) {
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                if (!isNaN(d.getTime())) {
+                    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                }
+            }
+        }
         if (!isNaN(y) && y) return `FY${y}`;
         if (dateStr) {
             const parts = String(dateStr).split('-').map(Number);
@@ -6119,7 +6510,7 @@ body.bg-coolDark{
         const records = allDetail.filter(r => getRecordYear(r) === Number(year))
                                   .sort((a, b) => (a.date < b.date ? 1 : -1));
 
-        const yearTabs = ALLOWED_FINDING_YEARS.map(y => {
+        const yearTabs = getAllowedFindingYears().map(y => {
             const count = allDetail.filter(r => getRecordYear(r) === y).length;
             const active = Number(year) === y;
             return `
@@ -6134,7 +6525,7 @@ body.bg-coolDark{
             ? `<tr><td colspan="3" class="p-4 text-center text-xs text-slate-400 italic">No individual findings recorded for FY${year} (from AUDIT FINDINGS sheet).</td></tr>`
             : records.map(r => `
                 <tr class="border-t border-coolBorder">
-                    <td class="p-2 text-[11px] font-semibold text-slate-500 tabular-nums whitespace-nowrap align-top">${formatFindingDate(r.date, r.year)}</td>
+                    <td class="p-2 text-[11px] font-semibold text-slate-500 tabular-nums whitespace-nowrap align-top text-right">${formatFindingDate(r.date, r.year)}</td>
                     <td class="p-2 align-top whitespace-nowrap">${getFindingCategoryBadge(r.category)}</td>
                     <td class="p-2 text-xs text-slate-800">${escapeFindingHTML(r.finding)}</td>
                 </tr>`).join('');
@@ -6148,7 +6539,7 @@ body.bg-coolDark{
                 <div class="max-h-64 overflow-y-auto custom-scrollbar">
                     <table class="w-full text-left border-collapse">
                         <thead class="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400 font-bold sticky top-0">
-                            <tr><th class="p-2 w-24">Date</th><th class="p-2 w-40">Category</th><th class="p-2">Remarks</th></tr>
+                            <tr><th class="p-2 w-24 text-right">Date</th><th class="p-2 w-40">Category</th><th class="p-2">Remarks</th></tr>
                         </thead>
                         <tbody>${rowsHtml}</tbody>
                     </table>
@@ -6779,7 +7170,7 @@ body.bg-coolDark{
         const records = allDetail.filter(r => getRecordYear(r) === Number(year))
                                   .sort((a, b) => (a.date < b.date ? 1 : -1));
 
-        const yearTabs = ALLOWED_FINDING_YEARS.map(y => {
+        const yearTabs = getAllowedFindingYears().map(y => {
             const count = allDetail.filter(r => getRecordYear(r) === y).length;
             const active = Number(year) === y;
             return `
@@ -6796,7 +7187,7 @@ body.bg-coolDark{
         } else {
             rowsHtml = records.map(r => `
                 <tr class="border-t border-coolBorder">
-                    <td class="p-2 text-[11px] font-semibold text-slate-500 tabular-nums whitespace-nowrap align-top">${formatFindingDate(r.date, r.year)}</td>
+                    <td class="p-2 text-[11px] font-semibold text-slate-500 tabular-nums whitespace-nowrap align-top text-right">${formatFindingDate(r.date, r.year)}</td>
                     <td class="p-2 align-top whitespace-nowrap">${getFindingCategoryBadge(r.category)}</td>
                     <td class="p-2 text-xs text-slate-800">${escapeFindingHTML(r.finding)}</td>
                 </tr>`).join('');
@@ -6811,7 +7202,7 @@ body.bg-coolDark{
                 <div class="max-h-64 overflow-y-auto custom-scrollbar">
                     <table class="w-full text-left border-collapse">
                         <thead class="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-400 font-bold sticky top-0">
-                            <tr><th class="p-2 w-24">Date</th><th class="p-2 w-40">Category</th><th class="p-2">Remarks</th></tr>
+                            <tr><th class="p-2 w-24 text-right">Date</th><th class="p-2 w-40">Category</th><th class="p-2">Remarks</th></tr>
                         </thead>
                         <tbody>${rowsHtml}</tbody>
                     </table>
@@ -6971,7 +7362,7 @@ body.bg-coolDark{
         const pct = total ? Math.round(val / total * 100) : 0;
         const safeTitle = `${modalTitlePrefix}: ${seg.label}`.replace(/'/g, "\\'");
         return `
-          <div class="cursor-pointer" onclick="event.stopPropagation(); openModal('${safeTitle}', '${modalKey}', '${seg.label}')">
+          <div class="cursor-pointer rounded-lg p-1.5 -m-1.5 border border-transparent hover:border-coolBorder hover:bg-gray-50 hover:shadow-sm transition-colors row-hover-strong" onclick="event.stopPropagation(); openModal('${safeTitle}', '${modalKey}', '${seg.label}')">
             <div class="flex items-center justify-between text-xs sm:text-[13px] font-semibold mb-1">
               <span class="flex items-center gap-2 text-slate-700 min-w-0">
                 <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${seg.color}"></span>
