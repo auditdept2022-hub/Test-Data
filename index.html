@@ -28,7 +28,7 @@
       theme: {
         extend: {
           colors: {
-            coolDark: '#f3f4f8',
+            coolDark: '#e6e8f0',
             coolCard: '#ffffff',
             coolBorder: '#e7e9f2',
             accentCyan: '#0ea5c7',
@@ -139,13 +139,14 @@
     }
 
     /* Smooth, native-feeling momentum scrolling on every internal
-       scroll region, plus overscroll-behavior so scrolling a nested
-       panel to its edge doesn't also drag the page behind it — both
-       are common causes of scrolling feeling "janky" on trackpads and
-       phones. */
+       scroll region. overscroll-behavior is intentionally "auto" (not
+       "contain") so that once a nested panel — like the branch
+       scorecard table — is scrolled to its top/bottom edge, the very
+       same scroll gesture keeps going and scrolls the page behind it,
+       instead of getting trapped inside that panel. */
     #modalBody, #auditScheduleCards, .custom-scrollbar, #sideMenu {
       -webkit-overflow-scrolling: touch;
-      overscroll-behavior: contain;
+      overscroll-behavior: auto;
     }
 
     /* Tailwind's transition-all utility (used on ~90 cards/buttons
@@ -1457,10 +1458,10 @@ rect.legend-mouseover-inactive,
 html{scroll-behavior:smooth;}
 body.bg-coolDark{
   background:
-    radial-gradient(1100px 600px at 8% -10%, rgba(99,102,241,0.10), transparent 60%),
+    radial-gradient(1100px 600px at 8% -10%, rgba(99,102,241,0.11), transparent 60%),
     radial-gradient(900px 500px at 100% 0%, rgba(8,145,178,0.10), transparent 55%),
-    radial-gradient(800px 500px at 50% 110%, rgba(124,58,237,0.08), transparent 55%),
-    #f4f5fb !important;
+    radial-gradient(800px 500px at 50% 110%, rgba(124,58,237,0.06), transparent 55%),
+    #e6e8f0 !important;
   font-family:'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing:antialiased;
 }
@@ -1765,10 +1766,10 @@ input#tableSearch:focus, select:focus{
 /* ---------- premium canvas: crisp, layered, low-contrast colour washes ---------- */
 body.bg-coolDark{
   background:
-    radial-gradient(1200px 620px at 6% -12%, rgba(91,61,240,0.09), transparent 58%),
-    radial-gradient(1000px 560px at 102% -4%, rgba(14,165,199,0.08), transparent 55%),
-    radial-gradient(900px 520px at 50% 112%, rgba(124,58,237,0.05), transparent 55%),
-    #f5f6fb !important;
+    radial-gradient(1200px 620px at 6% -12%, rgba(91,61,240,0.11), transparent 58%),
+    radial-gradient(1000px 560px at 102% -4%, rgba(14,165,199,0.10), transparent 55%),
+    radial-gradient(900px 520px at 50% 112%, rgba(124,58,237,0.07), transparent 55%),
+    #e6e8f0 !important;
 }
 
 /* ---------- section headings ---------- */
@@ -6643,7 +6644,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     function buildTopPerformersList(top5, valueFn, accentColor) {
       if (!top5 || top5.length === 0) return '';
       const rows = top5.map((b, i) => `
-        <div class="flex items-center justify-between gap-2 text-[11px] bg-slate-50 border border-coolBorder rounded-lg px-2 py-1">
+        <div class="flex items-center justify-between gap-2 text-[11px] bg-slate-200 border border-slate-300 rounded-lg px-2 py-1">
           <div class="flex items-center gap-1.5 min-w-0">
             <span class="flex-shrink-0 w-4 h-4 rounded-full bg-${accentColor}/20 text-${accentColor} font-bold text-[9px] flex items-center justify-center">${i + 1}</span>
             <span class="truncate font-semibold text-slate-700">${b.name}</span>
