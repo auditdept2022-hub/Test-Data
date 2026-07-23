@@ -6636,13 +6636,34 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       renderAccountsModalTable();
     }
 
+    // Renders a compact "Top 5 Performers" list, ranked highest first.
+    // valueFn(branch) returns the already-formatted value string/number to
+    // display next to each name. accentColor is one of the accent* Tailwind
+    // color tokens already defined for this dashboard (accentIndigo/accentCyan).
+    function buildTopPerformersList(top5, valueFn, accentColor) {
+      if (!top5 || top5.length === 0) return '';
+      const rows = top5.map((b, i) => `
+        <div class="flex items-center justify-between gap-2 text-[11px] bg-slate-50 border border-coolBorder rounded-lg px-2 py-1">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="flex-shrink-0 w-4 h-4 rounded-full bg-${accentColor}/20 text-${accentColor} font-bold text-[9px] flex items-center justify-center">${i + 1}</span>
+            <span class="truncate font-semibold text-slate-700">${b.name}</span>
+          </div>
+          <span class="flex-shrink-0 text-${accentColor} font-bold">${valueFn(b)}</span>
+        </div>`).join('');
+      return `
+      <div class="mb-2 px-1">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Top 5 Performers</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1">${rows}</div>
+      </div>`;
+    }
+
     function buildSalesSummaryBar(list) {
       const improving = list.filter(b => b.sales === 'Improving').length;
       const declining = list.filter(b => b.sales === 'Declining').length;
       const stable = list.filter(b => b.sales === 'Stable').length;
       const avgVals = list.map(computeAvgSales);
       const meanAvg = avgVals.length ? Math.round(avgVals.reduce((s, v) => s + v, 0) / avgVals.length) : 0;
-      const top = list.length ? list.reduce((a, b) => computeAvgSales(b) > computeAvgSales(a) ? b : a) : null;
+      const top5 = [...list].sort((a, b) => computeAvgSales(b) - computeAvgSales(a)).slice(0, 5);
       const activeStatus = (window.modalFilterState && window.modalFilterState.statusValue) || 'ALL';
       const ring = (v) => activeStatus === v ? 'ring-2 ring-offset-1' : '';
 
@@ -6665,7 +6686,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
           <div class="text-[8px] leading-tight font-bold text-accentIndigo/80 uppercase tracking-tight px-0.5">3-Mo Avg Sales (INS−CA)</div>
         </div>
       </div>
-      ${top ? `<div class="flex justify-end mb-2 px-1 text-[11px] text-slate-500">Top performer: <strong class="text-slate-700 ml-1">${top.name}</strong> <span class="text-accentIndigo font-bold ml-1">(${computeAvgSales(top)})</span></div>` : ''}`;
+      ${buildTopPerformersList(top5, (b) => computeAvgSales(b), 'accentIndigo')}`;
     }
 
     function buildCollectionSummaryBar(list) {
@@ -6675,7 +6696,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       const recovering = list.filter(b => b.collection === 'Recovering').length;
       const effVals = list.map(b => b.effLatest);
       const meanEff = effVals.length ? Math.round(effVals.reduce((s, v) => s + v, 0) / effVals.length) : 0;
-      const top = list.length ? list.reduce((a, b) => b.effLatest > a.effLatest ? b : a) : null;
+      const top5 = [...list].sort((a, b) => b.effLatest - a.effLatest).slice(0, 5);
       const activeStatus = (window.modalFilterState && window.modalFilterState.statusValue) || 'ALL';
       const ring = (v) => activeStatus === v ? 'ring-2 ring-offset-1' : '';
 
@@ -6702,7 +6723,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
           <div class="text-[10px] font-bold text-accentIndigo/80 uppercase tracking-wider">Avg Eff Latest</div>
         </div>
       </div>
-      ${top ? `<div class="text-[11px] text-slate-500 mb-2 px-1">Top performer: <strong class="text-slate-700">${top.name}</strong> <span class="text-accentIndigo font-bold">(${top.effLatest}%)</span></div>` : ''}`;
+      ${buildTopPerformersList(top5, (b) => `${b.effLatest}%`, 'accentIndigo')}`;
     }
 
     function buildServiceSummaryBar(list) {
@@ -6710,7 +6731,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       const declining = list.filter(b => b.service === 'Declining').length;
       const mayVals = list.map(b => Number(b.serviceMay) || 0);
       const totalMay = mayVals.reduce((s, v) => s + v, 0);
-      const top = list.length ? list.reduce((a, b) => Number(b.serviceMay) > Number(a.serviceMay) ? b : a) : null;
+      const top5 = [...list].sort((a, b) => Number(b.serviceMay) - Number(a.serviceMay)).slice(0, 5);
       const activeStatus = (window.modalFilterState && window.modalFilterState.statusValue) || 'ALL';
       const ring = (v) => activeStatus === v ? 'ring-2 ring-offset-1' : '';
 
@@ -6729,7 +6750,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
           <div class="text-[10px] font-bold text-accentCyan/80 uppercase tracking-wider">Total (Latest Mo.)</div>
         </div>
       </div>
-      ${top ? `<div class="text-[11px] text-slate-500 mb-2 px-1">Top performer: <strong class="text-slate-700">${top.name}</strong> <span class="text-accentCyan font-bold">(₱${Number(top.serviceMay).toLocaleString()})</span></div>` : ''}`;
+      ${buildTopPerformersList(top5, (b) => `₱${Number(b.serviceMay).toLocaleString()}`, 'accentCyan')}`;
     }
 
     // filterSetter is the name of the JS function to call when a pill is
