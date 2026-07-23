@@ -2291,6 +2291,59 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     .road-loader-bike { left: 12px; opacity: 1; transform: none; }
   }
 
+  /* ---------- Full-screen loading overlay's road + motorcycle strip ----------
+     The header's .road-loader above sits UNDER this overlay (z-[9999],
+     fixed inset-0) whenever a manual "Update data" click shows the
+     immersive loading screen — so it's never actually visible. This is
+     the wider variant that lives inside the loading card itself, using
+     the same slow-while-loading / fast-once-done idea. */
+  .loading-road-loader {
+    position: relative;
+    width: 96px;
+    height: 22px;
+    margin: 14px auto 0;
+    overflow: hidden;
+    border-radius: 6px;
+    background: #eef0f6;
+    flex-shrink: 0;
+  }
+  .loading-road-track {
+    position: absolute;
+    left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-50%);
+    background-image: repeating-linear-gradient(90deg, #c7cad1 0 6px, transparent 6px 14px);
+    background-size: 200% 100%;
+    animation: roadDashMove 2s linear infinite;
+  }
+  .loading-road-bike {
+    position: absolute;
+    bottom: 2px;
+    left: -3px;
+    color: #4f46e5;
+    animation: bikeDriveWide 2s cubic-bezier(.45, 0, .55, 1) infinite;
+  }
+  @keyframes bikeDriveWide {
+    0%   { transform: translateX(0) scale(0.85); opacity: .75; }
+    85%  { transform: translateX(58px) scale(1); opacity: 1; }
+    100% { transform: translateX(68px) scale(1.02); opacity: 0; }
+  }
+  /* Added once the fetch actually succeeds, right as revealDashboard()
+     starts its "Dashboard ready!" beat — one fast pass across the strip
+     as a quick "made it!" flourish before the whole overlay fades out. */
+  #loadingCore.loading-road-finish .loading-road-track {
+    animation: roadDashMove 0.32s linear 1;
+  }
+  #loadingCore.loading-road-finish .loading-road-bike {
+    animation: bikeZoomOffWide 0.32s cubic-bezier(.2, .8, .2, 1) 1 forwards;
+  }
+  @keyframes bikeZoomOffWide {
+    0%   { transform: translateX(0) scale(1); opacity: 1; }
+    100% { transform: translateX(110px) scale(1.08); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .loading-road-track, .loading-road-bike { animation: none !important; }
+    .loading-road-bike { left: 36px; opacity: 1; transform: none; }
+  }
+
   /* Once-a-minute settle so the date/minute change doesn't feel like a jump cut */
   @keyframes liveClockSettle {
     0%   { opacity: .45; transform: translateY(2px); }
@@ -2588,6 +2641,20 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
         </div>
         <h2 id="loadingTitleText" class="text-lg font-bold text-slate-900 mb-1">Preparing your dashboard</h2>
         <p id="loadingStatusText" class="text-xs text-slate-500 min-h-[1rem]">Connecting to secure server&hellip;</p>
+        <!-- Minimalist road + motorcycle strip: slow steady lap while the
+             fetch is in flight, one fast zoom-off pass (.loading-road-finish,
+             toggled from revealDashboard() below) right as data finishes
+             loading. -->
+        <div class="loading-road-loader" aria-hidden="true">
+          <span class="loading-road-track"></span>
+          <svg class="loading-road-bike" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="5.5" cy="17.5" r="2.5"></circle>
+            <circle cx="18.5" cy="17.5" r="2.5"></circle>
+            <path d="M5.5 17.5 9 10h3l1.5 3"></path>
+            <path d="M9 10 7.5 6.5h3L13 10"></path>
+            <path d="M18.5 17.5 15.5 12H12"></path>
+          </svg>
+        </div>
       </div>
 
       <div id="loadingError" class="hidden">
@@ -3031,6 +3098,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
         const token = generation;
         loadingErrorBox.classList.add('hidden');
         loadingCore.classList.remove('hidden');
+        loadingCore.classList.remove('loading-road-finish');
         loadingScreen.classList.remove('hidden');
         loadingScreen.style.display = 'flex';
         loadingScreen.style.opacity = '1';
@@ -3052,6 +3120,11 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
         stopProgress();
         setRingProgress(100);
         loadingStatusEl.textContent = readyText || 'Dashboard ready!';
+        // Fast "made it!" pass on the road strip — same slow-then-fast idea
+        // as the header's small loader, just actually visible here since
+        // this overlay is what's on top of the header during the load.
+        const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (!reduceMotion) loadingCore.classList.add('loading-road-finish');
         setTimeout(function() {
           if (token !== undefined && token !== generation) return;
           loadingScreen.style.opacity = '0';
