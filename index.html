@@ -49,6 +49,8 @@
     z-index:0;
     overflow:hidden;
     pointer-events:none;
+    opacity:1;
+    transition:opacity .2s ease;
   }
   .ocean-bg .fish-outer{
     position:absolute;
@@ -129,6 +131,12 @@
   }
   @media(prefers-reduced-motion:reduce){
     .ocean-bg .fish-outer, .ocean-bg .fish-inner{ animation:none; }
+  }
+  @media(max-width:640px){
+    .ocean-bg{ opacity:.55; }
+  }
+  @media(max-width:420px){
+    .ocean-bg{ opacity:.4; }
   }
 
   /* Header banner */
@@ -329,7 +337,9 @@
     gap:26px;
     margin-bottom:18px;
     border-bottom:1px solid var(--border);
-    padding:0 4px;
+    padding:8px 4px 0;
+    background:var(--card);
+    border-radius:10px 10px 0 0;
   }
   .tab{
     padding:10px 2px 12px;
