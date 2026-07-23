@@ -1651,6 +1651,59 @@ header svg.text-royalBlue{ color:#3730a3 !important; }
 #sideMenu.menu-open{ transform:translateX(0); }
 #sideMenu .side-menu-group-label{ padding:0.9rem 1.15rem 0.4rem; }
 
+/* ---------- shortcut icon-tile grid (used by every group in the
+   Shortcuts side menu: Jump to, Quick actions, Quick Links) ---------- */
+.menu-tile-grid{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:0.55rem;
+  padding:0.15rem 0.65rem 0.35rem;
+}
+.menu-tile{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:0.45rem;
+  padding:0.85rem 0.4rem 0.7rem;
+  border-radius:1rem;
+  border:1px solid rgba(15,23,42,0.06);
+  background:#fff;
+  box-shadow:0 1px 2px rgba(15,23,42,0.04);
+  text-align:center;
+  transition:background-color .15s ease, border-color .15s ease, transform .15s cubic-bezier(.2,.8,.2,1), box-shadow .15s ease;
+}
+.menu-tile-icon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:2.5rem;
+  height:2.5rem;
+  border-radius:0.85rem;
+  background:rgba(79,70,229,0.10);
+  flex-shrink:0;
+  transition:background-color .15s ease, transform .15s ease;
+}
+.menu-tile-label{
+  font-size:0.68rem;
+  font-weight:700;
+  line-height:1.15;
+  color:#334155;
+  letter-spacing:-0.01em;
+}
+.menu-tile:hover{
+  background:#f5f7ff;
+  border-color:rgba(79,70,229,0.24);
+  transform:translateY(-2px);
+  box-shadow:0 8px 16px -8px rgba(15,23,42,0.18);
+}
+.menu-tile:active{ transform:translateY(-2px) scale(0.97); }
+.menu-tile:hover .menu-tile-icon{ transform:scale(1.08); }
+.menu-tile:focus-visible{
+  outline:2px solid #4f46e5;
+  outline-offset:2px;
+}
+
 /* ---------- surfaces / cards ---------- */
 .bg-coolCard{
   background:linear-gradient(180deg, rgba(255,255,255,1), rgba(250,250,255,1)) !important;
@@ -1763,7 +1816,62 @@ input#tableSearch:focus, select:focus{
   header h1.text-white{ font-size:1.05rem; }
 }
 
-/* ---------- premium canvas: crisp, layered, low-contrast colour washes ---------- */
+/* ============================================================
+   ENTRANCE ANIMATION — dashboard sections and cards gently fade
+   and slide into place on load / as you scroll to them, and the
+   Overview cards stagger in one after another. Skipped entirely
+   for anyone with prefers-reduced-motion set, since motion isn't
+   optional for them the way it is a nice-to-have for everyone else.
+   ============================================================ */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal-up {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity .6s cubic-bezier(.16,.8,.24,1), transform .6s cubic-bezier(.16,.8,.24,1);
+  }
+  .reveal-up.is-visible { opacity: 1; transform: translateY(0); }
+
+  /* Overview cards stagger: each direct child fades in slightly after
+     the previous one once the whole row scrolls into view. */
+  #section-overview.reveal-up, #section-overview.reveal-up.is-visible { opacity: 1; transform: none; transition: none; }
+  #section-overview.reveal-up > * {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity .5s cubic-bezier(.16,.8,.24,1), transform .5s cubic-bezier(.16,.8,.24,1);
+  }
+  #section-overview.reveal-up.is-visible > * { opacity: 1; transform: translateY(0); }
+  #section-overview.reveal-up.is-visible > *:nth-child(1) { transition-delay: .02s; }
+  #section-overview.reveal-up.is-visible > *:nth-child(2) { transition-delay: .07s; }
+  #section-overview.reveal-up.is-visible > *:nth-child(3) { transition-delay: .12s; }
+  #section-overview.reveal-up.is-visible > *:nth-child(4) { transition-delay: .17s; }
+  #section-overview.reveal-up.is-visible > *:nth-child(5) { transition-delay: .22s; }
+  #section-overview.reveal-up.is-visible > *:nth-child(6) { transition-delay: .27s; }
+  #section-overview.reveal-up.is-visible > *:nth-child(7) { transition-delay: .32s; }
+  #section-overview.reveal-up.is-visible > *:nth-child(8) { transition-delay: .37s; }
+
+  /* Header slides down softly on first paint. */
+  .app-header-reveal {
+    animation: headerDropIn .55s cubic-bezier(.16,.8,.24,1) both;
+  }
+  @keyframes headerDropIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* A small icon "pop" on the KPI card icon badges when their parent
+     card (marked with the existing .group pattern) is hovered — makes
+     the existing color-swap hover feel more alive without touching any
+     markup, since it piggybacks on the .group/.group-hover convention
+     already used throughout this dashboard. */
+  .group:hover .lucide {
+    transform: scale(1.12) rotate(-4deg);
+  }
+  .lucide {
+    transition: transform .25s cubic-bezier(.34, 1.56, .64, 1);
+  }
+}
+
+
 body.bg-coolDark{
   background:
     radial-gradient(1200px 620px at 6% -12%, rgba(91,61,240,0.11), transparent 58%),
@@ -2035,6 +2143,262 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     .sm\:inline-flex{display:inline-flex}
     .sm\:text-base{font-size:1rem;line-height:1.5rem}
   }
+</style>
+
+<!-- ================================================================
+     V2 DESIGN PASS — a top-layer of richer motion, depth and polish
+     over the existing dashboard. Deliberately additive/non-destructive:
+     everything here targets classes and ids that already exist in the
+     markup (bg-coolCard, bg-royalBlue, #modalDialog, #sideMenu, #toast,
+     header, apexcharts-canvas, etc), so no HTML or JS changes are
+     required and nothing above this block needs to be touched. Placed
+     last in <head> so it wins the cascade over the earlier utility/
+     patch stylesheets. All motion is GPU-cheap (transform/opacity) and
+     is silenced by the existing prefers-reduced-motion rule above.
+     ================================================================ -->
+<style>
+  :root{
+    --grad-1:#4f46e5;
+    --grad-2:#0891b2;
+    --grad-3:#7c3aed;
+    --glow-indigo: rgba(79,70,229,0.35);
+    --glow-cyan: rgba(14,165,199,0.35);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+
+  /* ---------------------------------------------------------------
+     1. CARDS — glass sheen + animated gradient-glow border on hover,
+     richer layered shadow with real depth, gentle lift+scale.
+     --------------------------------------------------------------- */
+  .bg-coolCard{
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,1), rgba(250,250,255,1)) !important;
+    transition: transform .4s var(--ease-smooth), box-shadow .4s var(--ease-smooth), border-color .4s var(--ease-smooth) !important;
+  }
+  .bg-coolCard::after{
+    content:"";
+    position:absolute; inset:0;
+    border-radius:inherit;
+    padding:1px;
+    background:linear-gradient(135deg, rgba(79,70,229,0), rgba(79,70,229,0));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity:0;
+    transition: opacity .35s ease, background .35s ease;
+    pointer-events:none;
+  }
+  [onclick].bg-coolCard, .cursor-pointer.bg-coolCard{
+    will-change: transform;
+  }
+  [onclick].bg-coolCard:hover, .cursor-pointer.bg-coolCard:hover{
+    transform: translateY(-4px) scale(1.008) !important;
+    box-shadow:
+      0 2px 4px rgba(16,24,64,0.05),
+      0 28px 46px -18px rgba(30,41,89,0.30),
+      0 0 0 1px rgba(99,102,241,0.10) !important;
+  }
+  [onclick].bg-coolCard:hover::after, .cursor-pointer.bg-coolCard:hover::after{
+    opacity:1;
+    background:linear-gradient(135deg, var(--grad-1), var(--grad-3), var(--grad-2));
+  }
+  [onclick].bg-coolCard:active, .cursor-pointer.bg-coolCard:active{
+    transform: translateY(-1px) scale(0.995) !important;
+    transition-duration: .12s !important;
+  }
+  /* top accent line: sweep in from the left instead of a flat fade */
+  .grid > .bg-coolCard::before{
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform .45s var(--ease-smooth), opacity .2s ease;
+  }
+  .grid > .bg-coolCard:hover::before{ transform: scaleX(1); }
+
+  /* ---------------------------------------------------------------
+     2. STAT NUMBERS — quiet shimmer sweep across the big KPI figures
+     on load so they read as "alive" without being distracting.
+     --------------------------------------------------------------- */
+  @keyframes numberShimmer{
+    0%{ background-position: 200% 0; }
+    100%{ background-position: -40% 0; }
+  }
+  h3.text-3xl, h3.text-2xl{
+    background-image: linear-gradient(100deg, currentColor 38%, var(--grad-1) 48%, var(--grad-2) 52%, currentColor 62%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    animation: numberShimmer 2.6s var(--ease-smooth) .3s 1 both;
+  }
+
+  /* ---------------------------------------------------------------
+     3. ICON CHIPS — playful bounce + rotate on hover for the small
+     rounded icon tiles used throughout cards/lists.
+     --------------------------------------------------------------- */
+  .p-1\.5.rounded-lg, .p-2.rounded-lg, .p-2\.5.rounded-xl{
+    transition: transform .35s var(--ease-spring), background-color .2s ease, color .2s ease !important;
+  }
+  .group:hover .p-1\.5.rounded-lg,
+  .group:hover .p-2.rounded-lg,
+  .group:hover .p-2\.5.rounded-xl{
+    transform: scale(1.12) rotate(-6deg);
+  }
+
+  /* ---------------------------------------------------------------
+     4. BUTTONS — shimmer sweep on primary actions + tactile press.
+     --------------------------------------------------------------- */
+  button.bg-royalBlue, button.bg-accentBlue, button.bg-accentIndigo{
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  button.bg-royalBlue::before,
+  button.bg-accentBlue::before,
+  button.bg-accentIndigo::before{
+    content:"";
+    position:absolute; top:0; left:-60%; width:40%; height:100%;
+    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent);
+    transform: skewX(-20deg);
+    transition: left .55s var(--ease-smooth);
+    z-index: 1;
+    pointer-events:none;
+  }
+  button.bg-royalBlue:hover::before,
+  button.bg-accentBlue:hover::before,
+  button.bg-accentIndigo:hover::before{ left: 130%; }
+  button{ transition: transform .18s var(--ease-spring), box-shadow .2s ease, background-color .18s ease, filter .2s ease !important; }
+  button:hover{ filter: brightness(1.04); }
+  button:active{ transform: scale(0.96) !important; }
+
+  /* ---------------------------------------------------------------
+     5. HEADER — slow ambient gradient drift, like a living surface.
+     --------------------------------------------------------------- */
+  @keyframes headerAmbient{
+    0%{ background-position: 0% 50%; }
+    50%{ background-position: 100% 50%; }
+    100%{ background-position: 0% 50%; }
+  }
+  header.app-header-reveal{
+    background-size: 200% 200% !important;
+    animation: headerDropIn .55s var(--ease-smooth) both, headerAmbient 18s ease-in-out infinite;
+  }
+
+  /* ---------------------------------------------------------------
+     6. SIDEBAR — staggered nav-link entrance each time the menu opens.
+     --------------------------------------------------------------- */
+  #sideMenu.menu-open .side-menu-link,
+  #sideMenu.menu-open .menu-tile{
+    animation: navLinkIn .45s var(--ease-smooth) both;
+  }
+  @keyframes navLinkIn{
+    from{ opacity:0; transform: translateX(-10px); }
+    to{ opacity:1; transform: translateX(0); }
+  }
+  #sideMenu .side-menu-group-details:nth-of-type(1) .side-menu-link{ animation-delay: .05s; }
+  #sideMenu .side-menu-group-details:nth-of-type(2) .side-menu-link{ animation-delay: .10s; }
+  #sideMenu .side-menu-group-details:nth-of-type(3) .side-menu-link{ animation-delay: .15s; }
+  #sideMenu .side-menu-group-details:nth-of-type(4) .side-menu-link{ animation-delay: .20s; }
+  #sideMenu{ transition: transform .4s var(--ease-smooth) !important; }
+  #sideMenu.menu-open ~ * #sideMenuOverlay, #sideMenuOverlay{
+    transition: opacity .4s ease, backdrop-filter .4s ease;
+  }
+
+  /* ---------------------------------------------------------------
+     7. MODAL — spring-y pop instead of a flat scale, deeper backdrop.
+     --------------------------------------------------------------- */
+  #modalDialog{
+    transition: transform .38s var(--ease-spring), opacity .3s ease !important;
+  }
+  #dataModal:not(.hidden) #modalDialog.scale-100{
+    animation: modalPop .38s var(--ease-spring) both;
+  }
+  @keyframes modalPop{
+    0%{ opacity:0; transform: scale(.92) translateY(10px); }
+    100%{ opacity:1; transform: scale(1) translateY(0); }
+  }
+  #dataModal .bg-slate-900\/40{
+    transition: opacity .35s ease, backdrop-filter .35s ease !important;
+  }
+
+  /* ---------------------------------------------------------------
+     8. TOAST — spring bounce entrance with a gradient accent edge.
+     --------------------------------------------------------------- */
+  #toast{
+    animation: toastSpring .5s var(--ease-spring) both;
+  }
+  #toast.bg-coolCard{
+    border-left: 3px solid transparent !important;
+    border-image: linear-gradient(180deg, var(--grad-1), var(--grad-2)) 1 !important;
+  }
+  @keyframes toastSpring{
+    0%{ opacity:0; transform: translateY(16px) scale(.94); }
+    100%{ opacity:1; transform: translateY(0) scale(1); }
+  }
+
+  /* ---------------------------------------------------------------
+     9. CHARTS — fade + slight rise as they render, so the page never
+     feels like it's popping content in with no motion.
+     --------------------------------------------------------------- */
+  .apexcharts-canvas{
+    animation: chartRise .6s var(--ease-smooth) both;
+  }
+  @keyframes chartRise{
+    from{ opacity:0; transform: translateY(10px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
+
+  /* ---------------------------------------------------------------
+     10. TABLE ROWS — gradient left-edge reveal on hover instead of a
+     flat background tint only.
+     --------------------------------------------------------------- */
+  tbody tr{ position: relative; transition: background-color .2s ease, transform .2s ease !important; }
+  tbody tr:hover{ transform: translateX(1px); }
+  tbody tr td:first-child{ position: relative; }
+  tbody tr:hover td:first-child::before{
+    content:"";
+    position:absolute; left:0; top:0; bottom:0; width:3px;
+    background: linear-gradient(180deg, var(--grad-1), var(--grad-2));
+    border-radius: 0 3px 3px 0;
+  }
+
+  /* ---------------------------------------------------------------
+     11. SCROLLBARS — gradient thumb with a soft glow on hover.
+     --------------------------------------------------------------- */
+  ::-webkit-scrollbar-thumb{
+    background: linear-gradient(180deg, #a5b4fc, #67e8f9) !important;
+  }
+  ::-webkit-scrollbar-thumb:hover{
+    background: linear-gradient(180deg, var(--grad-1), var(--grad-2)) !important;
+    box-shadow: 0 0 6px var(--glow-indigo);
+  }
+
+  /* ---------------------------------------------------------------
+     12. FOCUS STATES — visible, on-brand, and animated in.
+     --------------------------------------------------------------- */
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible{
+    outline: 2px solid var(--grad-1);
+    outline-offset: 2px;
+    transition: outline-offset .15s ease;
+  }
+
+  /* ---------------------------------------------------------------
+     13. LOADING SPLASH — shimmering brand text + smoother spinner.
+     --------------------------------------------------------------- */
+  #authCheckSplash h1, #authCheckSplash .shimmer-text{
+    background-image: linear-gradient(100deg, rgba(255,255,255,0.6) 30%, #fff 50%, rgba(255,255,255,0.6) 70%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: numberShimmer 2.2s linear infinite;
+  }
+
+  /* ---------------------------------------------------------------
+     14. SECTION HEADINGS — small gradient underline that grows in.
+     --------------------------------------------------------------- */
+  h2.text-lg, h2.text-xl{ position: relative; display: inline-block; }
+
+  } /* end prefers-reduced-motion guard */
 </style>
 </head>
 <body class="bg-coolDark text-slate-800 min-h-screen selection:bg-accentCyan/30 selection:text-slate-900 pb-16 relative">
@@ -2984,7 +3348,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     <span id="toast-message" class="text-sm font-semibold">Dashboard successfully updated from Web Link!</span>
   </div>
 
-  <header class="border-b border-blue-800 sticky top-0 z-40 shadow-md" style="background: linear-gradient(115deg, #3730a3 0%, #4f46e5 45%, #0891b2 100%);">
+  <header class="border-b border-blue-800 sticky top-0 z-40 shadow-md app-header-reveal" style="background: linear-gradient(115deg, #3730a3 0%, #4f46e5 45%, #0891b2 100%);">
     <div class="dash-container py-3 min-h-[5rem] flex flex-col lg:flex-row items-center justify-between gap-4">
       
       <div class="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
@@ -3040,90 +3404,50 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       </button>
     </div>
     <nav class="flex-1 overflow-y-auto custom-scrollbar py-2">
-      <details class="side-menu-group-details">
-        <summary class="side-menu-group-summary">
-          <span class="side-menu-group-title">Jump to</span>
-          <span class="side-menu-group-count">5</span>
-          <svg class="side-menu-group-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-        </summary>
-
-      <div role="button" tabindex="0" onclick="scrollToSection('section-scorecard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-scorecard');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M12 3v18"></path><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M3 15h18"></path></svg></span>
-        <span>Branch Scorecard</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
-
-      <div role="button" tabindex="0" onclick="scrollToSection('section-charts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-charts');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"></path><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path></svg></span>
-        <span>Charts &amp; Breakdown</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
-
-      <div role="button" tabindex="0" onclick="scrollToSection('section-findings')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-findings');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect><path d="M14 4h7"></path><path d="M14 9h7"></path><path d="M14 15h7"></path><path d="M14 20h7"></path></svg></span>
-        <span>Findings &amp; Declining</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
-
-      <div role="button" tabindex="0" onclick="scrollToSection('section-overview')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-overview');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg></span>
-        <span>Overview</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
-
-      <div role="button" tabindex="0" onclick="scrollToSection('section-rankings')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToSection('section-rankings');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg></span>
-        <span>Top 10 Rankings</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
-      </details>
-
-      <details class="side-menu-group-details">
+      <details class="side-menu-group-details" open>
         <summary class="side-menu-group-summary">
           <span class="side-menu-group-title">Quick actions</span>
           <span class="side-menu-group-count">6</span>
           <svg class="side-menu-group-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
         </summary>
 
-      <div role="button" tabindex="0" onclick="openEditAssignmentModal(headerEditAssignBranch || (activeData.branches && activeData.branches[0] && activeData.branches[0].name))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEditAssignmentModal(headerEditAssignBranch || (activeData.branches && activeData.branches[0] && activeData.branches[0].name));}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(37,99,235,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11v6"></path><path d="M9 14h6"></path></svg></span>
-        <span>Add Assignment</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+      <div class="menu-tile-grid">
 
-      <div role="button" tabindex="0" onclick="window.open('attendance_dashboard_v35.html', '_blank')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.open('attendance_dashboard_v35.html', '_blank');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path></svg></span>
-        <span>Attendance</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+        <div role="button" tabindex="0" onclick="openEditAssignmentModal(headerEditAssignBranch || (activeData.branches && activeData.branches[0] && activeData.branches[0].name))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEditAssignmentModal(headerEditAssignBranch || (activeData.branches && activeData.branches[0] && activeData.branches[0].name));}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(37,99,235,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11v6"></path><path d="M9 14h6"></path></svg></span>
+          <span class="menu-tile-label">Add Assignment</span>
+        </div>
 
-      <div role="button" tabindex="0" onclick="openAuditFindingsFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAuditFindingsFromMenu();}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg></span>
-        <span>AUDIT FINDINGS</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+        <div role="button" tabindex="0" onclick="window.open('attendance_dashboard_v35.html', '_blank')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.open('attendance_dashboard_v35.html', '_blank');}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path></svg></span>
+          <span class="menu-tile-label">Attendance</span>
+        </div>
 
-      <div role="button" tabindex="0" onclick="openExportPicker('consolidated')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openExportPicker('consolidated');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(5,150,105,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentEmerald shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></span>
-        <span>Download Report</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+        <div role="button" tabindex="0" onclick="openAuditFindingsFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAuditFindingsFromMenu();}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg></span>
+          <span class="menu-tile-label">Audit Findings</span>
+        </div>
 
-      <div role="button" tabindex="0" onclick="openEmergencyAuditorFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmergencyAuditorFromMenu();}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(225,29,72,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose shrink-0"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg></span>
-        <span>Emergency Auditor</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+        <div role="button" tabindex="0" onclick="openExportPicker('consolidated')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openExportPicker('consolidated');}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(5,150,105,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentEmerald shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></span>
+          <span class="menu-tile-label">Download Report</span>
+        </div>
 
-      <div role="button" tabindex="0" onclick="updateDataFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();updateDataFromMenu();}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg></span>
-        <span>Update Data</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+        <div role="button" tabindex="0" onclick="openEmergencyAuditorFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmergencyAuditorFromMenu();}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(225,29,72,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose shrink-0"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg></span>
+          <span class="menu-tile-label">Emergency Auditor</span>
+        </div>
+
+        <div role="button" tabindex="0" onclick="updateDataFromMenu()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();updateDataFromMenu();}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-royalBlue shrink-0"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg></span>
+          <span class="menu-tile-label">Update Data</span>
+        </div>
+
       </div>
 
       </details>
 
-      <details class="side-menu-group-details">
+      <details class="side-menu-group-details" open>
         <summary class="side-menu-group-summary">
           <span class="side-menu-group-title">Quick Links</span>
           <span class="side-menu-group-count">6</span>
@@ -3137,48 +3461,46 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
            ask the Apps Script backend for the real link, which it reveals
            by redirecting a new tab straight to the sheet. See the
            QUICK_LINKS / openQuickLink script further down this file. -->
-      <div role="button" tabindex="0" onclick="openQuickLink('accounts','AUDIT AUDITED ACCOUNTS')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('accounts','AUDIT AUDITED ACCOUNTS');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
-        <span>AUDIT AUDITED ACCOUNTS</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+      <div class="menu-tile-grid">
 
-      <div role="button" tabindex="0" onclick="openQuickLink('data','AUDIT DATA')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('data','AUDIT DATA');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
-        <span>AUDIT DATA</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+        <div role="button" tabindex="0" onclick="openQuickLink('accounts','AUDIT AUDITED ACCOUNTS')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('accounts','AUDIT AUDITED ACCOUNTS');}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          <span class="menu-tile-label">Audited Accounts</span>
+        </div>
 
-      <div role="button" tabindex="0" onclick="openQuickLink('opex','AUDIT OPEX')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('opex','AUDIT OPEX');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
-        <span>AUDIT OPEX</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+        <div role="button" tabindex="0" onclick="openQuickLink('data','AUDIT DATA')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('data','AUDIT DATA');}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          <span class="menu-tile-label">Audit Data</span>
+        </div>
 
-      <div role="button" tabindex="0" onclick="openQuickLink('sheets','AUDIT SHEETS')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('sheets','AUDIT SHEETS');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
-        <span>AUDIT SHEETS</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+        <div role="button" tabindex="0" onclick="openQuickLink('opex','AUDIT OPEX')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('opex','AUDIT OPEX');}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          <span class="menu-tile-label">Audit Opex</span>
+        </div>
 
-      <div role="button" tabindex="0" onclick="openQuickLink('personnel','PERSONNEL')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('personnel','PERSONNEL');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
-        <span>PERSONNEL</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
-      </div>
+        <div role="button" tabindex="0" onclick="openQuickLink('sheets','AUDIT SHEETS')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('sheets','AUDIT SHEETS');}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          <span class="menu-tile-label">Audit Sheets</span>
+        </div>
 
-      <!-- AUDIT REPORT (Audit Vault) -> now merged into the SAME Apps
-           Script deployment as the rest of the dashboard, instead of a
-           separate audit-vault-launcher /exec app. It goes through the
-           exact same password re-check + Quick_Links backend lookup
-           (openQuickLink -> action=open&id=auditreport) as the other
-           Quick Links above, using the "auditreport" entry already
-           defined in QUICK_LINKS in the merged Code.gs. One script, one
-           deployment, one auth path for all seven links. -->
-      <div role="button" tabindex="0" onclick="openQuickLink('auditreport','AUDIT FOLDER')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('auditreport','AUDIT FOLDER');}" class="side-menu-link cursor-pointer select-none">
-        <span class="side-menu-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
-        <span>AUDIT FOLDER</span>
-        <svg class="side-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+        <div role="button" tabindex="0" onclick="openQuickLink('personnel','PERSONNEL')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('personnel','PERSONNEL');}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          <span class="menu-tile-label">Personnel</span>
+        </div>
+
+        <!-- AUDIT REPORT (Audit Vault) -> now merged into the SAME Apps
+             Script deployment as the rest of the dashboard, instead of a
+             separate audit-vault-launcher /exec app. It goes through the
+             exact same password re-check + Quick_Links backend lookup
+             (openQuickLink -> action=open&id=auditreport) as the other
+             Quick Links above, using the "auditreport" entry already
+             defined in QUICK_LINKS in the merged Code.gs. One script, one
+             deployment, one auth path for all seven links. -->
+        <div role="button" tabindex="0" onclick="openQuickLink('auditreport','AUDIT FOLDER')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openQuickLink('auditreport','AUDIT FOLDER');}" class="menu-tile cursor-pointer select-none">
+          <span class="menu-tile-icon" style="background:rgba(217,119,6,0.10);"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentAmber shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          <span class="menu-tile-label">Audit Folder</span>
+        </div>
+
       </div>
       </details>
     </nav>
@@ -3237,7 +3559,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       </div>
     </div>
 
-    <div id="section-overview" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" style="margin-top:0.6rem">
+    <div id="section-overview" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 reveal-up" style="margin-top:0.6rem">
       <div onclick="openModal('All Branches Overview', 'all', null)" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentBlue/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold tracking-wider text-slate-500">TOTAL BRANCHES</span>
@@ -3342,7 +3664,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       </div>
     </div>
 
-    <div id="section-charts" class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+    <div id="section-charts" class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start reveal-up">
       
       <div class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-3 shadow-md lg:col-span-2 flex flex-col hover:shadow-lg transition-all">
         <div class="flex items-start justify-between gap-3 mb-2 pb-2 border-b border-coolBorder">
@@ -3489,7 +3811,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       </div>
     </div>
 
-    <div id="section-rankings" class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md mb-4">
+    <div id="section-rankings" class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md mb-4 reveal-up">
       <h3 class="text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2 mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bar-chart-2 w-5 h-5 text-accentIndigo"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
         Top 10 Rankings (<span id="span-rankings-month">MAY</span>)
@@ -3519,7 +3841,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       </div>
     </div>
 
-    <div id="section-findings" class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md">
+    <div id="section-findings" class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md reveal-up">
       <h3 class="text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2 mb-1">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-list w-5 h-5 text-accentIndigo"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect><path d="M14 4h7"></path><path d="M14 9h7"></path><path d="M14 15h7"></path><path d="M14 20h7"></path></svg>
         Findings, Recovery &amp; Declining Branches
@@ -3662,7 +3984,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       </div>
     </div>
 
-    <div id="section-scorecard" class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md">
+    <div id="section-scorecard" class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md reveal-up">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
         <div>
           <h3 class="text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
@@ -5286,11 +5608,21 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
           if (!s.rows || s.rows.length === 0) return;
           const aoa = [s.headers].concat(s.rows);
           const ws = XLSX.utils.aoa_to_sheet(aoa);
+          // Long free-text columns (findings, remarks, details, etc.) need a
+          // much roomier cap than short columns like "Branch" or "Date" —
+          // capping everything at the same width is what made these sheets
+          // look squeezed. Also give every row a taller default height so
+          // wrapped/long text has room to breathe instead of clipping.
           ws['!cols'] = s.headers.map(function(h, i) {
-              let maxLen = String(h).length;
+              const headerText = String(h);
+              let maxLen = headerText.length;
               s.rows.forEach(function(r) { const v = r[i]; if (v !== undefined && v !== null) maxLen = Math.max(maxLen, String(v).length); });
-              return { wch: Math.min(Math.max(maxLen + 2, 10), 40) };
+              const isLongTextColumn = /finding|remark|detail|description|note|comment|reason|summary/i.test(headerText);
+              const cap = isLongTextColumn ? 90 : 45;
+              const minWidth = isLongTextColumn ? 24 : 10;
+              return { wch: Math.min(Math.max(maxLen + 2, minWidth), cap) };
           });
+          ws['!rows'] = [{ hpt: 20 }].concat(s.rows.map(function() { return { hpt: 18 }; }));
           // Keep the header row visible while scrolling and enable the
           // filter/sort dropdowns so large sheets stay easy to navigate.
           ws['!autofilter'] = { ref: ws['!ref'] };
@@ -5309,26 +5641,69 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       const nonEmpty = sheets.filter(function(s) { return s.rows && s.rows.length > 0; });
       if (nonEmpty.length === 0) { showToast('Nothing to export yet.'); return; }
 
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType } = docx;
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, PageOrientation, VerticalAlign } = docx;
+
+      // Landscape, letter-width usable area in twentieths-of-a-point (DXA):
+      // 15840 total width minus 2 x 720 (0.5") margins.
+      const PAGE_USABLE_DXA = 15840 - 1440;
+      const MIN_COL_DXA = 900;   // ~0.6" floor so short columns don't vanish
+      const LONG_TEXT_RE = /finding|remark|detail|description|note|comment|reason|summary/i;
+
+      // Evenly-split columns is exactly what squeezed these tables before —
+      // a "Finding" column and a "Date" column got the same width regardless
+      // of content. Instead, size each column by its content (with extra
+      // weight for free-text columns) and only clamp the total to the page.
+      function computeColumnWidths(headers, rows) {
+          const weights = headers.map(function(h, i) {
+              const headerText = String(h);
+              let maxLen = headerText.length;
+              rows.forEach(function(r) { const v = r[i]; if (v !== undefined && v !== null) maxLen = Math.max(maxLen, String(v).length); });
+              maxLen = Math.min(maxLen, LONG_TEXT_RE.test(headerText) ? 70 : 28);
+              return Math.max(maxLen, 6);
+          });
+          const totalWeight = weights.reduce(function(a, b) { return a + b; }, 0) || 1;
+          let widths = weights.map(function(w) { return Math.round((w / totalWeight) * PAGE_USABLE_DXA); });
+          widths = widths.map(function(w) { return Math.max(w, MIN_COL_DXA); });
+          const overflow = widths.reduce(function(a, b) { return a + b; }, 0) - PAGE_USABLE_DXA;
+          if (overflow > 0) {
+              // Shrink proportionally from columns that are above the floor,
+              // so no column gets squeezed below the readable minimum.
+              const shrinkable = widths.map(function(w) { return w > MIN_COL_DXA ? w - MIN_COL_DXA : 0; });
+              const shrinkableTotal = shrinkable.reduce(function(a, b) { return a + b; }, 0);
+              if (shrinkableTotal > 0) {
+                  widths = widths.map(function(w, i) { return w - Math.round(overflow * (shrinkable[i] / shrinkableTotal)); });
+              }
+          }
+          return widths;
+      }
 
       function buildTable(headers, rows) {
+          const colWidths = computeColumnWidths(headers, rows);
           const headerRow = new TableRow({
               tableHeader: true,
-              children: headers.map(function(h) {
+              children: headers.map(function(h, i) {
                   return new TableCell({
+                      width: { size: colWidths[i], type: WidthType.DXA },
                       shading: { fill: 'E5E7EB' },
-                      children: [new Paragraph({ children: [new TextRun({ text: String(h), bold: true })] })]
+                      verticalAlign: VerticalAlign.CENTER,
+                      margins: { top: 80, bottom: 80, left: 100, right: 100 },
+                      children: [new Paragraph({ children: [new TextRun({ text: String(h), bold: true, size: 18 })] })]
                   });
               })
           });
           const bodyRows = rows.map(function(r) {
               return new TableRow({
-                  children: r.map(function(v) {
-                      return new TableCell({ children: [new Paragraph(v === undefined || v === null ? '' : String(v))] });
+                  cantSplit: true,
+                  children: r.map(function(v, i) {
+                      return new TableCell({
+                          width: { size: colWidths[i], type: WidthType.DXA },
+                          margins: { top: 60, bottom: 60, left: 100, right: 100 },
+                          children: [new Paragraph({ children: [new TextRun({ text: v === undefined || v === null ? '' : String(v), size: 17 })] })]
+                      });
                   })
               });
           });
-          return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow].concat(bodyRows) });
+          return new Table({ width: { size: PAGE_USABLE_DXA, type: WidthType.DXA }, columnWidths: colWidths, rows: [headerRow].concat(bodyRows) });
       }
 
       const children = [
@@ -5337,11 +5712,21 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       ];
 
       nonEmpty.forEach(function(s) {
-          children.push(new Paragraph({ text: s.name, heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 150 } }));
+          children.push(new Paragraph({ text: s.name, heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 150 }, pageBreakBefore: children.length > 2 }));
           children.push(buildTable(s.headers, s.rows));
       });
 
-      const doc = new Document({ sections: [{ properties: {}, children: children }] });
+      const doc = new Document({
+          sections: [{
+              properties: {
+                  page: {
+                      size: { orientation: PageOrientation.LANDSCAPE },
+                      margin: { top: 720, bottom: 720, left: 720, right: 720 }
+                  }
+              },
+              children: children
+          }]
+      });
       const blob = await Packer.toBlob(doc);
       downloadBlob(blob, filename);
       showToast('Word document downloaded.');
@@ -5371,14 +5756,28 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
           doc.setTextColor(148, 163, 184);
           doc.text(generatedLabel, pageWidth - 40, 36, { align: 'right' });
 
+          // Give free-text columns (findings, remarks, details, etc.) a wider
+          // minimum than short columns like "Branch" or "Date" — treating
+          // every column the same is what squeezed long text before. Tables
+          // with too many columns to fit even at that minimum spill onto
+          // extra pages (horizontalPageBreak) instead of being crushed
+          // to fit one page width.
+          const columnStyles = {};
+          s.headers.forEach(function(h, i) {
+              columnStyles[i] = { minCellWidth: /finding|remark|detail|description|note|comment|reason|summary/i.test(String(h)) ? 160 : 55 };
+          });
+
           doc.autoTable({
               head: [s.headers.map(function(h) { return String(h); })],
               body: s.rows.map(function(r) { return r.map(function(v) { return (v === undefined || v === null) ? '' : String(v); }); }),
               startY: 66,
               margin: { left: 40, right: 40, bottom: 30 },
-              styles: { fontSize: 8, cellPadding: 5, overflow: 'linebreak' },
+              styles: { fontSize: 8, cellPadding: 5, overflow: 'linebreak', valign: 'middle' },
               headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
               alternateRowStyles: { fillColor: [248, 250, 252] },
+              columnStyles: columnStyles,
+              horizontalPageBreak: true,
+              horizontalPageBreakRepeat: 0,
               theme: 'grid',
               didDrawPage: function() {
                   const pageCount = doc.internal.getNumberOfPages();
@@ -7265,27 +7664,66 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       });
     }
 
+    // Animates a stat number counting up/down from its previous value to
+    // the new one, instead of just snapping to it. Falls back to an
+    // instant update for anyone with prefers-reduced-motion set. Optional
+    // suffixHTML (e.g. the "improving" / "on target" label) is re-appended
+    // after every frame so it keeps rendering alongside the counting number.
+    function animateCountUp(el, target, opts) {
+      if (!el) return;
+      target = Math.round(Number(target) || 0);
+      const suffixHTML = (opts && opts.suffixHTML) || '';
+      const reduceMotion = window.matchMedia && !window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
+      if (reduceMotion) {
+        el.innerHTML = target.toLocaleString() + suffixHTML;
+        el.dataset.countFrom = target;
+        return;
+      }
+      const from = Number(el.dataset.countFrom);
+      const start = Number.isFinite(from) ? from : 0;
+      if (start === target) {
+        el.innerHTML = target.toLocaleString() + suffixHTML;
+        return;
+      }
+      const duration = (opts && opts.duration) || 650;
+      const startTime = performance.now();
+      const runId = (el._countRunId = (el._countRunId || 0) + 1);
+      function tick(now) {
+        if (runId !== el._countRunId) return; // a newer count-up superseded this one
+        const p = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+        const val = Math.round(start + (target - start) * eased);
+        el.innerHTML = val.toLocaleString() + suffixHTML;
+        if (p < 1) {
+          requestAnimationFrame(tick);
+        } else {
+          el.dataset.countFrom = target;
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
     function updateStatCards() {
       const sum = activeData.summary;
       
-      document.getElementById('stat-total-branches').innerText = sum.totalBranches || 0;
+      animateCountUp(document.getElementById('stat-total-branches'), sum.totalBranches || 0);
       document.getElementById('stat-branches-sub').innerText = `${sum.doneCount || 0} done · ${sum.forAuditCount || 0} for audit · ${sum.pendingCount || 0} pending`;
       
-      document.getElementById('stat-collection-improving').innerHTML = `${sum.improvingCollection || 0} <span class="text-sm font-medium text-slate-500">improving</span>`;
+      animateCountUp(document.getElementById('stat-collection-improving'), sum.improvingCollection || 0, { suffixHTML: ' <span class="text-sm font-medium text-slate-500">improving</span>' });
       document.getElementById('stat-collection-sub').innerText = `${sum.decliningCollection || 0} declining · ${sum.stableCollection || 0} stable · ${sum.recoveringCollection || 0} recovering`;
-      document.getElementById('stat-sales-improving').innerHTML = `${sum.salesImproving || 0} <span class="text-sm font-medium text-slate-500">improving</span>`;
+      animateCountUp(document.getElementById('stat-sales-improving'), sum.salesImproving || 0, { suffixHTML: ' <span class="text-sm font-medium text-slate-500">improving</span>' });
       document.getElementById('stat-sales-sub').innerText = `${sum.salesDeclining || 0} declining · ${sum.salesStable || 0} stable`;
-      document.getElementById('stat-service-target').innerHTML = `${sum.serviceTarget || 0} <span class="text-sm font-medium text-slate-500">on target</span>`;
+      animateCountUp(document.getElementById('stat-service-target'), sum.serviceTarget || 0, { suffixHTML: ' <span class="text-sm font-medium text-slate-500">on target</span>' });
       document.getElementById('stat-service-sub').innerText = `${sum.serviceDeclining || 0} declining`;
       
       const pctChange = sum.findings2024 > 0 ? Math.round(((sum.findings2025 - sum.findings2024) / sum.findings2024) * 100) : 0;
       
-      document.getElementById('stat-findings-2024').innerText = sum.findings2024 || 0;
-      document.getElementById('stat-findings-2025').innerText = sum.findings2025 || 0;
+      animateCountUp(document.getElementById('stat-findings-2024'), sum.findings2024 || 0);
+      animateCountUp(document.getElementById('stat-findings-2025'), sum.findings2025 || 0);
       document.getElementById('stat-findings-2025-sub').innerText = pctChange >= 0 ? `+${pctChange}% vs 2024` : `${pctChange}% vs 2024`;
       
-      document.getElementById('stat-findings-2026').innerText = sum.findings2026 || 0;
-      document.getElementById('stat-total-accounts').innerText = sum.totalAccounts || 0;
+      animateCountUp(document.getElementById('stat-findings-2026'), sum.findings2026 || 0);
+      animateCountUp(document.getElementById('stat-total-accounts'), sum.totalAccounts || 0);
       const repoMonthLabel = (sum.trendLabels || ["MARCH", "APRIL", "MAY"])[2];
       const repoPrevMonthLabel = (sum.trendLabels || ["MARCH", "APRIL", "MAY"])[1];
       const repoLatestEl = document.getElementById('stat-total-repo-latest');
@@ -8999,7 +9437,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       // normally — the side menu just doesn't stay open behind it.
       if (sideMenu) {
         sideMenu.addEventListener('click', function(e) {
-          const link = e.target.closest('.side-menu-link');
+          const link = e.target.closest('.side-menu-link, .menu-tile');
           if (link) setTimeout(closeSideMenu, 0);
         });
       }
@@ -9409,4 +9847,53 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
   </script>
   <!-- ================= END FIREBASE AUTH LOGIC ================= -->
 
+<script>
+  // Scroll-reveal for the dashboard sections/cards (see .reveal-up in the
+  // stylesheet). Kept in its own small script, separate from the main
+  // dashboard logic, so it can't interfere with anything else on the page.
+  // The Overview cards row is above the fold, so it's revealed right away
+  // on load rather than waiting for a scroll; everything below reveals the
+  // first time it scrolls into view.
+  (function () {
+    if (window.matchMedia && !window.matchMedia('(prefers-reduced-motion: no-preference)').matches) return;
+
+    function revealNow(el) { el.classList.add('is-visible'); }
+
+    function start() {
+      const targets = document.querySelectorAll('.reveal-up');
+      if (!targets.length) return;
+
+      if (!('IntersectionObserver' in window)) {
+        targets.forEach(revealNow);
+        return;
+      }
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            revealNow(entry.target);
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+      targets.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        // Above-the-fold on load (e.g. the Overview cards) reveal right away
+        // instead of waiting on a scroll event that may never come.
+        if (rect.top < window.innerHeight && rect.bottom > 0) {
+          revealNow(el);
+        } else {
+          observer.observe(el);
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', start);
+    } else {
+      start();
+    }
+  })();
+</script>
 </body></html>
