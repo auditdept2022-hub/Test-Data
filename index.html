@@ -2495,65 +2495,192 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
   </script>
 
   <style>
-    @keyframes loadBarPulse {
-      0%, 100% { transform: scaleY(0.28); opacity: .55; }
-      50% { transform: scaleY(1); opacity: 1; }
-    }
-    @keyframes loadRingSpin {
-      to { transform: rotate(360deg); }
-    }
     @keyframes loadFadeUp {
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .loading-bar {
-      transform-origin: bottom;
-      animation: loadBarPulse 1.15s ease-in-out infinite;
-    }
-    .loading-ring-spin {
-      animation: loadRingSpin 2.4s linear infinite;
-    }
     #loadingStatusText {
       animation: loadFadeUp .35s ease-out;
+    }
+
+    /* ================= "MOTORLANDIA" loading scene =================
+       Full dashboard loading screen, restyled as a little motorcycle
+       road-trip: sun, parallax hills, a scrolling road and a bike that
+       bounces on its suspension while its wheels spin. Speed is driven
+       by --ml-speed (set from JS as real progress comes in) so the bike
+       visibly builds momentum — slow at the start of a sync, fast as it
+       nears 100% — instead of looping at one constant pace forever. */
+    #motorlandiaScene {
+      --ml-speed: 1.35; /* multiplier: >1 slower, <1 faster. JS tweens this with real progress. */
+      position: relative;
+      overflow: hidden;
+      background: #151b2e;
+    }
+    #motorlandiaScene svg { display: block; width: 100%; height: auto; }
+
+    .ml-sun-glow {
+      transform-box: fill-box; transform-origin: center;
+      animation: mlSunPulse calc(3.2s * var(--ml-speed, 1)) ease-in-out infinite;
+    }
+    @keyframes mlSunPulse {
+      0%, 100% { opacity: .10; transform: scale(1); }
+      50%      { opacity: .22; transform: scale(1.12); }
+    }
+
+    .ml-mtn-far, .ml-mtn-near {
+      animation: mlParallax linear infinite;
+    }
+    .ml-mtn-far  { animation-duration: calc(18s * var(--ml-speed, 1)); }
+    .ml-mtn-near { animation-duration: calc(9s  * var(--ml-speed, 1)); }
+    @keyframes mlParallax {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-400px); }
+    }
+
+    .ml-road-dash {
+      animation: mlRoadDash linear infinite;
+      animation-duration: calc(0.85s * var(--ml-speed, 1));
+    }
+    @keyframes mlRoadDash {
+      from { stroke-dashoffset: 0; }
+      to   { stroke-dashoffset: -68; }
+    }
+
+    .ml-bike-bounce {
+      animation: mlBikeBounce ease-in-out infinite;
+      animation-duration: calc(0.42s * var(--ml-speed, 1));
+    }
+    @keyframes mlBikeBounce {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-2.5px); }
+    }
+    .ml-wheel {
+      transform-box: fill-box; transform-origin: center;
+      animation: mlWheelSpin linear infinite;
+      animation-duration: calc(0.5s * var(--ml-speed, 1));
+    }
+    @keyframes mlWheelSpin { to { transform: rotate(360deg); } }
+
+    .ml-speed-line {
+      animation: mlSpeedLine ease-out infinite;
+      animation-duration: calc(0.6s * var(--ml-speed, 1));
+    }
+    .ml-speed-line:nth-child(2) { animation-delay: calc(0.1s * var(--ml-speed, 1)); }
+    .ml-speed-line:nth-child(3) { animation-delay: calc(0.2s * var(--ml-speed, 1)); }
+    @keyframes mlSpeedLine {
+      0%   { opacity: 0; transform: translateX(10px); }
+      35%  { opacity: .8; }
+      100% { opacity: 0; transform: translateX(-16px); }
+    }
+
+    .ml-exhaust {
+      animation: mlExhaust ease-out infinite;
+      animation-duration: calc(0.9s * var(--ml-speed, 1));
+    }
+    .ml-exhaust:nth-child(2) { animation-delay: calc(0.3s * var(--ml-speed, 1)); }
+    @keyframes mlExhaust {
+      0%   { opacity: .35; transform: translate(0,0) scale(0.6); }
+      100% { opacity: 0;   transform: translate(-10px,-6px) scale(1.3); }
+    }
+
+    /* Engine stalls on an error: everything eases to a stop rather than
+       just vanishing mid-loop. */
+    #motorlandiaScene.ml-stalled * { animation-play-state: paused !important; }
+
+    .ml-wordmark {
+      font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+      background: linear-gradient(90deg, #3730a3, #0891b2);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ml-sun-glow, .ml-mtn-far, .ml-mtn-near, .ml-road-dash,
+      .ml-bike-bounce, .ml-wheel, .ml-speed-line, .ml-exhaust {
+        animation: none !important;
+      }
     }
   </style>
 
   <div id="loadingScreen" class="fixed inset-0 z-[9999] hidden items-center justify-center" style="display:none; opacity:1; transition: opacity .35s ease;">
-    <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 text-center">
+    <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-2xl overflow-hidden w-full max-w-sm mx-4 text-center">
 
       <div id="loadingCore">
-        <div class="relative w-28 h-28 mx-auto mb-5 flex items-center justify-center">
-          <svg class="absolute inset-0 w-28 h-28 loading-ring-spin" viewBox="0 0 120 120" style="opacity:.35;">
-            <circle cx="60" cy="60" r="54" fill="none" stroke="#c7cad1" stroke-width="2" stroke-dasharray="4 10" stroke-linecap="round"></circle>
-          </svg>
-          <svg class="absolute inset-0 w-28 h-28 -rotate-90" viewBox="0 0 120 120">
-            <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e4e9" stroke-width="8"></circle>
-            <circle id="loadingRingProgress" cx="60" cy="60" r="54" fill="none" stroke="url(#loadingGradient)" stroke-width="8" stroke-linecap="round" stroke-dasharray="339.292" stroke-dashoffset="339.292" style="transition: stroke-dashoffset .25s linear;"></circle>
+        <!-- Eyebrow / wordmark -->
+        <div class="flex items-center justify-center gap-1.5 pt-5 pb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><circle cx="5.5" cy="17.5" r="2.5"></circle><circle cx="18.5" cy="17.5" r="2.5"></circle><path d="M5.5 17.5 9 10h3l1.5 3"></path><path d="M9 10 7.5 6.5h3L13 10"></path><path d="M18.5 17.5 15.5 12H12"></path></svg>
+          <span class="ml-wordmark text-[13px]">Motorlandia</span>
+        </div>
+
+        <!-- Road scene: sun, parallax hills, scrolling road, bike -->
+        <div id="motorlandiaScene" class="relative mx-4 rounded-xl">
+          <svg viewBox="0 0 400 150" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <linearGradient id="loadingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#3730a3"></stop>
-                <stop offset="100%" stop-color="#4f46e5"></stop>
+              <linearGradient id="mlSky" x1="0" y1="0" x2="400" y2="150" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#1e2f8f"></stop>
+                <stop offset="45%" stop-color="#3730a3"></stop>
+                <stop offset="78%" stop-color="#4f46e5"></stop>
+                <stop offset="100%" stop-color="#0891b2"></stop>
               </linearGradient>
             </defs>
+            <rect x="0" y="0" width="400" height="150" fill="url(#mlSky)"></rect>
+            <circle class="ml-sun-glow" cx="335" cy="34" r="34" fill="#ffffff"></circle>
+            <circle cx="335" cy="34" r="19" fill="#ffe08a"></circle>
+            <g class="ml-mtn-far" fill="#ffffff" opacity="0.10">
+              <polygon points="0,95 40,60 80,90 120,55 170,92 210,62 260,90 300,58 340,92 380,65 400,90 400,150 0,150"></polygon>
+              <polygon points="400,95 440,60 480,90 520,55 570,92 610,62 660,90 700,58 740,92 780,65 800,90 800,150 400,150"></polygon>
+            </g>
+            <g class="ml-mtn-near" fill="#ffffff" opacity="0.16">
+              <polygon points="0,110 30,80 70,105 110,75 150,108 190,82 230,106 270,78 310,108 350,84 400,108 400,150 0,150"></polygon>
+              <polygon points="400,110 430,80 470,105 510,75 550,108 590,82 630,106 670,78 710,108 750,84 800,108 800,150 400,150"></polygon>
+            </g>
+            <rect x="0" y="112" width="400" height="38" fill="#151b2e"></rect>
+            <rect x="0" y="112" width="400" height="3" fill="#ffffff" opacity="0.18"></rect>
+            <line class="ml-road-dash" x1="0" y1="131" x2="400" y2="131" stroke="#fbbf24" stroke-width="3.5" stroke-dasharray="18 16" stroke-linecap="round"></line>
+            <g class="ml-bike-bounce">
+              <circle class="ml-exhaust" cx="98" cy="118" r="3" fill="#ffffff"></circle>
+              <circle class="ml-exhaust" cx="94" cy="121" r="2.4" fill="#ffffff"></circle>
+              <line class="ml-speed-line" x1="88" y1="98" x2="72" y2="98" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0"></line>
+              <line class="ml-speed-line" x1="90" y1="108" x2="70" y2="108" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0"></line>
+              <line class="ml-speed-line" x1="88" y1="118" x2="68" y2="118" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0"></line>
+              <g transform="translate(115,72) scale(3.6)" stroke="#ffffff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <circle class="ml-wheel" cx="5.5" cy="17.5" r="2.5"></circle>
+                <circle class="ml-wheel" cx="18.5" cy="17.5" r="2.5"></circle>
+                <path d="M5.5 17.5 9 10h3l1.5 3"></path>
+                <path d="M9 10 7.5 6.5h3L13 10"></path>
+                <path d="M18.5 17.5 15.5 12H12"></path>
+                <circle cx="12" cy="5" r="1.6" fill="#ffffff" stroke="none"></circle>
+              </g>
+            </g>
           </svg>
-          <div class="flex items-end gap-1.5 h-9">
-            <span class="loading-bar w-2 h-9 rounded-full bg-accentIndigo" style="animation-delay:0ms;"></span>
-            <span class="loading-bar w-2 h-9 rounded-full bg-accentBlue" style="animation-delay:150ms;"></span>
-            <span class="loading-bar w-2 h-9 rounded-full bg-accentCyan" style="animation-delay:300ms;"></span>
-            <span class="loading-bar w-2 h-9 rounded-full bg-accentEmerald" style="animation-delay:450ms;"></span>
+
+          <!-- Speedometer badge doubles as the real progress indicator -->
+          <div class="absolute -bottom-3 -right-3 w-14 h-14 rounded-full bg-white shadow-lg border border-coolBorder flex items-center justify-center">
+            <svg class="absolute inset-0 w-14 h-14 -rotate-90" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e4e9" stroke-width="9"></circle>
+              <circle id="loadingRingProgress" cx="60" cy="60" r="54" fill="none" stroke="url(#loadingGradient)" stroke-width="9" stroke-linecap="round" stroke-dasharray="339.292" stroke-dashoffset="339.292" style="transition: stroke-dashoffset .25s linear;"></circle>
+              <defs>
+                <linearGradient id="loadingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#3730a3"></stop>
+                  <stop offset="100%" stop-color="#0891b2"></stop>
+                </linearGradient>
+              </defs>
+            </svg>
+            <span id="loadingPercent" class="relative text-[11px] font-extrabold text-slate-700">0%</span>
           </div>
-          <span id="loadingPercent" class="absolute -bottom-1 right-1 text-[10px] font-bold text-slate-600 bg-white rounded-full px-1.5 py-0.5 border border-coolBorder shadow-sm">0%</span>
         </div>
-        <h2 id="loadingTitleText" class="text-lg font-bold text-slate-900 mb-1">Preparing your dashboard</h2>
-        <p id="loadingStatusText" class="text-xs text-slate-500 min-h-[1rem]">Connecting to secure server&hellip;</p>
+
+        <div class="px-6 pt-6 pb-6">
+          <h2 id="loadingTitleText" class="text-lg font-bold text-slate-900 mb-1">Preparing your dashboard</h2>
+          <p id="loadingStatusText" class="text-xs text-slate-500 min-h-[1rem]">Connecting to secure server&hellip;</p>
+        </div>
       </div>
 
-      <div id="loadingError" class="hidden">
+      <div id="loadingError" class="hidden px-8 py-8">
         <div class="w-14 h-14 rounded-2xl bg-accentRose/10 flex items-center justify-center mx-auto mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose"><circle cx="5.5" cy="17.5" r="2.5"></circle><circle cx="18.5" cy="17.5" r="2.5"></circle><path d="M5.5 17.5 9 10h3l1.5 3"></path><path d="M9 10 7.5 6.5h3L13 10"></path><path d="M18.5 17.5 15.5 12H12"></path><line x1="3" y1="3" x2="21" y2="21"></line></svg>
         </div>
         <h2 class="text-lg font-bold text-slate-900 mb-1">Couldn't load the dashboard</h2>
-        <p class="text-xs text-slate-500 mb-4">We couldn't sync the latest audit data. Check your connection and try again.</p>
+        <p class="text-xs text-slate-500 mb-4">Looks like we hit a pothole &mdash; we couldn't sync the latest audit data. Check your connection and try again.</p>
         <button id="loadingRetryBtn" class="w-full py-2.5 bg-accentIndigo text-white text-sm font-semibold rounded-xl hover:bg-accentIndigo/90 active:scale-[0.98] transition-all">Retry</button>
       </div>
 
@@ -2926,8 +3053,24 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       const loadingPercentEl = document.getElementById('loadingPercent');
       const loadingStatusEl = document.getElementById('loadingStatusText');
       const loadingTitleEl = document.getElementById('loadingTitleText');
+      const motorlandiaScene = document.getElementById('motorlandiaScene');
 
       const RING_CIRCUMFERENCE = 339.292;
+      // The bike's whole animation set (wheel spin, road-line scroll, hill
+      // parallax, suspension bounce) reads its pace off this CSS custom
+      // property. Above 1 = slower than resting pace, below 1 = faster.
+      // Real progress drives it down from a lazy idle toward a full-speed
+      // blur as the sync approaches completion, so "slow at first, fast
+      // once the data's actually loaded" is tied to the real fetch, not
+      // just a decorative loop.
+      const ML_SPEED_IDLE = 1.6;
+      const ML_SPEED_MAX = 0.45;
+      function setBikeSpeedFromProgress(pct) {
+        if (!motorlandiaScene) return;
+        const clamped = Math.max(0, Math.min(100, pct));
+        const speed = ML_SPEED_IDLE - (ML_SPEED_IDLE - ML_SPEED_MAX) * (clamped / 100);
+        motorlandiaScene.style.setProperty('--ml-speed', speed.toFixed(2));
+      }
       const MIN_LOADING_MS = 450;
       const STATUS_MESSAGES = [
         'Connecting to secure server\u2026',
@@ -2953,6 +3096,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
         const clamped = Math.max(0, Math.min(100, pct));
         loadingRing.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - clamped / 100);
         loadingPercentEl.textContent = Math.round(clamped) + '%';
+        setBikeSpeedFromProgress(clamped);
       }
 
       function cycleStatus() {
@@ -2994,6 +3138,8 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
         loadingScreen.style.opacity = '1';
         document.body.style.overflow = 'hidden';
         loadingTitleEl.textContent = opts.title || 'Preparing your dashboard';
+        if (motorlandiaScene) motorlandiaScene.classList.remove('ml-stalled');
+        setBikeSpeedFromProgress(0);
         startProgress(opts.messages);
         return token;
       }
@@ -3003,6 +3149,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
         stopProgress();
         loadingCore.classList.add('hidden');
         loadingErrorBox.classList.remove('hidden');
+        if (motorlandiaScene) motorlandiaScene.classList.add('ml-stalled');
       }
 
       function revealDashboard(readyText, token) {
