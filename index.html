@@ -269,7 +269,111 @@
       content: '';
       position: absolute; top: 0; left: 0; right: 0; height: 3px;
       background: linear-gradient(90deg, #4f46e5, #0891b2 55%, #059669);
+      background-size: 200% 100%;
       opacity: .85;
+      animation: accentShimmer 6s ease-in-out infinite;
+    }
+    @keyframes accentShimmer {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    /* ============================================================
+       PREMIUM INTERACTION LAYER
+       A cohesive, performance-conscious pass over motion & feel:
+       smoother global easing, lifted/glowing cards on hover, tactile
+       buttons with a real ripple, and a refined focus/press language —
+       layered on top of the existing utility classes so none of the
+       underlying markup or logic has to change. Everything here is
+       GPU-friendly (transform/opacity only) and fully respects
+       prefers-reduced-motion.
+       ============================================================ */
+    html { scroll-behavior: smooth; }
+    :root {
+      --ease-premium: cubic-bezier(.22, 1, .36, 1);
+      --ease-snap: cubic-bezier(.34, 1.56, .64, 1);
+    }
+
+    /* Re-time the existing Tailwind transition utilities with a softer,
+       more premium curve instead of the default linear/ease timing. */
+    .transition-all, .transition-colors, .transition-transform, .transition-opacity {
+      transition-timing-function: var(--ease-premium);
+    }
+
+    /* Primary content cards: gentle lift + soft glow + border brighten.
+       Targets the real card shells already used throughout the dashboard
+       (bg-coolCard + border + rounded-2xl/xl) without needing new classes
+       on every element in a 9000-line markup tree. */
+    .bg-coolCard.border.border-coolBorder.rounded-2xl,
+    .bg-coolCard.border.border-coolBorder.rounded-xl,
+    .dash-card-accent {
+      transition: transform .38s var(--ease-premium), box-shadow .38s var(--ease-premium), border-color .38s var(--ease-premium);
+      will-change: transform;
+    }
+    .bg-coolCard.border.border-coolBorder.rounded-2xl:hover,
+    .bg-coolCard.border.border-coolBorder.rounded-xl:hover,
+    .dash-card-accent:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 20px 40px -18px rgba(30, 41, 59, 0.22), 0 4px 10px -4px rgba(30, 41, 59, 0.08);
+      border-color: rgba(79, 70, 229, 0.28);
+    }
+
+    /* Buttons & interactive controls: crisper press feedback layered on
+       top of whatever active:scale-* utility is already present. */
+    button, [role="button"], .cursor-pointer {
+      transition-timing-function: var(--ease-snap);
+    }
+    button:active, [role="button"]:active {
+      filter: brightness(0.97);
+    }
+
+    /* Lightweight ripple: a single absolutely-positioned span injected on
+       pointerdown (see the script near the end of body). Pure CSS/opacity
+       animation — no layout thrash, no interference with click handlers. */
+    .btn-ripple-host { position: relative; overflow: hidden; }
+    .btn-ripple {
+      position: absolute;
+      border-radius: 9999px;
+      background: currentColor;
+      opacity: 0.28;
+      transform: scale(0);
+      pointer-events: none;
+      animation: rippleExpand .55s var(--ease-premium) forwards;
+    }
+    @keyframes rippleExpand {
+      to { transform: scale(2.6); opacity: 0; }
+    }
+
+    /* Sharper, more visible keyboard focus ring in the same accent
+       language as the rest of the dashboard. */
+    a:focus-visible, button:focus-visible, [role="button"]:focus-visible,
+    input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 2px solid rgba(37, 99, 235, 0.55);
+      outline-offset: 2px;
+      border-radius: 6px;
+    }
+
+    /* Table rows: replace the flat hover tint with a subtle slide-in
+       accent bar, echoing the ranking-list hover treatment already used
+       elsewhere in the dashboard. */
+    .dash-container table tbody tr {
+      transition: background-color .2s var(--ease-premium), transform .2s var(--ease-premium);
+    }
+    .dash-container table tbody tr:hover {
+      transform: translateX(1px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .dash-card-accent::before { animation: none; }
+      .bg-coolCard.border.border-coolBorder.rounded-2xl,
+      .bg-coolCard.border.border-coolBorder.rounded-xl,
+      .dash-card-accent,
+      .dash-container table tbody tr {
+        transition: none !important;
+        transform: none !important;
+      }
+      .btn-ripple { display: none; }
     }
   </style>
 
@@ -2143,262 +2247,6 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     .sm\:inline-flex{display:inline-flex}
     .sm\:text-base{font-size:1rem;line-height:1.5rem}
   }
-</style>
-
-<!-- ================================================================
-     V2 DESIGN PASS — a top-layer of richer motion, depth and polish
-     over the existing dashboard. Deliberately additive/non-destructive:
-     everything here targets classes and ids that already exist in the
-     markup (bg-coolCard, bg-royalBlue, #modalDialog, #sideMenu, #toast,
-     header, apexcharts-canvas, etc), so no HTML or JS changes are
-     required and nothing above this block needs to be touched. Placed
-     last in <head> so it wins the cascade over the earlier utility/
-     patch stylesheets. All motion is GPU-cheap (transform/opacity) and
-     is silenced by the existing prefers-reduced-motion rule above.
-     ================================================================ -->
-<style>
-  :root{
-    --grad-1:#4f46e5;
-    --grad-2:#0891b2;
-    --grad-3:#7c3aed;
-    --glow-indigo: rgba(79,70,229,0.35);
-    --glow-cyan: rgba(14,165,199,0.35);
-    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-
-  /* ---------------------------------------------------------------
-     1. CARDS — glass sheen + animated gradient-glow border on hover,
-     richer layered shadow with real depth, gentle lift+scale.
-     --------------------------------------------------------------- */
-  .bg-coolCard{
-    position: relative;
-    background:
-      linear-gradient(180deg, rgba(255,255,255,1), rgba(250,250,255,1)) !important;
-    transition: transform .4s var(--ease-smooth), box-shadow .4s var(--ease-smooth), border-color .4s var(--ease-smooth) !important;
-  }
-  .bg-coolCard::after{
-    content:"";
-    position:absolute; inset:0;
-    border-radius:inherit;
-    padding:1px;
-    background:linear-gradient(135deg, rgba(79,70,229,0), rgba(79,70,229,0));
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor; mask-composite: exclude;
-    opacity:0;
-    transition: opacity .35s ease, background .35s ease;
-    pointer-events:none;
-  }
-  [onclick].bg-coolCard, .cursor-pointer.bg-coolCard{
-    will-change: transform;
-  }
-  [onclick].bg-coolCard:hover, .cursor-pointer.bg-coolCard:hover{
-    transform: translateY(-4px) scale(1.008) !important;
-    box-shadow:
-      0 2px 4px rgba(16,24,64,0.05),
-      0 28px 46px -18px rgba(30,41,89,0.30),
-      0 0 0 1px rgba(99,102,241,0.10) !important;
-  }
-  [onclick].bg-coolCard:hover::after, .cursor-pointer.bg-coolCard:hover::after{
-    opacity:1;
-    background:linear-gradient(135deg, var(--grad-1), var(--grad-3), var(--grad-2));
-  }
-  [onclick].bg-coolCard:active, .cursor-pointer.bg-coolCard:active{
-    transform: translateY(-1px) scale(0.995) !important;
-    transition-duration: .12s !important;
-  }
-  /* top accent line: sweep in from the left instead of a flat fade */
-  .grid > .bg-coolCard::before{
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform .45s var(--ease-smooth), opacity .2s ease;
-  }
-  .grid > .bg-coolCard:hover::before{ transform: scaleX(1); }
-
-  /* ---------------------------------------------------------------
-     2. STAT NUMBERS — quiet shimmer sweep across the big KPI figures
-     on load so they read as "alive" without being distracting.
-     --------------------------------------------------------------- */
-  @keyframes numberShimmer{
-    0%{ background-position: 200% 0; }
-    100%{ background-position: -40% 0; }
-  }
-  h3.text-3xl, h3.text-2xl{
-    background-image: linear-gradient(100deg, currentColor 38%, var(--grad-1) 48%, var(--grad-2) 52%, currentColor 62%);
-    background-size: 250% 100%;
-    -webkit-background-clip: text; background-clip: text;
-    animation: numberShimmer 2.6s var(--ease-smooth) .3s 1 both;
-  }
-
-  /* ---------------------------------------------------------------
-     3. ICON CHIPS — playful bounce + rotate on hover for the small
-     rounded icon tiles used throughout cards/lists.
-     --------------------------------------------------------------- */
-  .p-1\.5.rounded-lg, .p-2.rounded-lg, .p-2\.5.rounded-xl{
-    transition: transform .35s var(--ease-spring), background-color .2s ease, color .2s ease !important;
-  }
-  .group:hover .p-1\.5.rounded-lg,
-  .group:hover .p-2.rounded-lg,
-  .group:hover .p-2\.5.rounded-xl{
-    transform: scale(1.12) rotate(-6deg);
-  }
-
-  /* ---------------------------------------------------------------
-     4. BUTTONS — shimmer sweep on primary actions + tactile press.
-     --------------------------------------------------------------- */
-  button.bg-royalBlue, button.bg-accentBlue, button.bg-accentIndigo{
-    position: relative;
-    overflow: hidden;
-    isolation: isolate;
-  }
-  button.bg-royalBlue::before,
-  button.bg-accentBlue::before,
-  button.bg-accentIndigo::before{
-    content:"";
-    position:absolute; top:0; left:-60%; width:40%; height:100%;
-    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent);
-    transform: skewX(-20deg);
-    transition: left .55s var(--ease-smooth);
-    z-index: 1;
-    pointer-events:none;
-  }
-  button.bg-royalBlue:hover::before,
-  button.bg-accentBlue:hover::before,
-  button.bg-accentIndigo:hover::before{ left: 130%; }
-  button{ transition: transform .18s var(--ease-spring), box-shadow .2s ease, background-color .18s ease, filter .2s ease !important; }
-  button:hover{ filter: brightness(1.04); }
-  button:active{ transform: scale(0.96) !important; }
-
-  /* ---------------------------------------------------------------
-     5. HEADER — slow ambient gradient drift, like a living surface.
-     --------------------------------------------------------------- */
-  @keyframes headerAmbient{
-    0%{ background-position: 0% 50%; }
-    50%{ background-position: 100% 50%; }
-    100%{ background-position: 0% 50%; }
-  }
-  header.app-header-reveal{
-    background-size: 200% 200% !important;
-    animation: headerDropIn .55s var(--ease-smooth) both, headerAmbient 18s ease-in-out infinite;
-  }
-
-  /* ---------------------------------------------------------------
-     6. SIDEBAR — staggered nav-link entrance each time the menu opens.
-     --------------------------------------------------------------- */
-  #sideMenu.menu-open .side-menu-link,
-  #sideMenu.menu-open .menu-tile{
-    animation: navLinkIn .45s var(--ease-smooth) both;
-  }
-  @keyframes navLinkIn{
-    from{ opacity:0; transform: translateX(-10px); }
-    to{ opacity:1; transform: translateX(0); }
-  }
-  #sideMenu .side-menu-group-details:nth-of-type(1) .side-menu-link{ animation-delay: .05s; }
-  #sideMenu .side-menu-group-details:nth-of-type(2) .side-menu-link{ animation-delay: .10s; }
-  #sideMenu .side-menu-group-details:nth-of-type(3) .side-menu-link{ animation-delay: .15s; }
-  #sideMenu .side-menu-group-details:nth-of-type(4) .side-menu-link{ animation-delay: .20s; }
-  #sideMenu{ transition: transform .4s var(--ease-smooth) !important; }
-  #sideMenu.menu-open ~ * #sideMenuOverlay, #sideMenuOverlay{
-    transition: opacity .4s ease, backdrop-filter .4s ease;
-  }
-
-  /* ---------------------------------------------------------------
-     7. MODAL — spring-y pop instead of a flat scale, deeper backdrop.
-     --------------------------------------------------------------- */
-  #modalDialog{
-    transition: transform .38s var(--ease-spring), opacity .3s ease !important;
-  }
-  #dataModal:not(.hidden) #modalDialog.scale-100{
-    animation: modalPop .38s var(--ease-spring) both;
-  }
-  @keyframes modalPop{
-    0%{ opacity:0; transform: scale(.92) translateY(10px); }
-    100%{ opacity:1; transform: scale(1) translateY(0); }
-  }
-  #dataModal .bg-slate-900\/40{
-    transition: opacity .35s ease, backdrop-filter .35s ease !important;
-  }
-
-  /* ---------------------------------------------------------------
-     8. TOAST — spring bounce entrance with a gradient accent edge.
-     --------------------------------------------------------------- */
-  #toast{
-    animation: toastSpring .5s var(--ease-spring) both;
-  }
-  #toast.bg-coolCard{
-    border-left: 3px solid transparent !important;
-    border-image: linear-gradient(180deg, var(--grad-1), var(--grad-2)) 1 !important;
-  }
-  @keyframes toastSpring{
-    0%{ opacity:0; transform: translateY(16px) scale(.94); }
-    100%{ opacity:1; transform: translateY(0) scale(1); }
-  }
-
-  /* ---------------------------------------------------------------
-     9. CHARTS — fade + slight rise as they render, so the page never
-     feels like it's popping content in with no motion.
-     --------------------------------------------------------------- */
-  .apexcharts-canvas{
-    animation: chartRise .6s var(--ease-smooth) both;
-  }
-  @keyframes chartRise{
-    from{ opacity:0; transform: translateY(10px); }
-    to{ opacity:1; transform: translateY(0); }
-  }
-
-  /* ---------------------------------------------------------------
-     10. TABLE ROWS — gradient left-edge reveal on hover instead of a
-     flat background tint only.
-     --------------------------------------------------------------- */
-  tbody tr{ position: relative; transition: background-color .2s ease, transform .2s ease !important; }
-  tbody tr:hover{ transform: translateX(1px); }
-  tbody tr td:first-child{ position: relative; }
-  tbody tr:hover td:first-child::before{
-    content:"";
-    position:absolute; left:0; top:0; bottom:0; width:3px;
-    background: linear-gradient(180deg, var(--grad-1), var(--grad-2));
-    border-radius: 0 3px 3px 0;
-  }
-
-  /* ---------------------------------------------------------------
-     11. SCROLLBARS — gradient thumb with a soft glow on hover.
-     --------------------------------------------------------------- */
-  ::-webkit-scrollbar-thumb{
-    background: linear-gradient(180deg, #a5b4fc, #67e8f9) !important;
-  }
-  ::-webkit-scrollbar-thumb:hover{
-    background: linear-gradient(180deg, var(--grad-1), var(--grad-2)) !important;
-    box-shadow: 0 0 6px var(--glow-indigo);
-  }
-
-  /* ---------------------------------------------------------------
-     12. FOCUS STATES — visible, on-brand, and animated in.
-     --------------------------------------------------------------- */
-  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible{
-    outline: 2px solid var(--grad-1);
-    outline-offset: 2px;
-    transition: outline-offset .15s ease;
-  }
-
-  /* ---------------------------------------------------------------
-     13. LOADING SPLASH — shimmering brand text + smoother spinner.
-     --------------------------------------------------------------- */
-  #authCheckSplash h1, #authCheckSplash .shimmer-text{
-    background-image: linear-gradient(100deg, rgba(255,255,255,0.6) 30%, #fff 50%, rgba(255,255,255,0.6) 70%);
-    background-size: 220% 100%;
-    -webkit-background-clip: text; background-clip: text;
-    color: transparent;
-    animation: numberShimmer 2.2s linear infinite;
-  }
-
-  /* ---------------------------------------------------------------
-     14. SECTION HEADINGS — small gradient underline that grows in.
-     --------------------------------------------------------------- */
-  h2.text-lg, h2.text-xl{ position: relative; display: inline-block; }
-
-  } /* end prefers-reduced-motion guard */
 </style>
 </head>
 <body class="bg-coolDark text-slate-800 min-h-screen selection:bg-accentCyan/30 selection:text-slate-900 pb-16 relative">
@@ -5608,21 +5456,11 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
           if (!s.rows || s.rows.length === 0) return;
           const aoa = [s.headers].concat(s.rows);
           const ws = XLSX.utils.aoa_to_sheet(aoa);
-          // Long free-text columns (findings, remarks, details, etc.) need a
-          // much roomier cap than short columns like "Branch" or "Date" —
-          // capping everything at the same width is what made these sheets
-          // look squeezed. Also give every row a taller default height so
-          // wrapped/long text has room to breathe instead of clipping.
           ws['!cols'] = s.headers.map(function(h, i) {
-              const headerText = String(h);
-              let maxLen = headerText.length;
+              let maxLen = String(h).length;
               s.rows.forEach(function(r) { const v = r[i]; if (v !== undefined && v !== null) maxLen = Math.max(maxLen, String(v).length); });
-              const isLongTextColumn = /finding|remark|detail|description|note|comment|reason|summary/i.test(headerText);
-              const cap = isLongTextColumn ? 90 : 45;
-              const minWidth = isLongTextColumn ? 24 : 10;
-              return { wch: Math.min(Math.max(maxLen + 2, minWidth), cap) };
+              return { wch: Math.min(Math.max(maxLen + 2, 10), 40) };
           });
-          ws['!rows'] = [{ hpt: 20 }].concat(s.rows.map(function() { return { hpt: 18 }; }));
           // Keep the header row visible while scrolling and enable the
           // filter/sort dropdowns so large sheets stay easy to navigate.
           ws['!autofilter'] = { ref: ws['!ref'] };
@@ -5641,69 +5479,65 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       const nonEmpty = sheets.filter(function(s) { return s.rows && s.rows.length > 0; });
       if (nonEmpty.length === 0) { showToast('Nothing to export yet.'); return; }
 
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, PageOrientation, VerticalAlign } = docx;
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, TableLayoutType, PageOrientation } = docx;
 
-      // Landscape, letter-width usable area in twentieths-of-a-point (DXA):
-      // 15840 total width minus 2 x 720 (0.5") margins.
-      const PAGE_USABLE_DXA = 15840 - 1440;
-      const MIN_COL_DXA = 900;   // ~0.6" floor so short columns don't vanish
-      const LONG_TEXT_RE = /finding|remark|detail|description|note|comment|reason|summary/i;
-
-      // Evenly-split columns is exactly what squeezed these tables before —
-      // a "Finding" column and a "Date" column got the same width regardless
-      // of content. Instead, size each column by its content (with extra
-      // weight for free-text columns) and only clamp the total to the page.
-      function computeColumnWidths(headers, rows) {
-          const weights = headers.map(function(h, i) {
-              const headerText = String(h);
-              let maxLen = headerText.length;
-              rows.forEach(function(r) { const v = r[i]; if (v !== undefined && v !== null) maxLen = Math.max(maxLen, String(v).length); });
-              maxLen = Math.min(maxLen, LONG_TEXT_RE.test(headerText) ? 70 : 28);
-              return Math.max(maxLen, 6);
-          });
-          const totalWeight = weights.reduce(function(a, b) { return a + b; }, 0) || 1;
-          let widths = weights.map(function(w) { return Math.round((w / totalWeight) * PAGE_USABLE_DXA); });
-          widths = widths.map(function(w) { return Math.max(w, MIN_COL_DXA); });
-          const overflow = widths.reduce(function(a, b) { return a + b; }, 0) - PAGE_USABLE_DXA;
-          if (overflow > 0) {
-              // Shrink proportionally from columns that are above the floor,
-              // so no column gets squeezed below the readable minimum.
-              const shrinkable = widths.map(function(w) { return w > MIN_COL_DXA ? w - MIN_COL_DXA : 0; });
-              const shrinkableTotal = shrinkable.reduce(function(a, b) { return a + b; }, 0);
-              if (shrinkableTotal > 0) {
-                  widths = widths.map(function(w, i) { return w - Math.round(overflow * (shrinkable[i] / shrinkableTotal)); });
-              }
-          }
-          return widths;
-      }
+      // Landscape A4 in twentieths-of-a-point (dxa), with narrower 0.5in
+      // margins so wide sheets (e.g. the 34-column Branches table) have as
+      // much usable width as possible before columns have to shrink.
+      const PAGE_WIDTH_DXA = 16838;
+      const PAGE_HEIGHT_DXA = 11906;
+      const MARGIN_DXA = 560;
+      const USABLE_WIDTH_DXA = PAGE_WIDTH_DXA - (MARGIN_DXA * 2);
 
       function buildTable(headers, rows) {
-          const colWidths = computeColumnWidths(headers, rows);
+          const colCount = headers.length;
+
+          // Wide tables used to just get an equal 100%/colCount share per
+          // column, which crushed 30+ column sheets into unreadable slivers.
+          // Instead, size each column proportionally to its actual content
+          // (same idea as the Excel auto-width logic) so short columns like
+          // "#" stay narrow and long ones like branch names get real room,
+          // and scale the font down as column count grows so text still fits.
+          const rawWidths = headers.map(function(h, i) {
+              let maxLen = String(h).length;
+              rows.forEach(function(r) {
+                  const v = r[i];
+                  if (v !== undefined && v !== null) maxLen = Math.max(maxLen, String(v).length);
+              });
+              return Math.min(Math.max(maxLen, 4), 40);
+          });
+          const totalRaw = rawWidths.reduce(function(a, b) { return a + b; }, 0) || 1;
+          const colWidths = rawWidths.map(function(w) { return Math.max(Math.round((w / totalRaw) * USABLE_WIDTH_DXA), 400); });
+
+          const fontSize = colCount <= 8 ? 20 : colCount <= 14 ? 18 : colCount <= 22 ? 16 : 14; // half-points
+
           const headerRow = new TableRow({
               tableHeader: true,
               children: headers.map(function(h, i) {
                   return new TableCell({
                       width: { size: colWidths[i], type: WidthType.DXA },
+                      margins: { top: 60, bottom: 60, left: 80, right: 80 },
                       shading: { fill: 'E5E7EB' },
-                      verticalAlign: VerticalAlign.CENTER,
-                      margins: { top: 80, bottom: 80, left: 100, right: 100 },
-                      children: [new Paragraph({ children: [new TextRun({ text: String(h), bold: true, size: 18 })] })]
+                      children: [new Paragraph({ children: [new TextRun({ text: String(h), bold: true, size: fontSize })] })]
                   });
               })
           });
           const bodyRows = rows.map(function(r) {
               return new TableRow({
-                  cantSplit: true,
                   children: r.map(function(v, i) {
                       return new TableCell({
                           width: { size: colWidths[i], type: WidthType.DXA },
-                          margins: { top: 60, bottom: 60, left: 100, right: 100 },
-                          children: [new Paragraph({ children: [new TextRun({ text: v === undefined || v === null ? '' : String(v), size: 17 })] })]
+                          margins: { top: 40, bottom: 40, left: 80, right: 80 },
+                          children: [new Paragraph({ children: [new TextRun({ text: v === undefined || v === null ? '' : String(v), size: fontSize })] })]
                       });
                   })
               });
           });
-          return new Table({ width: { size: PAGE_USABLE_DXA, type: WidthType.DXA }, columnWidths: colWidths, rows: [headerRow].concat(bodyRows) });
+          return new Table({
+              width: { size: USABLE_WIDTH_DXA, type: WidthType.DXA },
+              layout: TableLayoutType.FIXED,
+              rows: [headerRow].concat(bodyRows)
+          });
       }
 
       const children = [
@@ -5712,16 +5546,18 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       ];
 
       nonEmpty.forEach(function(s) {
-          children.push(new Paragraph({ text: s.name, heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 150 }, pageBreakBefore: children.length > 2 }));
+          children.push(new Paragraph({ text: s.name, heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 150 } }));
           children.push(buildTable(s.headers, s.rows));
       });
 
+      // Landscape orientation (rather than the docx default portrait) so
+      // wide tables get the extra horizontal room instead of squeezing.
       const doc = new Document({
           sections: [{
               properties: {
                   page: {
-                      size: { orientation: PageOrientation.LANDSCAPE },
-                      margin: { top: 720, bottom: 720, left: 720, right: 720 }
+                      size: { width: PAGE_WIDTH_DXA, height: PAGE_HEIGHT_DXA, orientation: PageOrientation.LANDSCAPE },
+                      margin: { top: MARGIN_DXA, bottom: MARGIN_DXA, left: MARGIN_DXA, right: MARGIN_DXA }
                   }
               },
               children: children
@@ -5744,8 +5580,18 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       const pageWidth = doc.internal.pageSize.getWidth();
       const generatedLabel = 'Generated ' + new Date().toLocaleString();
 
+      // Wide sheets (e.g. the 34-column Branches table) used to get crushed
+      // into unreadably tiny cells because autoTable was forced to squeeze
+      // every column onto a single landscape page. Instead: scale the font/
+      // padding down gradually as columns increase, AND let genuinely wide
+      // tables spill onto continuation pages (repeating the first column as
+      // a row identifier) so text stays legible instead of shrinking forever.
       nonEmpty.forEach(function(s, idx) {
           if (idx > 0) doc.addPage();
+          const colCount = s.headers.length;
+          const fontSize = colCount <= 8 ? 9 : colCount <= 14 ? 7.5 : colCount <= 22 ? 6.5 : 5.5;
+          const cellPadding = colCount <= 8 ? 5 : colCount <= 14 ? 4 : colCount <= 22 ? 3 : 2;
+
           doc.setFontSize(14);
           doc.setTextColor(30, 41, 59);
           doc.text(String(title), 40, 36);
@@ -5756,29 +5602,20 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
           doc.setTextColor(148, 163, 184);
           doc.text(generatedLabel, pageWidth - 40, 36, { align: 'right' });
 
-          // Give free-text columns (findings, remarks, details, etc.) a wider
-          // minimum than short columns like "Branch" or "Date" — treating
-          // every column the same is what squeezed long text before. Tables
-          // with too many columns to fit even at that minimum spill onto
-          // extra pages (horizontalPageBreak) instead of being crushed
-          // to fit one page width.
-          const columnStyles = {};
-          s.headers.forEach(function(h, i) {
-              columnStyles[i] = { minCellWidth: /finding|remark|detail|description|note|comment|reason|summary/i.test(String(h)) ? 160 : 55 };
-          });
-
           doc.autoTable({
               head: [s.headers.map(function(h) { return String(h); })],
               body: s.rows.map(function(r) { return r.map(function(v) { return (v === undefined || v === null) ? '' : String(v); }); }),
               startY: 66,
               margin: { left: 40, right: 40, bottom: 30 },
-              styles: { fontSize: 8, cellPadding: 5, overflow: 'linebreak', valign: 'middle' },
-              headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+              styles: { fontSize: fontSize, cellPadding: cellPadding, overflow: 'linebreak', valign: 'middle' },
+              headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold', fontSize: fontSize },
               alternateRowStyles: { fillColor: [248, 250, 252] },
-              columnStyles: columnStyles,
-              horizontalPageBreak: true,
-              horizontalPageBreakRepeat: 0,
               theme: 'grid',
+              // Split wide tables across extra pages column-wise instead of
+              // squeezing everything onto one page; the first column repeats
+              // on each continuation page so rows stay identifiable.
+              horizontalPageBreak: colCount > 8,
+              horizontalPageBreakRepeat: 0,
               didDrawPage: function() {
                   const pageCount = doc.internal.getNumberOfPages();
                   doc.setFontSize(8);
@@ -9894,6 +9731,37 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     } else {
       start();
     }
+  })();
+</script>
+
+<script>
+  // Lightweight tactile "ripple" for buttons and button-role controls.
+  // Purely visual (an absolutely-positioned span with a CSS animation) and
+  // attached via a single delegated, non-capturing listener — it never
+  // calls preventDefault/stopPropagation, so every existing onclick/handler
+  // across the dashboard keeps working exactly as before.
+  (function () {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    document.addEventListener('pointerdown', function (e) {
+      if (e.button !== undefined && e.button !== 0) return; // left click / primary touch only
+      const target = e.target.closest('button, [role="button"]');
+      if (!target || target.disabled) return;
+
+      const style = getComputedStyle(target);
+      if (style.position === 'static') target.classList.add('btn-ripple-host');
+      else target.classList.add('btn-ripple-host'); // overflow:hidden is what actually matters here
+
+      const rect = target.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      const span = document.createElement('span');
+      span.className = 'btn-ripple';
+      span.style.width = span.style.height = size + 'px';
+      span.style.left = (e.clientX - rect.left - size / 2) + 'px';
+      span.style.top = (e.clientY - rect.top - size / 2) + 'px';
+      target.appendChild(span);
+      span.addEventListener('animationend', function () { span.remove(); }, { once: true });
+    }, { passive: true });
   })();
 </script>
 </body></html>
