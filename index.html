@@ -2229,242 +2229,174 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
      size themselves via padding now — no fixed pixel height needed, they
      line up naturally since they share the same py-2 padding. */
 
-  /* ---------- "Update data" header-inline loader ---------- */
-  /* Manual "Update data" clicks no longer open the full-screen overlay —
-     everything happens right here in the header button: the icon/label
-     hide and this compact scene takes their place until the fetch
-     settles. Different design from the full-screen hero animation: the
-     bike stays put and bounces on its suspension (wheels spinning, a
-     couple of motion trails behind it) over a moving dashed road,
-     rather than driving across and fading out. */
+  /* ---------- "Update data" road + motorcycle loader ---------- */
+  /* A little lane the bike drives across in a loop. Each lap eases in
+     (slow) then accelerates (fast) toward the end, so the motion itself
+     reads as "picking up speed" while the real fetch is in flight — the
+     loop just keeps repeating for as long as the request takes. */
   #updateDataRoadLoader.flex { display: flex; }
-  .hbl-scene {
+  .road-loader {
     position: relative;
-    width: 52px;
-    height: 22px;
-    border-radius: 8px;
+    width: 44px;
+    height: 18px;
     overflow: hidden;
-    background: rgba(255,255,255,0.14);
+    border-radius: 5px;
+    background: rgba(255,255,255,0.08);
     flex-shrink: 0;
   }
-  .hbl-road {
+  .road-loader-track {
     position: absolute;
-    left: 0; right: 0; bottom: 3px; height: 2px;
-    background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.9) 0 5px, transparent 5px 11px);
+    left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-50%);
+    background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 5px, transparent 5px 12px);
     background-size: 200% 100%;
-    animation: hblRoadMove 0.5s linear infinite;
+    animation: roadDashMove 1.2s cubic-bezier(.55, 0, .85, .35) infinite;
   }
-  @keyframes hblRoadMove {
+  @keyframes roadDashMove {
     from { background-position-x: 0; }
-    to   { background-position-x: -32px; }
+    to   { background-position-x: -68px; }
   }
-  .hbl-bike {
+  .road-loader-bike {
     position: absolute;
-    left: 50%; bottom: 4px;
-    width: 26px; height: 20px;
-    transform: translateX(-50%);
-    filter: drop-shadow(0 1px 1px rgba(0,0,0,.2));
-    animation: hblBikeBounce 0.32s ease-in-out infinite;
+    bottom: 1px;
+    left: -2px;
+    color: #fff;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.25));
+    animation: bikeDrive 1.2s cubic-bezier(.55, 0, .85, .35) infinite;
   }
-  @keyframes hblBikeBounce {
-    0%, 100% { transform: translateX(-50%) translateY(0) rotate(0deg); }
-    50%      { transform: translateX(-50%) translateY(-2px) rotate(-2deg); }
-  }
-  .hbl-wheel {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: hblWheelSpin 0.4s linear infinite;
-  }
-  @keyframes hblWheelSpin { to { transform: rotate(360deg); } }
-  .hbl-trail {
-    position: absolute;
-    height: 2px;
-    border-radius: 2px;
-    background: rgba(255,255,255,.85);
-    opacity: 0;
-    animation: hblTrail 0.5s ease-out infinite;
-  }
-  @keyframes hblTrail {
-    0%   { opacity: 0;  transform: translateX(4px); }
-    30%  { opacity: .8; }
-    100% { opacity: 0;  transform: translateX(-8px); }
-  }
-  /* Once the data has fully loaded, setUpdateDataBtnLoading() adds this
-     class for one quick beat before swapping the loader back out for the
-     normal icon — a little "done!" pulse instead of the old zoom-off
-     (there's no room to actually drive off in a button this small, so a
-     pulse reads more clearly here). */
-  #updateDataRoadLoader.hbl-finish .hbl-scene {
-    animation: hblFinishPulse 0.3s ease-out 1;
-  }
-  @keyframes hblFinishPulse {
-    0%   { transform: scale(1); }
-    50%  { transform: scale(1.12); }
-    100% { transform: scale(1); }
+  @keyframes bikeDrive {
+    0%   { transform: translateX(0) scale(0.85); opacity: .75; }
+    85%  { transform: translateX(24px) scale(1); opacity: 1; }
+    100% { transform: translateX(30px) scale(1.02); opacity: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .hbl-road, .hbl-bike, .hbl-wheel, .hbl-trail { animation: none !important; }
+    .road-loader-track, .road-loader-bike { animation: none !important; }
+    .road-loader-bike { left: 12px; opacity: 1; transform: none; }
   }
 
-  /* ---------- Full-screen loading overlay's cartoon "biker on the road" ----------
-     Only shown once, right after sign-in, while the dashboard's first load
-     settles — manual "Update data" clicks stay in the header now (see
-     .hbl-scene above) and never touch this overlay. This is the hero
-     visual that lives inside the loading card itself: a small cartoon
-     scene (sky, sun, drifting clouds, rolling hills, a road) with a
-     cartoon rider bouncing along it. Same slow-while-loading /
-     fast-once-done idea as before, just a full illustration instead of a
-     single-color stick-figure line icon. */
-  .cartoon-scene {
-    position: relative;
-    width: 100%;
-    max-width: 260px;
-    height: 132px;
-    margin: 0 auto;
-    border-radius: 18px;
+  /* ---------- Header "Update data" ride overlay ---------- */
+  /* Plays across the full width of the header: a cartoon figure walks a
+     few steps, hops on a motorcycle, then rides off — slow at first,
+     picking up speed until it exits past the right edge. Runs on every
+     manual "Update data" click and every silent auto-refresh; the real
+     fetch is held open for the same minimum duration so the animation is
+     always seen in full before "Last synced" updates. */
+  #headerRideOverlay {
+    position: absolute; inset: 0; z-index: 55;
     overflow: hidden;
-    background: linear-gradient(180deg, #bfe4ff 0%, #eaf6ff 65%, #eaf6ff 100%);
-    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .06);
-  }
-  .cs-percent {
-    position: absolute;
-    top: 8px; left: 8px;
-    z-index: 2;
-  }
-  .cs-sun {
-    position: absolute;
-    top: 12px; right: 18px;
-    width: 26px; height: 26px;
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, #ffe58a, #ffc93f);
-    animation: csSunPulse 2.6s ease-in-out infinite;
-  }
-  @keyframes csSunPulse {
-    0%, 100% { transform: scale(1); opacity: .95; }
-    50%      { transform: scale(1.08); opacity: 1; }
-  }
-  .cs-cloud {
-    position: absolute;
-    width: 30px; height: 11px;
-    border-radius: 999px;
-    background: #ffffff;
-    opacity: .95;
-  }
-  .cs-cloud::before, .cs-cloud::after {
-    content: '';
-    position: absolute;
-    background: #ffffff;
-    border-radius: 50%;
-  }
-  .cs-cloud::before { width: 15px; height: 15px; top: -6px; left: 3px; }
-  .cs-cloud::after  { width: 11px; height: 11px; top: -4px; left: 16px; }
-  .cs-cloud-1 { top: 16px; left: -40px; animation: csCloudDrift 7s linear infinite; }
-  .cs-cloud-2 { top: 32px; left: -80px; transform: scale(.7); animation: csCloudDrift 9.5s linear infinite; animation-delay: -3s; }
-  @keyframes csCloudDrift {
-    from { transform: translateX(0); }
-    to   { transform: translateX(320px); }
-  }
-  .cs-hills {
-    position: absolute;
-    left: 0; right: 0; bottom: 34px; height: 50px;
-    overflow: hidden;
-  }
-  .cs-hill {
-    position: absolute;
-    bottom: -22px;
-    width: 120px; height: 60px;
-    border-radius: 50%;
-    animation: csHillScroll linear infinite;
-  }
-  .cs-hill-back  { background: #cdebd6; animation-duration: 6s; }
-  .cs-hill-front { background: #a3e0b4; bottom: -30px; animation-duration: 3.2s; }
-  @keyframes csHillScroll {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-120px); }
-  }
-  .cs-road {
-    position: absolute;
-    left: 0; right: 0; bottom: 0; height: 34px;
-    background: #4b5265;
-  }
-  .cs-road-line {
-    position: absolute;
-    left: 0; right: 0; top: 50%; height: 3px; transform: translateY(-50%);
-    background-image: repeating-linear-gradient(90deg, #ffe58a 0 14px, transparent 14px 30px);
-    background-size: 200% 100%;
-    animation: csRoadMove 0.6s linear infinite;
-  }
-  @keyframes csRoadMove {
-    from { background-position-x: 0; }
-    to   { background-position-x: -44px; }
-  }
-  .cs-speed-line {
-    position: absolute;
-    height: 2px;
-    border-radius: 2px;
-    background: rgba(255,255,255,.85);
     opacity: 0;
-    animation: csSpeedLine 0.55s ease-out infinite;
+    pointer-events: none;
+    transition: opacity .3s ease;
   }
-  @keyframes csSpeedLine {
-    0%   { opacity: 0;  transform: translateX(8px); }
-    30%  { opacity: .9; }
-    100% { opacity: 0;  transform: translateX(-16px); }
+  #headerRideOverlay.header-ride-visible {
+    opacity: 1;
   }
-  .cs-rider {
-    position: absolute;
-    left: 34%; bottom: 18px;
-    width: 64px; height: 48px;
-    transform-origin: bottom center;
-    animation: csBikeBounce 0.34s ease-in-out infinite;
+  .header-ride-scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(115deg, #3730a3 0%, #4f46e5 45%, #0891b2 100%);
   }
-  @keyframes csBikeBounce {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50%      { transform: translateY(-3px) rotate(-1.5deg); }
+  .header-ride-caption {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #fff; font-weight: 700; font-size: .8rem; letter-spacing: .01em;
+    display: flex; align-items: center; gap: .5rem; white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,.25);
   }
-  .cs-wheel {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: csWheelSpin 0.45s linear infinite;
+  .header-ride-caption .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #6ee7b7;
+    animation: headerRideDotPulse 1s ease-in-out infinite;
   }
-  @keyframes csWheelSpin { to { transform: rotate(360deg); } }
-  /* Added once the fetch actually succeeds, right as revealDashboard()
-     starts its "Dashboard ready!" beat — the rider zooms off the right
-     edge while the road blurs by underneath, a quick "made it!" flourish
-     before the whole overlay fades out. */
-  #loadingCore.loading-road-finish .cs-rider {
-    animation: csBikeZoomOff 0.5s cubic-bezier(.2, .8, .2, 1) 1 forwards;
+  @keyframes headerRideDotPulse { 0%,100%{ opacity:.4; transform:scale(.8);} 50%{ opacity:1; transform:scale(1.15);} }
+  .header-ride-road {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 5px;
+    background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.65) 0 26px, transparent 26px 52px);
+    background-size: 78px 100%;
+    animation: headerRoadDash .5s linear infinite;
   }
-  #loadingCore.loading-road-finish .cs-road-line {
-    animation: csRoadMove 0.18s linear 2;
+  @keyframes headerRoadDash { from { background-position-x: 0; } to { background-position-x: -78px; } }
+
+  .ride-rig {
+    position: absolute; bottom: 4px; left: 0;
+    width: 64px; height: 56px;
   }
-  #loadingCore.loading-road-finish .cs-hill {
-    animation-duration: .5s;
+  .ride-rig .walk-figure, .ride-rig .bike-figure {
+    position: absolute; bottom: 0; left: 0;
   }
-  @keyframes csBikeZoomOff {
-    0%   { transform: translateX(0) translateY(0) rotate(0deg) scale(1); opacity: 1; }
-    100% { transform: translateX(170px) translateY(-6px) rotate(-4deg) scale(1.05); opacity: 0; }
+  .ride-rig .walk-figure { opacity: 1; }
+  .ride-rig .bike-figure { opacity: 0; }
+
+  /* Walking cycle: legs/arms swing while the figure is on foot (first ~20%
+     of the timeline only — see walkFigureFade below). */
+  .walk-leg-l, .walk-leg-r, .walk-arm-l, .walk-arm-r {
+    transform-box: fill-box; transform-origin: top center;
+    animation: headerWalkSwing .34s ease-in-out infinite;
+  }
+  .walk-leg-r, .walk-arm-l { animation-delay: .17s; }
+  @keyframes headerWalkSwing {
+    0%, 100% { transform: rotate(22deg); }
+    50% { transform: rotate(-22deg); }
+  }
+  .walk-figure { animation: headerBob .34s ease-in-out infinite; }
+  @keyframes headerBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+
+  .bike-figure .wheel-r, .bike-figure .wheel-f {
+    transform-box: fill-box; transform-origin: center;
+    animation: headerWheelSpin .2s linear infinite;
+  }
+  @keyframes headerWheelSpin { to { transform: rotate(360deg); } }
+  .bike-figure .puff { transform-box: fill-box; transform-origin: center; opacity: 0; }
+  .bike-figure .puff.p1 { animation: headerPuff .5s ease-out infinite; }
+  .bike-figure .puff.p2 { animation: headerPuff .5s ease-out .17s infinite; }
+  .bike-figure .puff.p3 { animation: headerPuff .5s ease-out .34s infinite; }
+  @keyframes headerPuff {
+    0% { opacity: .6; transform: translate(0,0) scale(.5); }
+    100% { opacity: 0; transform: translate(-12px,-8px) scale(1.3); }
+  }
+  .header-ride-speedlines {
+    position: absolute; bottom: 14px; height: 2px; border-radius: 2px;
+    background: rgba(255,255,255,.6);
+    opacity: 0;
+  }
+
+  /* Master timeline, applied to #headerRideRig when the animation should
+     play: walk in from the left, pause to "mount up", then ride off to
+     the right, easing in slow and finishing fast so it reads as building
+     speed, landing just past the header's right edge. */
+  .header-ride-play .walk-figure {
+    animation: headerWalkFade 5s steps(1) forwards, headerBob .34s ease-in-out infinite;
+  }
+  .header-ride-play .bike-figure {
+    animation: headerBikeFade 5s steps(1) forwards;
+  }
+  .header-ride-play.ride-rig {
+    animation: headerRigMove 5s cubic-bezier(.45, 0, .7, 1) forwards;
+  }
+  .header-ride-play .header-ride-speedlines {
+    animation: headerSpeedFade 5s steps(1) forwards;
+  }
+  @keyframes headerWalkFade {
+    0%, 20% { opacity: 1; }
+    24%, 100% { opacity: 0; }
+  }
+  @keyframes headerBikeFade {
+    0%, 20% { opacity: 0; }
+    24%, 100% { opacity: 1; }
+  }
+  @keyframes headerSpeedFade {
+    0%, 45% { opacity: 0; }
+    55%, 92% { opacity: .8; }
+    100% { opacity: 0; }
+  }
+  @keyframes headerRigMove {
+    0%   { transform: translateX(0); }
+    18%  { transform: translateX(9vw); }
+    24%  { transform: translateX(9vw); }
+    45%  { transform: translateX(22vw); }
+    70%  { transform: translateX(52vw); }
+    100% { transform: translateX(135vw); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .cs-sun, .cs-cloud-1, .cs-cloud-2, .cs-hill, .cs-road-line, .cs-rider, .cs-wheel, .cs-speed-line {
-      animation: none !important;
-    }
-  }
-  .cs-progress-track {
-    width: 100%;
-    max-width: 260px;
-    height: 6px;
-    margin: 12px auto 0;
-    border-radius: 999px;
-    background: #e2e4e9;
-    overflow: hidden;
-  }
-  .cs-progress-fill {
-    height: 100%;
-    width: 0%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #3730a3, #4f46e5);
-    transition: width .25s linear;
+    .header-ride-play, .header-ride-play .walk-figure, .header-ride-play .bike-figure,
+    .walk-leg-l, .walk-leg-r, .walk-arm-l, .walk-arm-r, .bike-figure .wheel-r, .bike-figure .wheel-f,
+    .bike-figure .puff, .header-ride-road, .header-ride-play .header-ride-speedlines { animation: none !important; }
   }
 
   /* Once-a-minute settle so the date/minute change doesn't feel like a jump cut */
@@ -2720,73 +2652,203 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     #loadingStatusText {
       animation: loadFadeUp .35s ease-out;
     }
+
+    /* ===================== Sunset -> Sunrise loading scene =====================
+       A single tall sky gradient is panned vertically on a loop (sunset at the
+       top, night in the middle, sunrise/day at the bottom) so the colour shift
+       reads as smooth time passing instead of hard cross-fades. Sun/moon, stars
+       and a cartoon motorcycle rider are layered on top so the whole loading
+       wait becomes a tiny scene instead of a bare progress indicator. */
+    #loadingScreen { background: #0b0c2a; }
+    .loading-scene-sky {
+      position: absolute; inset: 0; overflow: hidden; z-index: 0;
+    }
+    .loading-scene-sky-strip {
+      position: absolute; left: -5%; right: -5%; top: 0; height: 480%;
+      background: linear-gradient(to bottom,
+        #ff7e5f 0%, #ff9a66 6%, #feb47b 11%,
+        #d9678f 16%, #8a5aa8 21%, #4c3d8f 27%,
+        #26235f 33%, #14153f 40%, #0b0c2a 47%, #07081f 53%,
+        #0b0c2a 58%, #1c1f52 65%, #4a3f7a 71%, #8a6a9a 76%,
+        #d98a7a 81%, #f4a97a 86%, #ffd89e 91%, #bfe3d8 96%, #bfe3f2 100%);
+      animation: skyScroll 7s ease-in-out infinite alternate;
+      will-change: transform;
+    }
+    @keyframes skyScroll {
+      from { transform: translateY(0%); }
+      to   { transform: translateY(-79%); }
+    }
+    .loading-star {
+      position: absolute; width: 3px; height: 3px; border-radius: 50%;
+      background: #fff; box-shadow: 0 0 4px 1px rgba(255,255,255,.8);
+      opacity: 0;
+      animation: starTwinkle 7s ease-in-out infinite alternate;
+    }
+    @keyframes starTwinkle {
+      0%, 100% { opacity: 0; }
+      30% { opacity: 0; }
+      42% { opacity: 1; }
+      50% { opacity: .4; }
+      58% { opacity: 1; }
+      70% { opacity: 0; }
+    }
+    .loading-sun-moon { position: absolute; left: 50%; top: 46%; z-index: 1; filter: drop-shadow(0 0 14px rgba(255,220,140,.5)); }
+    .loading-sun {
+      animation: sunPath 7s ease-in-out infinite alternate;
+    }
+    @keyframes sunPath {
+      0%   { transform: translate(-46%, -10%) scale(1);   opacity: 1; }
+      16%  { transform: translate(-70%, 70%)  scale(.8);   opacity: 0; }
+      84%  { transform: translate(20%, 70%)   scale(.8);   opacity: 0; }
+      100% { transform: translate(46%, -14%)  scale(1);    opacity: 1; }
+    }
+    .loading-moon {
+      filter: drop-shadow(0 0 10px rgba(200,210,255,.5));
+      animation: moonPath 7s ease-in-out infinite alternate;
+    }
+    @keyframes moonPath {
+      0%, 18%  { transform: translate(-60%, 60%) scale(.7); opacity: 0; }
+      35% { transform: translate(-25%, -30%) scale(.9); opacity: 1; }
+      50% { transform: translate(0%, -46%) scale(1); opacity: 1; }
+      65% { transform: translate(25%, -30%) scale(.9); opacity: 1; }
+      82%, 100% { transform: translate(55%, 60%) scale(.7); opacity: 0; }
+    }
+    .loading-cloud {
+      position: absolute; width: 90px; height: 28px; z-index: 1;
+      background: rgba(255,255,255,.55);
+      border-radius: 50px;
+      animation: cloudDrift linear infinite;
+    }
+    .loading-cloud::before, .loading-cloud::after {
+      content: ""; position: absolute; background: rgba(255,255,255,.55); border-radius: 50%;
+    }
+    .loading-cloud::before { width: 46px; height: 46px; top: -20px; left: 10px; }
+    .loading-cloud::after { width: 34px; height: 34px; top: -14px; left: 46px; }
+    @keyframes cloudDrift { from { transform: translateX(0); } to { transform: translateX(140vw); } }
+    .loading-hills {
+      position: absolute; left: -5%; right: -5%; bottom: 15%; height: 90px; z-index: 1;
+      background: #241a3d;
+      clip-path: polygon(0% 100%, 0% 55%, 8% 40%, 18% 58%, 28% 30%, 38% 52%, 50% 20%, 62% 50%, 74% 34%, 86% 56%, 94% 42%, 100% 60%, 100% 100%);
+      opacity: .75;
+    }
+
+    .loading-scene-road {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 15%; z-index: 2;
+      background: #1f2430;
+      border-top: 3px solid #3a4152;
+      overflow: hidden;
+    }
+    .loading-road-lane {
+      position: absolute; left: -10%; right: -10%; top: 50%; height: 6px; transform: translateY(-50%);
+      background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.85) 0 40px, transparent 40px 90px);
+      background-size: 260px 100%;
+      animation: loadingRoadDash 1.1s linear infinite;
+    }
+    @keyframes loadingRoadDash { from { background-position-x: 0; } to { background-position-x: -260px; } }
+    .loading-rig {
+      position: absolute; bottom: 6%; left: 6%;
+      animation: loadingRigCruise 8s ease-in-out infinite alternate, loadingRigBounce .3s ease-in-out infinite;
+      filter: drop-shadow(0 6px 4px rgba(0,0,0,.35));
+    }
+    @keyframes loadingRigCruise {
+      0%   { transform: translateX(0) scale(.85); }
+      50%  { transform: translateX(58vw) scale(1.05); }
+      100% { transform: translateX(78vw) scale(1.1); }
+    }
+    @keyframes loadingRigBounce {
+      0%, 100% { margin-bottom: 0px; }
+      50% { margin-bottom: 4px; }
+    }
+    .loading-bike-svg .wheel-rear, .loading-bike-svg .wheel-front {
+      transform-origin: center; animation: loadingWheelSpin .45s linear infinite;
+    }
+    @keyframes loadingWheelSpin { to { transform: rotate(360deg); } }
+    .exhaust-puff { transform-origin: center; opacity: 0; }
+    .exhaust-puff.p1 { animation: puffOut 1.1s ease-out infinite; }
+    .exhaust-puff.p2 { animation: puffOut 1.1s ease-out .35s infinite; }
+    .exhaust-puff.p3 { animation: puffOut 1.1s ease-out .7s infinite; }
+    @keyframes puffOut {
+      0%   { opacity: .55; transform: translate(0,0) scale(.6); }
+      100% { opacity: 0; transform: translate(-16px,-10px) scale(1.4); }
+    }
+    .loading-caption-card {
+      position: relative; z-index: 3;
+      margin-top: auto; margin-bottom: 8%;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .loading-scene-sky-strip, .loading-star, .loading-sun, .loading-moon, .loading-cloud,
+      .loading-road-lane, .loading-rig, .loading-bike-svg .wheel-rear, .loading-bike-svg .wheel-front,
+      .exhaust-puff { animation: none !important; }
+    }
   </style>
 
-  <div id="loadingScreen" class="fixed inset-0 z-[9999] hidden items-center justify-center" style="display:none; opacity:1; transition: opacity .35s ease;">
-    <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 text-center">
+  <div id="loadingScreen" class="fixed inset-0 z-[9999] hidden flex-col items-center justify-end" style="display:none; opacity:1; transition: opacity .35s ease;">
 
-      <div id="loadingCore">
-        <!-- Cartoon "biker on the road" hero animation: a rider bounces down
-             a road past drifting clouds and rolling hills the whole time the
-             fetch is in flight, then zooms off the edge (.loading-road-finish,
-             toggled from revealDashboard() below) right as data finishes
-             loading — replaces the old spinner-ring + equalizer-bar combo. -->
-        <div class="cartoon-scene mb-4" aria-hidden="true">
-          <span id="loadingPercent" class="cs-percent text-[10px] font-bold text-slate-600 bg-white/90 rounded-full px-1.5 py-0.5 shadow-sm">0%</span>
-          <div class="cs-sun"></div>
-          <div class="cs-cloud cs-cloud-1"></div>
-          <div class="cs-cloud cs-cloud-2"></div>
-          <div class="cs-hills">
-            <div class="cs-hill cs-hill-back" style="left:0"></div>
-            <div class="cs-hill cs-hill-back" style="left:120px"></div>
-            <div class="cs-hill cs-hill-back" style="left:240px"></div>
-            <div class="cs-hill cs-hill-front" style="left:-30px"></div>
-            <div class="cs-hill cs-hill-front" style="left:90px"></div>
-            <div class="cs-hill cs-hill-front" style="left:210px"></div>
-          </div>
-          <span class="cs-speed-line" style="left:12px; bottom:26px; width:14px; animation-delay:0s;"></span>
-          <span class="cs-speed-line" style="left:8px; bottom:34px; width:10px; animation-delay:.15s;"></span>
-          <span class="cs-speed-line" style="left:14px; bottom:18px; width:8px; animation-delay:.3s;"></span>
-          <svg class="cs-rider" viewBox="0 0 64 48" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 34 Q10 24 22 22 L38 22 Q46 22 48 30 L50 34" fill="none" stroke="#3730a3" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
-            <path d="M40 22 L44 12" fill="none" stroke="#3730a3" stroke-width="3" stroke-linecap="round"></path>
-            <circle cx="44" cy="10" r="3" fill="#ffc93f"></circle>
-            <path d="M25 16 Q22 12 27 9 L33 9 Q39 10 38 16 L36 22 L26 22 Z" fill="#e11d5f"></path>
-            <circle cx="30" cy="9" r="6" fill="#ffdcb0"></circle>
-            <path d="M25 6 Q30 1 35 5 Q37 9 33 10.5 Q35 6 30 5.5 Q26.5 5.5 25 6 Z" fill="#4f46e5"></path>
-            <rect x="27" y="8.5" width="7" height="2.6" rx="1.3" fill="#1f2937"></rect>
-            <path d="M36 15 L44 12" stroke="#c2184f" stroke-width="3" stroke-linecap="round"></path>
-            <path d="M28 20 L20 26 L18 30" stroke="#1f2937" stroke-width="3" stroke-linecap="round"></path>
-            <g class="cs-wheel">
-              <circle cx="16" cy="34" r="7" fill="#1f2937"></circle>
-              <circle cx="16" cy="34" r="3" fill="#c7cad1"></circle>
-              <path d="M16 28 L16 40 M10 34 L22 34 M12 30 L20 38 M20 30 L12 38" stroke="#4b5265" stroke-width="1"></path>
-            </g>
-            <g class="cs-wheel">
-              <circle cx="48" cy="34" r="7" fill="#1f2937"></circle>
-              <circle cx="48" cy="34" r="3" fill="#c7cad1"></circle>
-              <path d="M48 28 L48 40 M42 34 L54 34 M44 30 L52 38 M52 30 L44 38" stroke="#4b5265" stroke-width="1"></path>
+    <div id="loadingCore" class="absolute inset-0 flex flex-col items-center justify-end">
+      <!-- Animated sunset -> night -> sunrise sky -->
+      <div class="loading-scene-sky">
+        <div class="loading-scene-sky-strip"></div>
+        <div class="loading-star" style="top:10%; left:16%;"></div>
+        <div class="loading-star" style="top:18%; left:68%;"></div>
+        <div class="loading-star" style="top:8%; left:44%;"></div>
+        <div class="loading-star" style="top:26%; left:84%;"></div>
+        <div class="loading-star" style="top:15%; left:30%;"></div>
+        <div class="loading-star" style="top:22%; left:54%;"></div>
+        <div class="loading-star" style="top:12%; left:92%;"></div>
+        <div class="loading-sun-moon loading-sun">
+          <svg viewBox="0 0 60 60" width="56" height="56"><circle cx="30" cy="30" r="21" fill="#ffdd66"></circle><circle cx="30" cy="30" r="21" fill="none" stroke="#fff3b0" stroke-width="4" opacity=".5"></circle></svg>
+        </div>
+        <div class="loading-sun-moon loading-moon">
+          <svg viewBox="0 0 60 60" width="46" height="46"><circle cx="30" cy="30" r="19" fill="#eef2fb"></circle><circle cx="24" cy="24" r="4" fill="#cfd6ea"></circle><circle cx="37" cy="34" r="3" fill="#cfd6ea"></circle><circle cx="22" cy="37" r="2.4" fill="#cfd6ea"></circle></svg>
+        </div>
+        <div class="loading-cloud" style="top:12%; left:-15%; animation-duration:20s;"></div>
+        <div class="loading-cloud" style="top:24%; left:-45%; animation-duration:28s; animation-delay:-9s; transform:scale(.65);"></div>
+        <div class="loading-hills"></div>
+      </div>
+
+      <!-- Foreground road with the cartoon motorcycle rider -->
+      <div class="loading-scene-road">
+        <div class="loading-road-lane"></div>
+        <div class="loading-rig">
+          <svg viewBox="0 0 200 120" width="150" height="90" class="loading-bike-svg">
+            <ellipse cx="100" cy="108" rx="66" ry="6" fill="rgba(0,0,0,.22)"></ellipse>
+            <g class="wheel-rear"><circle cx="46" cy="88" r="20" fill="#1e2430"></circle><circle cx="46" cy="88" r="20" fill="none" stroke="#555" stroke-width="2"></circle><circle cx="46" cy="88" r="7" fill="#c7cad1"></circle><g stroke="#7c8291" stroke-width="2"><line x1="46" y1="70" x2="46" y2="106"></line><line x1="28" y1="88" x2="64" y2="88"></line><line x1="33" y1="75" x2="59" y2="101"></line><line x1="59" y1="75" x2="33" y2="101"></line></g></g>
+            <g class="wheel-front"><circle cx="150" cy="88" r="20" fill="#1e2430"></circle><circle cx="150" cy="88" r="20" fill="none" stroke="#555" stroke-width="2"></circle><circle cx="150" cy="88" r="7" fill="#c7cad1"></circle><g stroke="#7c8291" stroke-width="2"><line x1="150" y1="70" x2="150" y2="106"></line><line x1="132" y1="88" x2="168" y2="88"></line><line x1="137" y1="75" x2="163" y2="101"></line><line x1="163" y1="75" x2="137" y2="101"></line></g></g>
+            <path d="M46 88 L86 60 L118 60 L150 88" fill="none" stroke="#d64545" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M86 60 L100 40 L128 40 L118 60 Z" fill="#e8534f"></path>
+            <ellipse cx="112" cy="55" rx="24" ry="10" fill="#c72f2f"></ellipse>
+            <rect x="128" y="46" width="16" height="9" rx="3" fill="#333"></rect>
+            <circle cx="150" cy="50" r="6" fill="#ffe27a"></circle>
+            <circle class="exhaust-puff p1" cx="40" cy="95" r="4" fill="#cbd5e1"></circle>
+            <circle class="exhaust-puff p2" cx="34" cy="92" r="5" fill="#cbd5e1"></circle>
+            <circle class="exhaust-puff p3" cx="28" cy="90" r="6" fill="#cbd5e1"></circle>
+            <g class="rider">
+              <path d="M100 44 Q90 30 78 34" fill="none" stroke="#1e293b" stroke-width="8" stroke-linecap="round"></path>
+              <ellipse cx="96" cy="30" rx="12" ry="11" fill="#1e293b"></ellipse>
+              <path d="M92 22 Q96 16 104 20" fill="none" stroke="#f2c14e" stroke-width="4" stroke-linecap="round"></path>
+              <path d="M100 44 Q112 55 108 66" fill="none" stroke="#334155" stroke-width="10" stroke-linecap="round"></path>
+              <path d="M108 66 Q118 62 128 58" fill="none" stroke="#1e293b" stroke-width="8" stroke-linecap="round"></path>
+              <path d="M78 34 Q70 44 74 54" fill="none" stroke="#1e293b" stroke-width="8" stroke-linecap="round"></path>
             </g>
           </svg>
-          <div class="cs-road"><span class="cs-road-line"></span></div>
         </div>
-        <div class="cs-progress-track">
-          <div id="loadingRingProgress" class="cs-progress-fill"></div>
-        </div>
-        <h2 id="loadingTitleText" class="text-lg font-bold text-slate-900 mt-4 mb-1">Preparing your dashboard</h2>
+      </div>
+
+      <div class="bg-coolCard/95 backdrop-blur border border-coolBorder rounded-2xl shadow-2xl px-6 py-4 w-full max-w-xs mx-4 text-center loading-caption-card">
+        <h2 id="loadingTitleText" class="text-base font-bold text-slate-900 mb-0.5">Preparing your dashboard</h2>
         <p id="loadingStatusText" class="text-xs text-slate-500 min-h-[1rem]">Connecting to secure server&hellip;</p>
       </div>
-
-      <div id="loadingError" class="hidden">
-        <div class="w-14 h-14 rounded-2xl bg-accentRose/10 flex items-center justify-center mx-auto mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path></svg>
-        </div>
-        <h2 class="text-lg font-bold text-slate-900 mb-1">Couldn't load the dashboard</h2>
-        <p class="text-xs text-slate-500 mb-4">We couldn't sync the latest audit data. Check your connection and try again.</p>
-        <button id="loadingRetryBtn" class="w-full py-2.5 bg-accentIndigo text-white text-sm font-semibold rounded-xl hover:bg-accentIndigo/90 active:scale-[0.98] transition-all">Retry</button>
-      </div>
-
     </div>
+
+    <div id="loadingError" class="hidden relative z-10 bg-coolCard border border-coolBorder rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 text-center">
+      <div class="w-14 h-14 rounded-2xl bg-accentRose/10 flex items-center justify-center mx-auto mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-accentRose"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path></svg>
+      </div>
+      <h2 class="text-lg font-bold text-slate-900 mb-1">Couldn't load the dashboard</h2>
+      <p class="text-xs text-slate-500 mb-4">We couldn't sync the latest audit data. Check your connection and try again.</p>
+      <button id="loadingRetryBtn" class="w-full py-2.5 bg-accentIndigo text-white text-sm font-semibold rounded-xl hover:bg-accentIndigo/90 active:scale-[0.98] transition-all">Retry</button>
+    </div>
+
   </div>
 
   <script>
@@ -3151,13 +3213,14 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       const loadingCore = document.getElementById('loadingCore');
       const loadingErrorBox = document.getElementById('loadingError');
       const loadingRetryBtn = document.getElementById('loadingRetryBtn');
-      const loadingRing = document.getElementById('loadingRingProgress');
-      const loadingPercentEl = document.getElementById('loadingPercent');
       const loadingStatusEl = document.getElementById('loadingStatusText');
       const loadingTitleEl = document.getElementById('loadingTitleText');
 
-      const RING_CIRCUMFERENCE = 339.292;
-      const MIN_LOADING_MS = 450;
+      // The sunset -> sunrise scene (sky pan + motorcycle rider) needs a
+      // few seconds to actually read as an animation rather than a flash,
+      // so every loading screen — first sign-in or a manual retry — stays
+      // up for at least this long even if the data itself is ready sooner.
+      const MIN_LOADING_MS = 5200;
       const STATUS_MESSAGES = [
         'Connecting to secure server\u2026',
         'Fetching latest audit records\u2026',
@@ -3169,20 +3232,12 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
 
       let statusIndex = 0;
       let statusTimer = null;
-      let progressTimer = null;
-      let fakeProgress = 0;
       // Bumped every time a new loading operation starts. Async callbacks
       // from an older operation (e.g. the initial post-login load still
       // settling when someone quickly clicks "Update data") capture the
       // token active at their start and check it before touching the UI,
       // so a stale finish can't clobber whatever is currently showing.
       let generation = 0;
-
-      function setRingProgress(pct) {
-        const clamped = Math.max(0, Math.min(100, pct));
-        loadingRing.style.width = clamped + '%';
-        loadingPercentEl.textContent = Math.round(clamped) + '%';
-      }
 
       function cycleStatus() {
         loadingStatusEl.style.animation = 'none';
@@ -3195,21 +3250,13 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
 
       function startProgress(messages) {
         currentMessages = (messages && messages.length) ? messages : STATUS_MESSAGES;
-        fakeProgress = 0;
         statusIndex = 0;
-        setRingProgress(0);
         cycleStatus();
         statusTimer = setInterval(cycleStatus, 1500);
-        progressTimer = setInterval(function() {
-          fakeProgress += (92 - fakeProgress) * 0.09 + 0.3;
-          if (fakeProgress > 92) fakeProgress = 92;
-          setRingProgress(fakeProgress);
-        }, 180);
       }
 
       function stopProgress() {
         clearInterval(statusTimer);
-        clearInterval(progressTimer);
       }
 
       function openLoadingScreen(opts) {
@@ -3218,7 +3265,6 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
         const token = generation;
         loadingErrorBox.classList.add('hidden');
         loadingCore.classList.remove('hidden');
-        loadingCore.classList.remove('loading-road-finish');
         loadingScreen.classList.remove('hidden');
         loadingScreen.style.display = 'flex';
         loadingScreen.style.opacity = '1';
@@ -3238,13 +3284,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       function revealDashboard(readyText, token) {
         if (token !== undefined && token !== generation) return; // superseded by a newer operation
         stopProgress();
-        setRingProgress(100);
         loadingStatusEl.textContent = readyText || 'Dashboard ready!';
-        // Fast "made it!" pass on the road strip — same slow-then-fast idea
-        // as the header's small loader, just actually visible here since
-        // this overlay is what's on top of the header during the load.
-        const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!reduceMotion) loadingCore.classList.add('loading-road-finish');
         setTimeout(function() {
           if (token !== undefined && token !== generation) return;
           loadingScreen.style.opacity = '0';
@@ -3518,7 +3558,56 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     <span id="toast-message" class="text-sm font-semibold">Dashboard successfully updated from Web Link!</span>
   </div>
 
-  <header class="border-b border-blue-800 sticky top-0 z-40 shadow-md app-header-reveal" style="background: linear-gradient(115deg, #3730a3 0%, #4f46e5 45%, #0891b2 100%);">
+  <header class="relative border-b border-blue-800 sticky top-0 z-40 shadow-md app-header-reveal" style="background: linear-gradient(115deg, #3730a3 0%, #4f46e5 45%, #0891b2 100%);">
+
+    <!-- Plays over the whole header on every "Update data" click and every
+         auto-refresh: a little cartoon figure walks up, hops on a
+         motorcycle, and rides off the right edge, slow-to-fast. See
+         showHeaderRideOverlay()/hideHeaderRideOverlay() further down. -->
+    <div id="headerRideOverlay" aria-hidden="true">
+      <div class="header-ride-scrim"></div>
+      <div class="header-ride-road"></div>
+      <div id="headerRideRig" class="ride-rig">
+        <div class="header-ride-speedlines" style="left:4px; width:14px;"></div>
+        <div class="header-ride-speedlines" style="left:2px; width:22px; bottom:20px;"></div>
+
+        <svg class="walk-figure" viewBox="0 0 40 56" width="34" height="48">
+          <circle cx="20" cy="9" r="6.5" fill="#ffd9a8"></circle>
+          <path d="M15 6 Q20 1 26 6 L25 9 Q20 5 16 9 Z" fill="#2b2f45"></path>
+          <rect x="14" y="16" width="12" height="18" rx="5" fill="#f4f6ff"></rect>
+          <g class="walk-arm-l"><rect x="9" y="17" width="5" height="14" rx="2.5" fill="#e2e6f5"></rect></g>
+          <g class="walk-arm-r"><rect x="26" y="17" width="5" height="14" rx="2.5" fill="#e2e6f5"></rect></g>
+          <g class="walk-leg-l"><rect x="15" y="33" width="5.5" height="17" rx="2.5" fill="#334155"></rect></g>
+          <g class="walk-leg-r"><rect x="20.5" y="33" width="5.5" height="17" rx="2.5" fill="#1e293b"></rect></g>
+        </svg>
+
+        <svg class="bike-figure" viewBox="0 0 120 70" width="90" height="52">
+          <ellipse cx="60" cy="64" rx="40" ry="4" fill="rgba(0,0,0,.2)"></ellipse>
+          <g class="wheel-r"><circle cx="26" cy="52" r="12" fill="#1e2430"></circle><circle cx="26" cy="52" r="12" fill="none" stroke="#5b6272" stroke-width="1.4"></circle><circle cx="26" cy="52" r="4" fill="#c7cad1"></circle><g stroke="#7c8291" stroke-width="1.3"><line x1="26" y1="41" x2="26" y2="63"></line><line x1="15" y1="52" x2="37" y2="52"></line></g></g>
+          <g class="wheel-f"><circle cx="90" cy="52" r="12" fill="#1e2430"></circle><circle cx="90" cy="52" r="12" fill="none" stroke="#5b6272" stroke-width="1.4"></circle><circle cx="90" cy="52" r="4" fill="#c7cad1"></circle><g stroke="#7c8291" stroke-width="1.3"><line x1="90" y1="41" x2="90" y2="63"></line><line x1="79" y1="52" x2="101" y2="52"></line></g></g>
+          <path d="M26 52 L52 36 L70 36 L90 52" fill="none" stroke="#d64545" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M52 36 L60 24 L78 24 L70 36 Z" fill="#e8534f"></path>
+          <ellipse cx="66" cy="33" rx="14" ry="6" fill="#c72f2f"></ellipse>
+          <circle cx="90" cy="30" r="3.5" fill="#ffe27a"></circle>
+          <circle class="puff p1" cx="22" cy="57" r="2.4" fill="#dbe1ea"></circle>
+          <circle class="puff p2" cx="18" cy="55" r="3" fill="#dbe1ea"></circle>
+          <circle class="puff p3" cx="14" cy="54" r="3.6" fill="#dbe1ea"></circle>
+          <g>
+            <path d="M60 26 Q54 17 46 20" fill="none" stroke="#1e293b" stroke-width="4.5" stroke-linecap="round"></path>
+            <ellipse cx="57" cy="13" rx="6.5" ry="6" fill="#1e293b"></ellipse>
+            <path d="M54 9 Q57 6 62 8" fill="none" stroke="#f2c14e" stroke-width="2.2" stroke-linecap="round"></path>
+            <path d="M60 26 Q67 32 65 39" fill="none" stroke="#334155" stroke-width="5.5" stroke-linecap="round"></path>
+            <path d="M65 39 Q71 37 77 34" fill="none" stroke="#1e293b" stroke-width="4.5" stroke-linecap="round"></path>
+            <path d="M46 20 Q41 26 43 32" fill="none" stroke="#1e293b" stroke-width="4.5" stroke-linecap="round"></path>
+          </g>
+        </svg>
+      </div>
+      <div class="header-ride-caption">
+        <span class="dot"></span>
+        <span id="headerRideCaptionText">Updating dashboard&hellip;</span>
+      </div>
+    </div>
+
     <div class="dash-container py-3 min-h-[5rem] flex flex-col lg:flex-row items-center justify-between gap-4">
       
       <div class="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
@@ -3549,31 +3638,20 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
               </span>
             </span>
           </span>
-          <!-- Header-inline loader: swapped in for the icon/label above while
-               an "Update data" fetch is in flight. No full-screen overlay for
-               this action anymore — the bike just bounces on its suspension
-               over a moving road right here in the button, wheels spinning
-               and a couple of motion trails behind it, until the fetch settles. -->
+          <!-- Road + motorcycle loader: swapped in for the icon/label above
+               while an "Update data" fetch is in flight. The bike drives its
+               lane on a loop that eases in (slow) and speeds up (fast) each
+               pass, so the whole thing reads as building momentum for as
+               long as the real request takes, instead of a generic spinner. -->
           <span id="updateDataRoadLoader" class="hidden items-center gap-2" aria-hidden="true">
-            <span class="hbl-scene">
-              <span class="hbl-road"></span>
-              <span class="hbl-trail" style="left:6px; bottom:9px; animation-delay:0s;"></span>
-              <span class="hbl-trail" style="left:4px; bottom:6px; animation-delay:.15s; width:6px;"></span>
-              <svg class="hbl-bike" viewBox="0 0 26 20" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 15 Q4 10 9 9 L16 9 Q19 9 20 13 L21 15" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
-                <path d="M16.5 9 18.5 5.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"></path>
-                <circle cx="18.5" cy="5.5" r="1.4" fill="#ffc93f"></circle>
-                <path d="M10.5 7 Q9 5 11 4 L14 4 Q16.5 4.5 16 7 L15 9 L11 9 Z" fill="#0ea5c7"></path>
-                <circle cx="12.5" cy="5" r="2.4" fill="#ffdcb0"></circle>
-                <path d="M10.3 3.2 Q12.5 1 14.7 3 Q15.3 4.6 13.6 5.2 Q14.3 3.3 12.3 3.1 Q11 3.1 10.3 3.2 Z" fill="#ffc93f"></path>
-                <g class="hbl-wheel">
-                  <circle cx="7" cy="15" r="3" fill="#1f2937"></circle>
-                  <circle cx="7" cy="15" r="1.2" fill="#c7cad1"></circle>
-                </g>
-                <g class="hbl-wheel">
-                  <circle cx="20" cy="15" r="3" fill="#1f2937"></circle>
-                  <circle cx="20" cy="15" r="1.2" fill="#c7cad1"></circle>
-                </g>
+            <span class="road-loader">
+              <span class="road-loader-track"></span>
+              <svg class="road-loader-bike" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="5.5" cy="17.5" r="2.5"></circle>
+                <circle cx="18.5" cy="17.5" r="2.5"></circle>
+                <path d="M5.5 17.5 9 10h3l1.5 3"></path>
+                <path d="M9 10 7.5 6.5h3L13 10"></path>
+                <path d="M18.5 17.5 15.5 12H12"></path>
               </svg>
             </span>
             <span class="text-[11px] font-semibold normal-case whitespace-nowrap">Updating&hellip;</span>
@@ -9353,6 +9431,38 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     // toast messages.
     let isFetchingSheet = false;
 
+    // Plays the header-wide "walk to the motorcycle, then ride off" overlay
+    // (see #headerRideOverlay / .header-ride-play CSS). Runs every time
+    // fetchSheet() is called — manual "Update data" clicks and silent
+    // auto-refreshes alike — so the animation, and the "Last synced" label
+    // that follows it, is consistent everywhere data comes in.
+    const HEADER_RIDE_MS = 5000; // must match the CSS animation durations above
+    let headerRideGeneration = 0;
+    function showHeaderRideOverlay(captionText) {
+      const overlay = document.getElementById('headerRideOverlay');
+      const rig = document.getElementById('headerRideRig');
+      const captionEl = document.getElementById('headerRideCaptionText');
+      headerRideGeneration++;
+      const token = headerRideGeneration;
+      if (captionEl) captionEl.textContent = captionText || 'Updating dashboard\u2026';
+      if (overlay) overlay.classList.add('header-ride-visible');
+      if (rig) {
+        // Restart the CSS animation from frame 0 even if one is already
+        // mid-flight (e.g. auto-refresh firing right after a manual click).
+        rig.classList.remove('header-ride-play');
+        void rig.offsetWidth;
+        rig.classList.add('header-ride-play');
+      }
+      return token;
+    }
+    function hideHeaderRideOverlay(token) {
+      if (token !== undefined && token !== headerRideGeneration) return; // superseded by a newer ride
+      const overlay = document.getElementById('headerRideOverlay');
+      const rig = document.getElementById('headerRideRig');
+      if (overlay) overlay.classList.remove('header-ride-visible');
+      if (rig) rig.classList.remove('header-ride-play');
+    }
+
     async function fetchSheet(isAutoLoad = false) {
       if (isFetchingSheet) {
         if (!isAutoLoad) showToast("Already updating\u2026 hang tight.");
@@ -9360,24 +9470,25 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       }
       isFetchingSheet = true;
       const updateBtn = document.getElementById('updateDataBtn');
-      if (updateBtn && !isAutoLoad) updateBtn.disabled = true;
-      // Swap the button's normal icon/label for the road+motorcycle loader
-      // for the duration of a manual "Update data" click (auto/background
-      // refreshes stay silent, as before — the small green dot handles those).
-      if (!isAutoLoad) setUpdateDataBtnLoading(true);
+      if (updateBtn) updateBtn.disabled = true;
 
       const baseUrl = defaultAppsScriptUrl;
-      // Manual "Update data" clicks now stay entirely in the header — no
-      // full-screen overlay for this action (that's reserved for the very
-      // first load right after sign-in). A toast plus the header's own
-      // bike-bouncing animation carry the feedback instead.
       const startedAt = Date.now();
-      const MIN_LOADER_MS = 1200; // slight delay so the header animation is actually visible, even on an instant response
       const MAX_ATTEMPTS = 2;
-      // Whether the fetch actually finished successfully — only a real
-      // success gets the header loader's quick "done!" pulse; a failed
-      // attempt just swaps back to the normal icon with no fanfare.
-      let didSucceed = false;
+      const rideToken = showHeaderRideOverlay(isAutoLoad ? 'Auto-syncing dashboard\u2026' : 'Updating dashboard\u2026');
+
+      // Whatever happens (success, retry-then-success, or total failure),
+      // the ride overlay always stays up for at least HEADER_RIDE_MS so the
+      // walk -> motorcycle -> ride-off animation is seen in full before the
+      // header goes back to normal and "Last synced" updates.
+      function settleRide(onDone) {
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.max(0, HEADER_RIDE_MS - elapsed);
+        setTimeout(function() {
+          hideHeaderRideOverlay(rideToken);
+          if (onDone) onDone();
+        }, remaining);
+      }
 
       if (!isAutoLoad) showToast("Fetching the latest data\u2026");
 
@@ -9408,15 +9519,17 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
             const workbook = buildWorkbookFromAppsScript(json);
             processExcelData(workbook);
 
-            didSucceed = true;
-            if (!isAutoLoad) showToast("Dashboard successfully updated!");
+            settleRide(function() {
+              updateLastSyncedLabel();
+              if (!isAutoLoad) showToast("Dashboard successfully updated!");
+            });
             return;
           } catch (error) {
             lastError = error;
             console.warn('Fetch attempt ' + attempt + ' of ' + MAX_ATTEMPTS + ' failed:', error);
             const isLastAttempt = attempt === MAX_ATTEMPTS;
             if (!isLastAttempt) {
-              // Connection hiccups happen — keep the header loader up and
+              // Connection hiccups happen — keep the ride overlay up and
               // quietly retry instead of surfacing a failure right away.
               if (!isAutoLoad) showToast("Connection hiccup, retrying\u2026");
               // Brief backoff so a flaky connection gets a moment to recover.
@@ -9427,61 +9540,12 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
 
         // Every attempt failed.
         console.error(lastError);
-        if (!isAutoLoad) showToast("Couldn't reach the data source after a few tries. Check your connection.");
+        settleRide(function() {
+          if (!isAutoLoad) showToast("Couldn't reach the data source after a few tries. Check your connection.");
+        });
       } finally {
-        const finishUp = function() {
-          isFetchingSheet = false;
-          if (updateBtn && !isAutoLoad) updateBtn.disabled = false;
-          if (!isAutoLoad) setUpdateDataBtnLoading(false, didSucceed);
-        };
-        if (isAutoLoad) {
-          finishUp();
-        } else {
-          // Hold the header animation up for at least MIN_LOADER_MS total so
-          // it's actually visible, instead of instantly flashing back to the
-          // normal icon on a fast response.
-          const elapsed = Date.now() - startedAt;
-          setTimeout(finishUp, Math.max(0, MIN_LOADER_MS - elapsed));
-        }
-      }
-    }
-
-    // Toggles the "Update data" button between its normal icon/label and
-    // the header-inline bike loader (see #updateDataRoadLoader / .hbl-scene
-    // CSS). Kept as its own function since fetchSheet() has multiple
-    // return/throw paths that all need to end up back in the right state.
-    //
-    // isLoading=true swaps the loader in for the duration of the fetch,
-    // where it bounces on its suspension in place (see .hbl-bike /
-    // .hbl-wheel). isLoading=false ends the loader; when the fetch
-    // actually succeeded (success=true), it first adds .hbl-finish for one
-    // quick beat — the scale-pulse keyframes in the CSS above — as a
-    // little "done!" flourish, then swaps back to the normal icon.
-    function setUpdateDataBtnLoading(isLoading, success) {
-      const iconWrap = document.getElementById('updateDataIconWrap');
-      const loader = document.getElementById('updateDataRoadLoader');
-      if (!iconWrap || !loader) return;
-
-      if (isLoading) {
-        loader.classList.remove('hbl-finish');
-        iconWrap.classList.add('hidden');
-        loader.classList.remove('hidden');
-        loader.classList.add('flex');
-        return;
-      }
-
-      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const swapBack = function () {
-        iconWrap.classList.remove('hidden');
-        loader.classList.add('hidden');
-        loader.classList.remove('flex', 'hbl-finish');
-      };
-
-      if (success && !reduceMotion) {
-        loader.classList.add('hbl-finish');
-        setTimeout(swapBack, 300);
-      } else {
-        swapBack();
+        isFetchingSheet = false;
+        if (updateBtn) updateBtn.disabled = false;
       }
     }
 
