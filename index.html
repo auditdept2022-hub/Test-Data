@@ -2249,7 +2249,9 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-50%);
     background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 5px, transparent 5px 12px);
     background-size: 200% 100%;
-    animation: roadDashMove 1.2s cubic-bezier(.55, 0, .85, .35) infinite;
+    /* Deliberately unhurried while the real request is still in flight —
+       this is the "slow" loading state. */
+    animation: roadDashMove 2s linear infinite;
   }
   @keyframes roadDashMove {
     from { background-position-x: 0; }
@@ -2261,12 +2263,28 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     left: -2px;
     color: #fff;
     filter: drop-shadow(0 1px 1px rgba(0,0,0,.25));
-    animation: bikeDrive 1.2s cubic-bezier(.55, 0, .85, .35) infinite;
+    /* Same slow, steady lap as the road dashes above while loading. */
+    animation: bikeDrive 2s cubic-bezier(.45, 0, .55, 1) infinite;
   }
   @keyframes bikeDrive {
     0%   { transform: translateX(0) scale(0.85); opacity: .75; }
     85%  { transform: translateX(24px) scale(1); opacity: 1; }
     100% { transform: translateX(30px) scale(1.02); opacity: 0; }
+  }
+  /* Once the data has fully loaded, setUpdateDataBtnLoading() adds this
+     class for one beat before swapping the loader back out for the
+     normal icon — the dashes streak by and the bike zooms off the end of
+     the lane in a fraction of a second, so the "slow while working, fast
+     once it's done" motion reads clearly instead of just vanishing. */
+  #updateDataRoadLoader.road-loader-finish .road-loader-track {
+    animation: roadDashMove 0.32s linear 1;
+  }
+  #updateDataRoadLoader.road-loader-finish .road-loader-bike {
+    animation: bikeZoomOff 0.32s cubic-bezier(.2, .8, .2, 1) 1 forwards;
+  }
+  @keyframes bikeZoomOff {
+    0%   { transform: translateX(0) scale(1); opacity: 1; }
+    100% { transform: translateX(50px) scale(1.08); opacity: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     .road-loader-track, .road-loader-bike { animation: none !important; }
@@ -7701,7 +7719,13 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       document.getElementById('stat-findings-2025-sub').innerText = pctChange >= 0 ? `+${pctChange}% vs 2024` : `${pctChange}% vs 2024`;
       
       animateCountUp(document.getElementById('stat-findings-2026'), sum.findings2026 || 0);
-      animateCountUp(document.getElementById('stat-total-accounts'), sum.totalAccounts || 0);
+      // NOTE: sum.totalAccounts is a comma-formatted STRING (see
+      // totalAccounts: totalAccountsLatestRaw.toLocaleString() above) —
+      // animateCountUp does Number(target), and Number("12,924") is NaN,
+      // which silently falls back to 0 once the total crosses 1,000. Use
+      // the raw numeric total instead so the card animates/displays the
+      // real figure regardless of size.
+      animateCountUp(document.getElementById('stat-total-accounts'), sum.totalAccountsLatestRaw || 0);
       const accountsFallbackWarningEl = document.getElementById('stat-total-accounts-fallback-warning');
       if (accountsFallbackWarningEl) {
           accountsFallbackWarningEl.classList.toggle('hidden', !sum.totalAccountsFallbackActive);
@@ -9147,6 +9171,10 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       const MIN_LOADER_MS = 350; // avoid a jarring instant flash on fast responses
       const MAX_ATTEMPTS = 2;
       let loaderToken; // this operation's own generation token, see __loadingUI above
+      // Whether the fetch actually finished successfully — only a real
+      // success gets the road-loader's fast "made it!" zoom-off; a failed
+      // attempt just swaps back to the normal icon with no fanfare.
+      let didSucceed = false;
 
       function finishLoader(success) {
         if (!useFullLoader) return;
@@ -9199,6 +9227,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
             const workbook = buildWorkbookFromAppsScript(json);
             processExcelData(workbook);
 
+            didSucceed = true;
             finishLoader(true);
             if (!useFullLoader && !isAutoLoad) showToast("Dashboard successfully updated!");
             return;
@@ -9231,7 +9260,7 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
       } finally {
         isFetchingSheet = false;
         if (updateBtn && !isAutoLoad) updateBtn.disabled = false;
-        if (!isAutoLoad) setUpdateDataBtnLoading(false);
+        if (!isAutoLoad) setUpdateDataBtnLoading(false, didSucceed);
       }
     }
 
@@ -9239,13 +9268,39 @@ h2.text-lg, h2.font-bold, .section-title{ letter-spacing:-0.01em; }
     // the road+motorcycle loader (see #updateDataRoadLoader / .road-loader
     // CSS). Kept as its own function since fetchSheet() has multiple
     // return/throw paths that all need to end up back in the right state.
-    function setUpdateDataBtnLoading(isLoading) {
+    //
+    // isLoading=true swaps the loader in for the duration of the fetch,
+    // where it runs its slow, steady loop (see .road-loader-track /
+    // .road-loader-bike). isLoading=false ends the loader; when the fetch
+    // actually succeeded (success=true), it first adds .road-loader-finish
+    // for one beat — the fast zoom-off keyframes in the CSS above — as a
+    // quick "made it!" flourish, then swaps back to the normal icon.
+    function setUpdateDataBtnLoading(isLoading, success) {
       const iconWrap = document.getElementById('updateDataIconWrap');
       const loader = document.getElementById('updateDataRoadLoader');
       if (!iconWrap || !loader) return;
-      iconWrap.classList.toggle('hidden', isLoading);
-      loader.classList.toggle('hidden', !isLoading);
-      loader.classList.toggle('flex', isLoading);
+
+      if (isLoading) {
+        loader.classList.remove('road-loader-finish');
+        iconWrap.classList.add('hidden');
+        loader.classList.remove('hidden');
+        loader.classList.add('flex');
+        return;
+      }
+
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const swapBack = function () {
+        iconWrap.classList.remove('hidden');
+        loader.classList.add('hidden');
+        loader.classList.remove('flex', 'road-loader-finish');
+      };
+
+      if (success && !reduceMotion) {
+        loader.classList.add('road-loader-finish');
+        setTimeout(swapBack, 320);
+      } else {
+        swapBack();
+      }
     }
 
     function saveDashboardDataToCache() {
