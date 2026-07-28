@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AUDIT — Drive Gateway</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --bg:#12151b;
+    --panel:#1a1f27;
+    --panel-2:#20262f;
+    --border:#2b323d;
+    --text:#e7eaf0;
+    --muted:#8b93a3;
+    --accent:#4f8cff;
+    --accent-dim:#2e5aa8;
+    --good:#3ecf8e;
+    --bad:#ef5a5a;
+    --radius:8px;
+    font-family:"IBM Plex Sans",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);min-height:100vh;}
+  ::selection{background:var(--accent-dim);}
+
+  /* ---------- Gate / sign-in screen ---------- */
+  #gate{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;
+    padding:24px;text-align:center;
+  }
+  #gate h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0;}
+  #gate .lockline{
+    font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);
+    border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;background:var(--panel);
+    display:flex;align-items:center;gap:8px;
+  }
+  #gate .lockline .dot{width:7px;height:7px;border-radius:50%;background:var(--bad);flex:none;}
+  #gate .lockline.ok .dot{background:var(--good);}
+  #signin-btn{margin-top:6px;}
+  #gate .denied{color:var(--bad);font-size:13px;max-width:420px;margin-top:4px;}
+  #gate .hint{color:var(--muted);font-size:12px;max-width:380px;}
+
+  /* ---------- App shell ---------- */
+  #app{display:none;min-height:100vh;flex-direction:column;}
+  header.topbar{
+    display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--border);
+    background:var(--panel);position:sticky;top:0;z-index:10;
+  }
+  .brand{font-weight:700;letter-spacing:.08em;font-size:13px;text-transform:uppercase;color:var(--text);white-space:nowrap;}
+  .brand span{color:var(--accent);}
+  .breadcrumb{
+    font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);
+    display:flex;align-items:center;gap:4px;flex:1;overflow-x:auto;white-space:nowrap;
+  }
+  .breadcrumb .crumb{cursor:pointer;padding:3px 6px;border-radius:5px;}
+  .breadcrumb .crumb:hover{background:var(--panel-2);color:var(--text);}
+  .breadcrumb .crumb.current{color:var(--text);font-weight:500;cursor:default;}
+  .breadcrumb .crumb.current:hover{background:none;}
+  .breadcrumb .sep{color:#4a5262;}
+  .topbar-actions{display:flex;gap:8px;align-items:center;}
+  .who{font-size:12px;color:var(--muted);font-family:"IBM Plex Mono",monospace;}
+
+  button{
+    font-family:inherit;font-size:13px;border-radius:6px;border:1px solid var(--border);
+    background:var(--panel-2);color:var(--text);padding:7px 12px;cursor:pointer;
+  }
+  button:hover{border-color:var(--accent);}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#0c1320;font-weight:600;}
+  button.primary:hover{background:#5f98ff;}
+  button.ghost{background:transparent;}
+  button:disabled{opacity:.45;cursor:default;}
+  button:disabled:hover{border-color:var(--border);}
+
+  main{flex:1;padding:20px;max-width:1200px;width:100%;margin:0 auto;}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .toolbar .status{font-size:12px;color:var(--muted);font-family:"IBM Plex Mono",monospace;}
+  .toolbar .status.loading::after{content:"…";}
+
+  .grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;
+  }
+  .card{
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:12px;cursor:pointer;user-select:none;display:flex;flex-direction:column;gap:6px;
+    transition:border-color .12s, transform .06s;
+  }
+  .card:hover{border-color:var(--accent);}
+  .card:active{transform:scale(.98);}
+  .card .icon{font-size:22px;line-height:1;}
+  .card .name{font-size:13px;font-weight:500;word-break:break-word;line-height:1.3;}
+  .card .meta{font-size:11px;color:var(--muted);font-family:"IBM Plex Mono",monospace;}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:60px 0;}
+  .error-banner{
+    background:#2a1a1a;border:1px solid var(--bad);color:#ffb4b4;border-radius:var(--radius);
+    padding:10px 14px;font-size:13px;margin-bottom:14px;
+  }
+
+  /* ---------- Context menu ---------- */
+  #ctxmenu{
+    position:fixed;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;
+    padding:4px;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:none;z-index:100;
+  }
+  #ctxmenu button{
+    display:block;width:100%;text-align:left;background:none;border:none;padding:8px 10px;font-size:13px;border-radius:5px;
+  }
+  #ctxmenu button:hover{background:var(--panel);border-color:transparent;}
+  #ctxmenu button.danger{color:var(--bad);}
+  #ctxmenu hr{border:none;border-top:1px solid var(--border);margin:4px 0;}
+
+  /* ---------- Modal (preview + prompts) ---------- */
+  .overlay{
+    display:none;position:fixed;inset:0;background:rgba(6,8,12,.7);z-index:200;
+    align-items:center;justify-content:center;padding:24px;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  .modal.small{max-width:420px;}
+  .modal header{
+    display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);
+  }
+  .modal header .title{font-size:14px;font-weight:600;word-break:break-word;padding-right:10px;}
+  .modal .body{padding:16px;overflow:auto;flex:1;}
+  .modal .body iframe{width:100%;height:60vh;border:0;border-radius:6px;background:#fff;}
+  .modal footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--border);}
+  .modal input[type=text]{
+    width:100%;padding:9px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);
+    font-family:inherit;font-size:13px;
+  }
+  .field-label{font-size:12px;color:var(--muted);margin-bottom:6px;display:block;}
+  .folder-pick-list{max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:6px;}
+  .folder-pick-row{padding:8px 10px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;}
+  .folder-pick-row:hover{background:var(--panel-2);}
+  .folder-pick-row.selected{background:var(--accent-dim);}
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel-2);
+    border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:13px;z-index:300;
+    opacity:0;transition:opacity .2s;pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+  .toast.bad{border-color:var(--bad);color:#ffb4b4;}
+</style>
+</head>
+<body>
+
+<!-- ============ SIGN-IN GATE ============ -->
+<div id="gate">
+  <h1>Audit Drive Gateway</h1>
+  <div id="lockline" class="lockline"><span class="dot"></span><span id="lockline-text">Not signed in</span></div>
+  <div id="signin-btn"></div>
+  <div id="denied-msg" class="denied"></div>
+  <div class="hint">Sign in with a Google account on the allow-list to browse the AUDIT folder.</div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <header class="topbar">
+    <div class="brand">AUDIT <span>／</span> GATEWAY</div>
+    <div class="breadcrumb" id="breadcrumb"></div>
+    <div class="topbar-actions">
+      <span class="who" id="who"></span>
+      <button id="btn-refresh" title="Refresh this folder">↻ Refresh</button>
+      <button id="btn-new-folder" class="primary">＋ New Folder</button>
+      <button id="btn-signout" class="ghost">Sign out</button>
+    </div>
+  </header>
+  <main>
+    <div class="toolbar">
+      <div class="status" id="status">Loading…</div>
+    </div>
+    <div id="error" class="error-banner" style="display:none"></div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none">This folder is empty.</div>
+  </main>
+</div>
+
+<!-- ============ CONTEXT MENU ============ -->
+<div id="ctxmenu">
+  <button data-act="open">Open</button>
+  <button data-act="rename">Rename</button>
+  <button data-act="duplicate">Duplicate</button>
+  <button data-act="move">Move…</button>
+  <button data-act="copy">Copy…</button>
+  <hr>
+  <button data-act="delete" class="danger">Delete</button>
+</div>
+
+<!-- ============ PREVIEW MODAL ============ -->
+<div class="overlay" id="overlay-preview">
+  <div class="modal">
+    <header>
+      <div class="title" id="preview-title"></div>
+      <button class="ghost" id="preview-close">✕</button>
+    </header>
+    <div class="body" id="preview-body"></div>
+    <footer>
+      <a id="preview-open-drive" href="#" target="_blank"><button class="ghost">Open in Drive</button></a>
+      <button id="preview-print">Print</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ============ GENERIC PROMPT MODAL (rename / new folder) ============ -->
+<div class="overlay" id="overlay-prompt">
+  <div class="modal small">
+    <header><div class="title" id="prompt-title"></div><button class="ghost" id="prompt-close">✕</button></header>
+    <div class="body">
+      <label class="field-label" id="prompt-label"></label>
+      <input type="text" id="prompt-input">
+    </div>
+    <footer>
+      <button class="ghost" id="prompt-cancel">Cancel</button>
+      <button class="primary" id="prompt-ok">Confirm</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ============ MOVE / COPY DESTINATION PICKER ============ -->
+<div class="overlay" id="overlay-picker">
+  <div class="modal small">
+    <header><div class="title" id="picker-title"></div><button class="ghost" id="picker-close">✕</button></header>
+    <div class="body">
+      <div class="breadcrumb" id="picker-breadcrumb" style="margin-bottom:10px"></div>
+      <div class="folder-pick-list" id="picker-list"></div>
+    </div>
+    <footer>
+      <button class="ghost" id="picker-cancel">Cancel</button>
+      <button class="primary" id="picker-ok">Select this folder</button>
+    </footer>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ======================================================================
+   CONFIG — fill these in before deploying
+   ====================================================================== */
+const CLIENT_ID       = '508009297337-8q2jcgni4d2uslonq8cvqr8sae8d47vm.apps.googleusercontent.com'; // Google Cloud Console → OAuth client (Web application)
+const ROOT_FOLDER_ID  = '1wu4kj1EnytoxQr-MFsltuqByxcIrSiEr';               // same AUDIT root as the Apps Script version
+const ROOT_LABEL      = 'AUDIT';
+const ALLOWED_EMAILS  = [
+  'auditdept2022@gmail.com',
+  'karljenard@gmail.com',
+  // add more, one per line
+];
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+
+/* ====================================================================== */
+
+let accessToken = null;
+let userEmail = null;
+let tokenClient = null;
+
+// navigation state: stack of {id, name}
+let pathStack = [{ id: ROOT_FOLDER_ID, name: ROOT_LABEL }];
+let currentItems = []; // items in the currently viewed folder
+let ctxTarget = null;  // item the context menu is currently open for
+
+const $ = (sel) => document.querySelector(sel);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+/* ---------------------------------------------------------------------
+   AUTH
+   --------------------------------------------------------------------- */
+window.onload = () => {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: DRIVE_SCOPE + ' email profile',
+    callback: onTokenReceived,
+  });
+
+  const btn = document.createElement('button');
+  btn.className = 'primary';
+  btn.textContent = 'Sign in with Google';
+  btn.onclick = () => tokenClient.requestAccessToken({ prompt: 'consent' });
+  $('#signin-btn').appendChild(btn);
+};
+
+async function onTokenReceived(resp) {
+  if (resp.error) {
+    showDenied('Sign-in failed: ' + resp.error);
+    return;
+  }
+  accessToken = resp.access_token;
+  setLock(true, 'Verifying account…');
+
+  try {
+    const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    }).then(r => r.json());
+    userEmail = (info.email || '').toLowerCase();
+  } catch (err) {
+    showDenied('Could not verify your Google account. Please try again.');
+    return;
+  }
+
+  const allowed = ALLOWED_EMAILS.some(e => e.toLowerCase() === userEmail);
+  if (!allowed) {
+    showDenied('Signed in as ' + userEmail + '. This account is not authorized to view this folder.');
+    return;
+  }
+
+  setLock(true, 'Signed in as ' + userEmail);
+  $('#denied-msg').textContent = '';
+  $('#who').textContent = userEmail;
+  $('#gate').style.display = 'none';
+  $('#app').style.display = 'flex';
+  openFolder(ROOT_FOLDER_ID, ROOT_LABEL, /*pushToRoot*/ true);
+}
+
+function setLock(ok, text) {
+  $('#lockline').classList.toggle('ok', ok);
+  $('#lockline-text').textContent = text;
+}
+function showDenied(msg) {
+  setLock(false, 'Access denied');
+  $('#denied-msg').textContent = msg;
+}
+
+$('#btn-signout').onclick = () => {
+  if (accessToken) google.accounts.oauth2.revoke(accessToken, () => {});
+  accessToken = null; userEmail = null;
+  $('#app').style.display = 'none';
+  $('#gate').style.display = 'flex';
+  setLock(false, 'Not signed in');
+};
+
+/* Note: because this is a static page with client-side OAuth, the
+   allow-list check and every Drive call use the *signed-in visitor's own*
+   Google identity and their own Drive permissions — same trust model as
+   the Apps Script "Execute as: User accessing the web app" version. A
+   visitor still needs the AUDIT folder actually shared with their account,
+   and Editor access for anything that writes (create/rename/move/etc). */
+
+/* ---------------------------------------------------------------------
+   DRIVE API HELPERS
+   --------------------------------------------------------------------- */
+const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+
+async function driveFetch(path, opts = {}) {
+  const res = await fetch(DRIVE_API + path, {
+    ...opts,
+    headers: { Authorization: 'Bearer ' + accessToken, ...(opts.headers || {}) }
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { msg = (await res.json()).error.message; } catch (e) {}
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function listFolder(folderId) {
+  const fields = 'files(id,name,mimeType,iconLink,webViewLink,modifiedTime,size)';
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+  const data = await driveFetch(`/files?q=${q}&fields=${fields}&pageSize=1000&orderBy=folder,name_natural`);
+  return data.files || [];
+}
+
+const FOLDER_MIME = 'application/vnd.google-apps.folder';
+const GOOGLE_NATIVE_EXPORT = {
+  'application/vnd.google-apps.document': 'application/pdf',
+  'application/vnd.google-apps.spreadsheet': 'application/pdf',
+  'application/vnd.google-apps.presentation': 'application/pdf',
+};
+
+function iconFor(item) {
+  if (item.mimeType === FOLDER_MIME) return '📁';
+  if (item.mimeType === 'application/pdf') return '📕';
+  if (item.mimeType.startsWith('image/')) return '🖼️';
+  if (item.mimeType.includes('spreadsheet')) return '📊';
+  if (item.mimeType.includes('presentation')) return '📽️';
+  if (item.mimeType.includes('document')) return '📄';
+  return '📦';
+}
+
+/* ---------------------------------------------------------------------
+   NAVIGATION / RENDER
+   --------------------------------------------------------------------- */
+async function openFolder(id, name, resetStack) {
+  if (resetStack) pathStack = [{ id, name }];
+  renderBreadcrumb();
+  $('#status').textContent = 'Loading'; $('#status').classList.add('loading');
+  $('#error').style.display = 'none';
+  $('#grid').innerHTML = ''; $('#empty').style.display = 'none';
+
+  try {
+    currentItems = await listFolder(id);
+    renderGrid();
+    $('#status').textContent = currentItems.length + ' item' + (currentItems.length === 1 ? '' : 's');
+  } catch (err) {
+    $('#error').style.display = 'block';
+    $('#error').textContent = 'Could not load this folder — it may not be shared with your account. (' + err.message + ')';
+    $('#status').textContent = '';
+  }
+  $('#status').classList.remove('loading');
+}
+
+function pushFolder(id, name) {
+  pathStack.push({ id, name });
+  renderBreadcrumb();
+  openFolderNoPush(id);
+}
+async function openFolderNoPush(id) {
+  $('#status').textContent = 'Loading'; $('#status').classList.add('loading');
+  $('#error').style.display = 'none';
+  try {
+    currentItems = await listFolder(id);
+    renderGrid();
+    $('#status').textContent = currentItems.length + ' item' + (currentItems.length === 1 ? '' : 's');
+  } catch (err) {
+    $('#error').style.display = 'block';
+    $('#error').textContent = 'Could not load this folder: ' + err.message;
+  }
+  $('#status').classList.remove('loading');
+}
+
+function renderBreadcrumb() {
+  const bc = $('#breadcrumb'); bc.innerHTML = '';
+  pathStack.forEach((p, i) => {
+    if (i > 0) bc.appendChild(el('span', 'sep', '/'));
+    const isLast = i === pathStack.length - 1;
+    const crumb = el('span', 'crumb' + (isLast ? ' current' : ''), p.name);
+    if (!isLast) crumb.onclick = () => { pathStack = pathStack.slice(0, i + 1); renderBreadcrumb(); openFolderNoPush(p.id); };
+    bc.appendChild(crumb);
+  });
+}
+
+function renderGrid() {
+  const grid = $('#grid'); grid.innerHTML = '';
+  $('#empty').style.display = currentItems.length ? 'none' : 'block';
+  currentItems.forEach(item => {
+    const card = el('div', 'card');
+    card.appendChild(el('div', 'icon', iconFor(item)));
+    card.appendChild(el('div', 'name', item.name));
+    card.appendChild(el('div', 'meta', item.mimeType === FOLDER_MIME ? 'Folder' : formatSize(item.size)));
+    card.onclick = () => {
+      if (item.mimeType === FOLDER_MIME) pushFolder(item.id, item.name);
+      else openPreview(item);
+    };
+    card.oncontextmenu = (e) => { e.preventDefault(); openContextMenu(e, item); };
+    let pressTimer;
+    card.addEventListener('touchstart', (e) => { pressTimer = setTimeout(() => openContextMenu(e.touches[0], item), 500); });
+    card.addEventListener('touchend', () => clearTimeout(pressTimer));
+    grid.appendChild(card);
+  });
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '';
+  const n = Number(bytes);
+  if (n < 1024) return n + ' B';
+  if (n < 1024 ** 2) return (n / 1024).toFixed(0) + ' KB';
+  if (n < 1024 ** 3) return (n / 1024 ** 2).toFixed(1) + ' MB';
+  return (n / 1024 ** 3).toFixed(1) + ' GB';
+}
+
+$('#btn-refresh').onclick = () => openFolderNoPush(pathStack[pathStack.length - 1].id);
+
+/* ---------------------------------------------------------------------
+   PREVIEW MODAL
+   --------------------------------------------------------------------- */
+function openPreview(item) {
+  $('#preview-title').textContent = item.name;
+  $('#preview-open-drive').href = item.webViewLink || `https://drive.google.com/file/d/${item.id}/view`;
+  const body = $('#preview-body'); body.innerHTML = '';
+  const iframe = document.createElement('iframe');
+  iframe.src = `https://drive.google.com/file/d/${item.id}/preview`;
+  body.appendChild(iframe);
+  $('#preview-print').onclick = () => printFile(item);
+  $('#overlay-preview').classList.add('show');
+}
+$('#preview-close').onclick = () => $('#overlay-preview').classList.remove('show');
+
+async function printFile(item) {
+  toast('Preparing PDF…');
+  try {
+    let pdfBlob;
+    if (item.mimeType === 'application/pdf') {
+      pdfBlob = await driveFetchBlob(`/files/${item.id}?alt=media`);
+    } else if (GOOGLE_NATIVE_EXPORT[item.mimeType]) {
+      pdfBlob = await driveFetchBlob(`/files/${item.id}/export?mimeType=application/pdf`);
+    } else {
+      // Uploaded Office file (.docx/.xlsx/.pptx etc): copy to a temp native
+      // Google format, export that, then delete the temp copy.
+      const targetMime = item.mimeType.includes('spreadsheet') ? 'application/vnd.google-apps.spreadsheet'
+        : item.mimeType.includes('presentation') ? 'application/vnd.google-apps.presentation'
+        : 'application/vnd.google-apps.document';
+      const copy = await driveFetch(`/files/${item.id}/copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'tmp-print-' + item.id, mimeType: targetMime })
+      });
+      try {
+        pdfBlob = await driveFetchBlob(`/files/${copy.id}/export?mimeType=application/pdf`);
+      } finally {
+        driveFetch(`/files/${copy.id}`, { method: 'DELETE' }).catch(() => {});
+      }
+    }
+    const url = URL.createObjectURL(pdfBlob);
+    const w = window.open(url);
+    if (w) w.addEventListener('load', () => setTimeout(() => w.print(), 400));
+  } catch (err) {
+    toast('Could not convert this file for printing. Try Open in Drive instead.', true);
+  }
+}
+async function driveFetchBlob(path) {
+  const res = await fetch(DRIVE_API + path, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.blob();
+}
+
+/* ---------------------------------------------------------------------
+   CONTEXT MENU
+   --------------------------------------------------------------------- */
+const ctxmenu = $('#ctxmenu');
+function openContextMenu(e, item) {
+  ctxTarget = item;
+  ctxmenu.style.display = 'block';
+  ctxmenu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
+  ctxmenu.style.top = Math.min(e.clientY, window.innerHeight - 220) + 'px';
+}
+document.addEventListener('click', () => { ctxmenu.style.display = 'none'; });
+ctxmenu.addEventListener('click', async (e) => {
+  const act = e.target.dataset.act;
+  if (!act || !ctxTarget) return;
+  const item = ctxTarget;
+  if (act === 'open') { item.mimeType === FOLDER_MIME ? pushFolder(item.id, item.name) : openPreview(item); }
+  if (act === 'rename') await doRename(item);
+  if (act === 'duplicate') await doDuplicate(item);
+  if (act === 'move') await doMoveOrCopy(item, 'move');
+  if (act === 'copy') await doMoveOrCopy(item, 'copy');
+  if (act === 'delete') await doDelete(item);
+});
+
+/* ---------------------------------------------------------------------
+   ACTIONS: new folder / rename / duplicate / move / copy / delete
+   --------------------------------------------------------------------- */
+$('#btn-new-folder').onclick = async () => {
+  const name = await promptDialog('New Folder', 'Folder name', '');
+  if (!name) return;
+  const parentId = pathStack[pathStack.length - 1].id;
+  try {
+    await driveFetch('/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] })
+    });
+    toast('Folder created');
+    openFolderNoPush(parentId);
+  } catch (err) { toast('Could not create folder: ' + err.message, true); }
+};
+
+async function doRename(item) {
+  const name = await promptDialog('Rename', 'New name', item.name);
+  if (!name || name === item.name) return;
+  try {
+    await driveFetch(`/files/${item.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    toast('Renamed');
+    openFolderNoPush(pathStack[pathStack.length - 1].id);
+  } catch (err) { toast('Rename failed: ' + err.message, true); }
+}
+
+async function doDuplicate(item) {
+  const parentId = pathStack[pathStack.length - 1].id;
+  try {
+    if (item.mimeType === FOLDER_MIME) {
+      await copyFolderRecursive(item.id, parentId, item.name + ' (copy)');
+    } else {
+      await driveFetch(`/files/${item.id}/copy`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: item.name + ' (copy)', parents: [parentId] })
+      });
+    }
+    toast('Duplicated');
+    openFolderNoPush(parentId);
+  } catch (err) { toast('Duplicate failed: ' + err.message, true); }
+}
+
+async function copyFolderRecursive(sourceId, destParentId, newName) {
+  const newFolder = await driveFetch('/files', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: newName, mimeType: FOLDER_MIME, parents: [destParentId] })
+  });
+  const children = await listFolder(sourceId);
+  for (const child of children) {
+    if (child.mimeType === FOLDER_MIME) {
+      await copyFolderRecursive(child.id, newFolder.id, child.name);
+    } else {
+      await driveFetch(`/files/${child.id}/copy`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: child.name, parents: [newFolder.id] })
+      });
+    }
+  }
+  return newFolder;
+}
+
+async function doDelete(item) {
+  if (!confirm(`Delete "${item.name}"? This moves it to Trash in Drive.`)) return;
+  try {
+    await driveFetch(`/files/${item.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true })
+    });
+    toast('Deleted');
+    openFolderNoPush(pathStack[pathStack.length - 1].id);
+  } catch (err) { toast('Delete failed: ' + err.message, true); }
+}
+
+async function doMoveOrCopy(item, mode) {
+  const destId = await folderPicker(mode === 'move' ? 'Move to…' : 'Copy to…');
+  if (!destId) return;
+  try {
+    if (mode === 'move') {
+      const currentParent = pathStack[pathStack.length - 1].id;
+      await driveFetch(`/files/${item.id}?addParents=${destId}&removeParents=${currentParent}`, { method: 'PATCH' });
+      toast('Moved');
+    } else {
+      if (item.mimeType === FOLDER_MIME) {
+        await copyFolderRecursive(item.id, destId, item.name);
+      } else {
+        await driveFetch(`/files/${item.id}/copy`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: item.name, parents: [destId] })
+        });
+      }
+      toast('Copied');
+    }
+    openFolderNoPush(pathStack[pathStack.length - 1].id);
+  } catch (err) { toast((mode === 'move' ? 'Move' : 'Copy') + ' failed: ' + err.message, true); }
+}
+
+/* ---------------------------------------------------------------------
+   PROMPT DIALOG (rename / new folder name)
+   --------------------------------------------------------------------- */
+function promptDialog(title, label, initial) {
+  return new Promise((resolve) => {
+    $('#prompt-title').textContent = title;
+    $('#prompt-label').textContent = label;
+    $('#prompt-input').value = initial;
+    $('#overlay-prompt').classList.add('show');
+    $('#prompt-input').focus();
+    const cleanup = (val) => { $('#overlay-prompt').classList.remove('show'); resolve(val); };
+    $('#prompt-ok').onclick = () => cleanup($('#prompt-input').value.trim());
+    $('#prompt-cancel').onclick = () => cleanup(null);
+    $('#prompt-close').onclick = () => cleanup(null);
+    $('#prompt-input').onkeydown = (e) => { if (e.key === 'Enter') cleanup($('#prompt-input').value.trim()); };
+  });
+}
+
+/* ---------------------------------------------------------------------
+   FOLDER PICKER (for move / copy destination)
+   --------------------------------------------------------------------- */
+function folderPicker(title) {
+  return new Promise(async (resolve) => {
+    $('#picker-title').textContent = title;
+    let pickPath = [{ id: ROOT_FOLDER_ID, name: ROOT_LABEL }];
+    let selected = ROOT_FOLDER_ID;
+
+    async function renderPicker() {
+      const bc = $('#picker-breadcrumb'); bc.innerHTML = '';
+      pickPath.forEach((p, i) => {
+        if (i > 0) bc.appendChild(el('span', 'sep', '/'));
+        const c = el('span', 'crumb' + (i === pickPath.length - 1 ? ' current' : ''), p.name);
+        c.onclick = () => { pickPath = pickPath.slice(0, i + 1); selected = p.id; renderPicker(); };
+        bc.appendChild(c);
+      });
+      const list = $('#picker-list'); list.innerHTML = 'Loading…';
+      try {
+        const items = (await listFolder(pickPath[pickPath.length - 1].id)).filter(i => i.mimeType === FOLDER_MIME);
+        list.innerHTML = '';
+        if (!items.length) list.innerHTML = '<div class="folder-pick-row" style="color:var(--muted)">No subfolders</div>';
+        items.forEach(f => {
+          const row = el('div', 'folder-pick-row', '📁 ' + f.name);
+          row.onclick = () => { pickPath.push({ id: f.id, name: f.name }); selected = f.id; renderPicker(); };
+          list.appendChild(row);
+        });
+      } catch (err) { list.innerHTML = 'Could not load: ' + err.message; }
+    }
+    renderPicker();
+    $('#overlay-picker').classList.add('show');
+    $('#picker-ok').onclick = () => { $('#overlay-picker').classList.remove('show'); resolve(selected); };
+    $('#picker-cancel').onclick = () => { $('#overlay-picker').classList.remove('show'); resolve(null); };
+    $('#picker-close').onclick = () => { $('#overlay-picker').classList.remove('show'); resolve(null); };
+  });
+}
+
+/* ---------------------------------------------------------------------
+   TOAST
+   --------------------------------------------------------------------- */
+let toastTimer;
+function toast(msg, isBad) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.toggle('bad', !!isBad);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+</script>
+</body>
+</html>
