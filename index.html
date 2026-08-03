@@ -194,7 +194,7 @@
     <div id="dashPanel" style="display:none;">
       <div class="toolbar" style="margin-top:6px;">
         <div class="left">
-          <button class="btn" onclick="document.getElementById('importInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name and updates Due This Month, Payment (Adv) &amp; Penalty Due; unmatched names are added as new customers.">⇪ Import</button>
+          <button class="btn" onclick="document.getElementById('importInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name and updates Due This Month, Payment (Adv) &amp; Penalty Due on existing customers only; unmatched names are skipped, never added.">⇪ Import</button>
           <input type="file" id="importInput" accept=".csv,.xls,.xlsx" multiple style="display:none">
           <span id="importStatus" class="import-status"></span>
           <button class="btn" onclick="exportCSV()" title="Export all customers to CSV">⇩ Export</button>
@@ -563,44 +563,47 @@
     if(!allRecords.length){ toast('No customer rows found to import.'); return; }
 
     // Match every parsed row against the currently loaded list by customer
-    // name. A match ONLY gets Due This Month / Payment (Adv) / Penalty Due
-    // updated. No match -> added as a new customer with whatever fields
-    // were found for them.
+    // name. Import ONLY updates Due This Month / Payment (Adv) / Penalty
+    // Due on an existing, already-matched customer. It never creates new
+    // customers — a name with no match in the current list is skipped
+    // entirely, not added as a new row.
     const nameIndex = {};
     customers.forEach(c => { nameIndex[normalizeName_(c.customer)] = c; });
 
     const toUpdate = [];
-    const toCreate = [];
+    let unmatched = 0;
     allRecords.forEach(rec => {
       const match = nameIndex[normalizeName_(rec.customer)];
-      if(match){
-        const fields = {};
-        ['dueThisMonth', 'paymentAdv', 'penaltyDue'].forEach(k => { if(rec[k] !== undefined) fields[k] = rec[k]; });
-        if(Object.keys(fields).length) toUpdate.push({ row: match.row, fields });
-      } else {
-        toCreate.push(rec);
-      }
+      if(!match){ unmatched++; return; }
+      const fields = {};
+      ['dueThisMonth', 'paymentAdv', 'penaltyDue'].forEach(k => { if(rec[k] !== undefined) fields[k] = rec[k]; });
+      if(Object.keys(fields).length) toUpdate.push({ row: match.row, fields });
     });
 
-    if(!toUpdate.length && !toCreate.length){ toast('Found rows, but none had a matching customer or usable balance figures.'); return; }
+    if(!toUpdate.length){
+      toast(unmatched
+        ? `Found ${unmatched} row${unmatched === 1 ? '' : 's'}, but none matched an existing customer — nothing imported.`
+        : 'Found rows, but none had usable balance figures.');
+      return;
+    }
 
     const msg = `Found ${allRecords.length} data row${allRecords.length === 1 ? '' : 's'}: `
       + `${toUpdate.length} will update Due This Month / Payment (Adv) / Penalty Due on existing customers`
-      + (toCreate.length ? `, ${toCreate.length} unmatched name${toCreate.length === 1 ? '' : 's'} will be added as new customers` : '')
+      + (unmatched ? `. ${unmatched} unmatched name${unmatched === 1 ? '' : 's'} will be skipped (no new customers are created by import)` : '')
       + '. Continue?';
     if(!confirm(msg)) return;
 
-    const total = toUpdate.length + toCreate.length;
+    const total = toUpdate.length;
 
-    // Bulk writes go through batchUpdateCustomer / batchCreateCustomer,
-    // which apply many rows in ONE Apps Script execution instead of one
-    // HTTP round trip per row — that round-trip overhead (network +
-    // script cold start) is what made large imports slow. Chunked so the
-    // URL stays a safe length and progress can be reported; a few chunks
-    // run concurrently for extra speed. If a batch call fails for any
-    // reason (including an old, not-yet-redeployed backend), that chunk
-    // automatically retries one row at a time so the import still
-    // completes — just slower for that chunk.
+    // Bulk writes go through batchUpdateCustomer, which applies many rows
+    // in ONE Apps Script execution instead of one HTTP round trip per row
+    // — that round-trip overhead (network + script cold start) is what
+    // made large imports slow. Chunked so the URL stays a safe length and
+    // progress can be reported; a few chunks run concurrently for extra
+    // speed. If a batch call fails for any reason (including an old,
+    // not-yet-redeployed backend), that chunk automatically retries one
+    // row at a time so the import still completes — just slower for that
+    // chunk.
     document.getElementById('importStatus').textContent = `Importing 0 / ${total}…`;
     toast(`Importing ${total} record${total === 1 ? '' : 's'}…`);
 
@@ -610,17 +613,10 @@
       'updateCustomer', item => ({ row: item.row, fields: item.fields }),
       total, 0
     );
-    const createResult = await runBatched_(
-      toCreate, 'batchCreateCustomer', 'records',
-      item => item,
-      'createCustomer', item => ({ fields: item }),
-      total, updateResult.done
-    );
 
-    const updated = updateResult.succeeded, created = createResult.succeeded;
-    const failed = updateResult.failed + createResult.failed;
+    const updated = updateResult.succeeded, failed = updateResult.failed;
 
-    toast(`Import complete: ${updated} updated, ${created} added${failed ? ', ' + failed + ' failed' : ''}.`);
+    toast(`Import complete: ${updated} updated${failed ? ', ' + failed + ' failed' : ''}${unmatched ? ', ' + unmatched + ' skipped (no match)' : ''}.`);
     document.getElementById('importStatus').textContent = '';
     await loadData();
   }
