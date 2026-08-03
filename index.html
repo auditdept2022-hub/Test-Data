@@ -722,8 +722,8 @@
   // GET requests keep their query string across that redirect, so every
   // write action is sent as a GET with the payload JSON-encoded in the URL.
   function apiCall(action, payload){
-    const url = API_URL + '?action=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(JSON.stringify(payload));
-    return fetch(url);
+    const url = API_URL + '?action=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(JSON.stringify(payload)) + '&_=' + Date.now();
+    return fetch(url, { cache: 'no-store' });
   }
 
   let isLoading = false;
@@ -741,7 +741,11 @@
       document.getElementById('tableBody').innerHTML = skeletonHtml(6);
     }
     try{
-      const res = await fetch(API_URL + '?action=list');
+      // cache: 'no-store' plus a timestamp query param means the browser
+      // (and any CDN in front of the page, e.g. GitHub Pages) can never
+      // serve back a stale cached response for this request — including
+      // an old failed/404 response from before a deployment was fixed.
+      const res = await fetch(API_URL + '?action=list&_=' + Date.now(), { cache: 'no-store' });
       const data = await res.json();
       if(data.error) throw new Error(data.error);
       customers = data.customers || [];
