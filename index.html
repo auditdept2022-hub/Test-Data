@@ -1065,6 +1065,22 @@
   document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
   document.addEventListener('keydown', e=>{ if(e.key === 'Escape') closeModal(); });
 
+  // Auto-refresh: quietly re-pull the list on an interval so edits made by
+  // someone else (another tab, or a direct edit in the sheet) show up
+  // without the user having to hit the ⟳ button. Skipped whenever it would
+  // be disruptive: a modal is open (don't yank data out from under an
+  // in-progress edit), the tab isn't visible, or a load is already in
+  // flight. Cheap to run often since the backend serves these from cache
+  // (see Code.gs) rather than re-reading the whole sheet each time.
+  const AUTO_REFRESH_MS = 30000;
+  setInterval(() => {
+    if(!API_URL) return;
+    if(isLoading) return;
+    if(document.hidden) return;
+    if(document.getElementById('overlay').classList.contains('open')) return;
+    loadData();
+  }, AUTO_REFRESH_MS);
+
   // Boot
   if(API_URL){
     document.getElementById('dashPanel').style.display = 'block';
