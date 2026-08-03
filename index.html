@@ -53,6 +53,7 @@
   .header-sync{display:flex;align-items:center;gap:6px;font-size:10.5px;color:#B7C0DE;white-space:nowrap;background:none;border:none;}
   .header-sync .sync-btn{background:none;border:none;color:#B7C0DE;font-size:12px;cursor:pointer;padding:2px;line-height:1;}
   .header-sync .sync-btn:hover{color:#fff;}
+  .import-status{font-size:11.5px;color:var(--muted);white-space:nowrap;}
 
   /* Main */
   .main{padding:26px 32px 60px;max-width:1440px;margin:0 auto;width:100%;}
@@ -195,6 +196,7 @@
         <div class="left">
           <button class="btn" onclick="document.getElementById('importInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name and updates Due This Month, Payment (Adv) &amp; Penalty Due; unmatched names are added as new customers.">⇪ Import</button>
           <input type="file" id="importInput" accept=".csv,.xls,.xlsx" multiple style="display:none">
+          <span id="importStatus" class="import-status"></span>
           <button class="btn" onclick="exportCSV()" title="Export all customers to CSV">⇩ Export</button>
         </div>
         <div class="right">
@@ -599,7 +601,7 @@
     // reason (including an old, not-yet-redeployed backend), that chunk
     // automatically retries one row at a time so the import still
     // completes — just slower for that chunk.
-    document.getElementById('connStatus').textContent = `Importing 0 / ${total}…`;
+    document.getElementById('importStatus').textContent = `Importing 0 / ${total}…`;
     toast(`Importing ${total} record${total === 1 ? '' : 's'}…`);
 
     const updateResult = await runBatched_(
@@ -619,6 +621,7 @@
     const failed = updateResult.failed + createResult.failed;
 
     toast(`Import complete: ${updated} updated, ${created} added${failed ? ', ' + failed + ' failed' : ''}.`);
+    document.getElementById('importStatus').textContent = '';
     await loadData();
   }
 
@@ -647,7 +650,7 @@
     let succeeded = 0, failed = 0, done = doneSoFar;
 
     function reportProgress(){
-      document.getElementById('connStatus').textContent = `Importing ${done} / ${overallTotal}…`;
+      document.getElementById('importStatus').textContent = `Importing ${done} / ${overallTotal}…`;
     }
 
     async function fallbackChunk(chunk){
