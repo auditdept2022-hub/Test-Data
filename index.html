@@ -567,17 +567,30 @@
     // Due on an existing, already-matched customer. It never creates new
     // customers — a name with no match in the current list is skipped
     // entirely, not added as a new row.
+    //
+    // Some names appear more than once in the list (e.g. the same person
+    // with two separate accounts/units). Since the import file only gives
+    // a name with no other identifying info, there's no way to tell which
+    // account a row is meant for — so every customer sharing that name
+    // gets the same update, rather than silently updating just one of them
+    // and leaving the other(s) untouched.
     const nameIndex = {};
-    customers.forEach(c => { nameIndex[normalizeName_(c.customer)] = c; });
+    customers.forEach(c => {
+      const key = normalizeName_(c.customer);
+      (nameIndex[key] = nameIndex[key] || []).push(c);
+    });
 
     const toUpdate = [];
     let unmatched = 0;
+    let duplicateNameRows = 0;
     allRecords.forEach(rec => {
-      const match = nameIndex[normalizeName_(rec.customer)];
-      if(!match){ unmatched++; return; }
+      const matches = nameIndex[normalizeName_(rec.customer)];
+      if(!matches || !matches.length){ unmatched++; return; }
       const fields = {};
       ['dueThisMonth', 'paymentAdv', 'penaltyDue'].forEach(k => { if(rec[k] !== undefined) fields[k] = rec[k]; });
-      if(Object.keys(fields).length) toUpdate.push({ row: match.row, fields });
+      if(!Object.keys(fields).length) return;
+      if(matches.length > 1) duplicateNameRows++;
+      matches.forEach(m => toUpdate.push({ row: m.row, fields }));
     });
 
     if(!toUpdate.length){
@@ -588,7 +601,8 @@
     }
 
     const msg = `Found ${allRecords.length} data row${allRecords.length === 1 ? '' : 's'}: `
-      + `${toUpdate.length} will update Due This Month / Payment (Adv) / Penalty Due on existing customers`
+      + `${toUpdate.length} account${toUpdate.length === 1 ? '' : 's'} will get Due This Month / Payment (Adv) / Penalty Due updated`
+      + (duplicateNameRows ? ` (${duplicateNameRows} name${duplicateNameRows === 1 ? '' : 's'} matched more than one account — all of them will be updated)` : '')
       + (unmatched ? `. ${unmatched} unmatched name${unmatched === 1 ? '' : 's'} will be skipped (no new customers are created by import)` : '')
       + '. Continue?';
     if(!confirm(msg)) return;
