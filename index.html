@@ -992,7 +992,7 @@
     if(!c) return;
     Object.assign(c, item.fields);
     if(item.remark){
-      if(c.auditorRemarks && c.auditorRemarks.toUpperCase() !== 'NO REMARKS'){
+      if(c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS'){
         const entry = '[' + (c.dateOfAudit || 'undated') + '] ' + c.auditorRemarks;
         c.previousRemarks = c.previousRemarks ? entry + '\n' + c.previousRemarks : entry;
       }
@@ -1035,7 +1035,7 @@
     if(!c) return;
     Object.assign(c, item.fields);
     if(item.remark){
-      if(c.auditorRemarks && c.auditorRemarks.toUpperCase() !== 'NO REMARKS'){
+      if(c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS'){
         const entry = '[' + (c.dateOfAudit || 'undated') + '] ' + c.auditorRemarks;
         c.previousRemarks = c.previousRemarks ? entry + '\n' + c.previousRemarks : entry;
       }
@@ -1460,7 +1460,7 @@
   }
 
   function statusGroup(status){
-    const s = (status || '').toUpperCase();
+    const s = str_(status).toUpperCase();
     if(s.indexOf('DEL') !== -1) return 'del';
     if(s.indexOf('OD') !== -1) return 'od';
     if(s.indexOf('RSTR') !== -1) return 'rstr';
@@ -1486,7 +1486,7 @@
         if(hay.indexOf(q) === -1) return false;
       }
       if(statusF && statusGroup(c.customerStatus) !== statusF.toLowerCase()) return false;
-      const hasRemark = c.auditorRemarks && c.auditorRemarks.toUpperCase() !== 'NO REMARKS';
+      const hasRemark = c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS';
       if(remarkF === 'pending' && hasRemark) return false;
       if(remarkF === 'done' && !hasRemark) return false;
       return true;
@@ -1499,7 +1499,7 @@
     for(let i = 0; i < filtered.length; i++){
       const c = filtered[i];
       const g = statusGroup(c.customerStatus);
-      const hasRemark = c.auditorRemarks && c.auditorRemarks.toUpperCase() !== 'NO REMARKS';
+      const hasRemark = c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS';
       const hist = parseHistory(c.previousRemarks);
 
       const facts = [
@@ -1572,11 +1572,22 @@
     if(rec) openEditModal(Number(rec.dataset.row));
   });
 
+  // Google Sheets can hand back a number, boolean, or Date for a column
+  // that's supposed to hold plain text (e.g. someone typed "2024" or a
+  // raw date into a remarks/status cell instead of text). Every place
+  // below that calls a string method (toUpperCase, trim, split, etc.) on
+  // a sheet-derived field goes through this first so a stray non-string
+  // value can't throw and take down render()/loadData() entirely.
+  function str_(v){
+    return (v === null || v === undefined) ? '' : String(v);
+  }
+
   function escapeHtml(str){
     return String(str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
 
   function parseHistory(text){
+    text = str_(text);
     if(!text) return [];
     return text.split('\n').filter(Boolean).map(line=>{
       const match = line.match(/^\[(.*?)\]\s*(.*)$/);
@@ -1627,7 +1638,7 @@
 
     buildFieldGrid(c);
 
-    const hasRemark = c.auditorRemarks && c.auditorRemarks.toUpperCase() !== 'NO REMARKS';
+    const hasRemark = c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS';
     document.getElementById('mCurrent').innerHTML = hasRemark
       ? `<div class="date">${escapeHtml(c.dateOfAudit || 'Undated')}</div>${escapeHtml(c.auditorRemarks)}`
       : `<span style="color:#B4AD9B;font-style:italic;">No remarks recorded yet.</span>`;
