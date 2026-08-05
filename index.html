@@ -280,8 +280,10 @@
       <div id="conflictBanner" style="display:none;"></div>
       <div class="toolbar" style="margin-top:6px;">
         <div class="left">
-          <button class="btn" onclick="document.getElementById('importInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name (and engine no. when the file has one, so same-name/different-unit customers are told apart) and updates Due This Month, Payment (Adv) &amp; Penalty Due. An 'Auditor Remarks' column is added as a new remark — the old current remark moves into Previous Audit Remarks. Existing customers only; unmatched rows are skipped, never added.">⇪ Import</button>
-          <input type="file" id="importInput" accept=".csv,.xls,.xlsx" multiple style="display:none">
+          <button class="btn" onclick="document.getElementById('importBalancesInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name (and engine no. when the file has one, so same-name/different-unit customers are told apart) and updates ONLY Due This Month, Payment (Adv) &amp; Penalty Due. Any remarks/Auditor Remarks column in the file is ignored. Existing customers only; unmatched rows are skipped, never added.">⇪ Import Balances</button>
+          <input type="file" id="importBalancesInput" accept=".csv,.xls,.xlsx" multiple style="display:none">
+          <button class="btn" onclick="document.getElementById('importRemarksInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name (and engine no. when the file has one). Takes ONLY the customer name and a Remarks/Auditor Remarks column and appends each as a dated entry directly into Previous Audit Remarks. The current Auditor Remarks and Date of Audit are never touched. Any balance columns in the file are ignored. Existing customers only; unmatched rows are skipped, never added.">⇪ Import Remarks</button>
+          <input type="file" id="importRemarksInput" accept=".csv,.xls,.xlsx" multiple style="display:none">
           <span id="importStatus" class="import-status"></span>
           <button class="btn" onclick="exportCSV()" title="Export all customers to CSV">⇩ Export</button>
         </div>
@@ -441,33 +443,44 @@
 
   // ---- Import / Export ----------------------------------------------------
   //
-  // Import accepts CSV, .xls, or .xlsx. It works on ANY file that has a
-  // customer-name column plus at least one of Due This Month / Payment
-  // (Adv) / Penalty Due / Auditor Remarks, wherever those columns happen to
-  // sit and however many title/section rows sit above them — e.g. an
-  // aging/collection report exported straight from the accounting system,
-  // OR a branch's own audit sheet (like Sta. Rosa's) that carries a
-  // per-visit "Auditor Remarks" column instead of/alongside balances.
+  // There are TWO separate, independent import flows — "Import Balances"
+  // and "Import Remarks" — each with its own button/file-picker. They both
+  // read the same kinds of files (CSV, .xls, .xlsx) and use the same
+  // customer/engine matching, but each one only ever touches its own set of
+  // columns. That separation is deliberate: a file that happens to carry
+  // both balance figures and a remarks column will NOT have its remarks
+  // bleed into a balances import, or its balances bleed into a remarks
+  // import — whichever button you click, only that button's columns are
+  // ever written.
   //
-  // Behaviour:
-  //   - Customer name matches someone already on the list  -> their Due
-  //     This Month, Payment (Adv) and Penalty Due are updated if present in
-  //     the file. Nothing else (model, status, etc.) is touched.
+  // Shared matching behaviour (both flows):
+  //   - Customer name matches someone already on the list  -> that account
+  //     is eligible for update.
   //   - The row also has an Engine No. column               -> matching
   //     prefers name+engine together, so two accounts that share a name but
   //     are actually different units are told apart and only the correct
   //     one gets updated (both stay on the list as separate customers).
-  //   - The row has an Auditor Remarks value                -> handled
-  //     exactly like using "Add new remark" in the edit modal: whatever is
-  //     currently the customer's remark is pushed into Previous Audit
-  //     Remarks (dated), and the imported text becomes the new current
-  //     remark.
   //   - Customer name has no match on the list               -> skipped.
   //     Import never creates new customers.
   //   - Rows that aren't real customer data (section headers like "30 DAYS",
-  //     sub-total rows, blank rows) are skipped automatically, because they
-  //     have a name but no balance figures/remark, or a balance-column
-  //     position that isn't actually a name.
+  //     sub-total rows, blank rows) are skipped automatically.
+  //
+  // Import Balances (handleImportBalancesFiles):
+  //   - Reads ONLY Due This Month, Payment (Adv) and Penalty Due from the
+  //     file (plus customer/engine no. for matching). Any Auditor
+  //     Remarks/Remarks column in the file is completely ignored — never
+  //     read, never written. Rows with no balance figures are skipped.
+  //
+  // Import Remarks (handleImportRemarksFiles):
+  //   - Reads ONLY the customer (+engine no.) and an Auditor Remarks/
+  //     Remarks column. Any balance columns in the file are completely
+  //     ignored — never read, never written.
+  //   - The imported text is appended as a new dated entry directly into
+  //     Previous Audit Remarks. It does NOT touch the current Auditor
+  //     Remarks or Date of Audit at all — those stay exactly as they were
+  //     before the import. (This is different from "Add new remark" in the
+  //     edit modal, which replaces the current remark.)
+  //   - Rows with no remark text are skipped.
 
   // Alternate header names accepted on import, in addition to each field's
   // own label and key, so files from slightly different sources still map.
@@ -716,10 +729,13 @@
     });
   }
 
-  async function handleImportFiles(fileList){
+  // Shared file-reading step for both import flows: turns whatever files
+  // were picked into a flat array of parsed records (customer/engine plus
+  // any balance/remark columns the file happens to contain — filtering
+  // down to just the columns a given flow cares about happens later, in
+  // that flow's own matching step, NOT here).
+  async function parseImportFiles_(fileList){
     const files = Array.from(fileList || []);
-    if(!files.length) return;
-
     let allRecords = [];
     for(const file of files){
       const ext = (file.name.split('.').pop() || '').toLowerCase();
@@ -728,7 +744,7 @@
           const text = await readFileAsText_(file);
           const matrix = csvToMatrix_(text);
           const { records, headerFound } = detectHeaderAndParseRows_(matrix);
-          if(!headerFound){ toast(file.name + ': no recognizable customer/balance columns found.'); continue; }
+          if(!headerFound){ toast(file.name + ': no recognizable customer/balance/remarks columns found.'); continue; }
           if(!records.length) toast(file.name + ': columns found, but no data rows matched.');
           allRecords = allRecords.concat(records);
         } else if(ext === 'xls' || ext === 'xlsx'){
@@ -739,7 +755,7 @@
             const { records, headerFound } = detectHeaderAndParseRows_(matrix);
             if(headerFound) fileRecords = fileRecords.concat(records);
           });
-          if(!fileRecords.length){ toast(file.name + ': no recognizable customer/balance columns found.'); continue; }
+          if(!fileRecords.length){ toast(file.name + ': no recognizable customer/balance/remarks columns found.'); continue; }
           allRecords = allRecords.concat(fileRecords);
         } else {
           toast(file.name + ': unsupported file type (use .csv, .xls, or .xlsx).');
@@ -748,23 +764,31 @@
         toast('Could not read ' + file.name + ': ' + err.message);
       }
     }
-    if(!allRecords.length){ toast('No customer rows found to import.'); return; }
+    return allRecords;
+  }
 
-    // Match every parsed row against the currently loaded list by customer
-    // name — and, whenever the row also carries an engine number, by
-    // name+engine together. Import ONLY updates existing, already-matched
-    // customers. It never creates new customers — a name with no match in
-    // the current list is skipped entirely, not added as a new row.
-    //
-    // Some names appear more than once in the list (e.g. the same person
-    // with two separate units). When the import row includes an engine
-    // number, it's used to tell those apart: only the customer whose
-    // engine number actually matches gets updated, and the two accounts
-    // stay independent (each keeps its own balances/remarks). Only when a
-    // row has NO engine number, and the name is ambiguous, do we fall back
-    // to updating every account under that name — same as before.
-    function normalizeEngine_(s){ return String(s || '').replace(/[\s-]+/g, '').toUpperCase(); }
+  function normalizeEngine_(s){ return String(s || '').replace(/[\s-]+/g, '').toUpperCase(); }
 
+  // Matches every parsed row against the currently loaded list by customer
+  // name — and, whenever the row also carries an engine number, by
+  // name+engine together. Import ONLY updates existing, already-matched
+  // customers. It never creates new customers — a name with no match in
+  // the current list is skipped entirely, not added as a new row.
+  //
+  // Some names appear more than once in the list (e.g. the same person
+  // with two separate units). When the import row includes an engine
+  // number, it's used to tell those apart: only the customer whose engine
+  // number actually matches gets updated, and the two accounts stay
+  // independent (each keeps its own balances/remarks). Only when a row has
+  // NO engine number, and the name is ambiguous, do we fall back to
+  // updating every account under that name.
+  //
+  // `pickPayload_(rec)` decides what a given import flow actually wants
+  // out of a matched row — e.g. balances-only or remarks-only — and
+  // returns null to skip the row entirely if it has nothing usable for
+  // that flow. This is what keeps the two import flows from touching each
+  // other's columns even when both happen to be present in the same file.
+  function matchImportRecords_(allRecords, pickPayload_){
     const nameIndex = {};
     const compoundIndex = {};
     customers.forEach(c => {
@@ -780,7 +804,7 @@
     const toUpdate = [];
     let unmatched = 0;
     let duplicateNameRows = 0;
-    let remarkRows = 0;
+    let payloadRows = 0;
     allRecords.forEach(rec => {
       const nameKey = normalizeName_(rec.customer);
       const engKey = normalizeEngine_(rec.engineNo);
@@ -789,8 +813,7 @@
       if(engKey){
         // Engine number given — match that exact unit only. If it
         // doesn't line up with anything on file, don't guess: skip the
-        // row rather than risk updating (or worse, remark-stamping) the
-        // wrong account.
+        // row rather than risk updating the wrong account.
         matches = compoundIndex[nameKey + '|' + engKey] || null;
         if(!matches){
           const byName = nameIndex[nameKey];
@@ -802,54 +825,112 @@
 
       if(!matches || !matches.length){ unmatched++; return; }
 
-      const fields = {};
-      ['dueThisMonth', 'paymentAdv', 'penaltyDue'].forEach(k => { if(rec[k] !== undefined) fields[k] = rec[k]; });
-      const remark = rec.auditorRemarks ? String(rec.auditorRemarks).trim() : '';
-      if(!Object.keys(fields).length && !remark) return;
+      const payload = pickPayload_(rec);
+      if(!payload) return; // nothing this flow cares about on this row
 
       if(!engKey && matches.length > 1) duplicateNameRows++;
-      if(remark) remarkRows += matches.length;
-      matches.forEach(m => toUpdate.push({ row: m.row, fields, remark }));
+      payloadRows += matches.length;
+      matches.forEach(m => toUpdate.push(Object.assign({ row: m.row }, payload)));
+    });
+
+    return { toUpdate, unmatched, duplicateNameRows, payloadRows };
+  }
+
+  // ---- Import Balances -----------------------------------------------
+  // Only ever reads/writes Due This Month, Payment (Adv), Penalty Due.
+  // Any remarks column in the file is ignored completely.
+  async function handleImportBalancesFiles(fileList){
+    const allRecords = await parseImportFiles_(fileList);
+    if(!allRecords.length){ toast('No customer rows found to import.'); return; }
+
+    const { toUpdate, unmatched, duplicateNameRows } = matchImportRecords_(allRecords, rec => {
+      const fields = {};
+      ['dueThisMonth', 'paymentAdv', 'penaltyDue'].forEach(k => { if(rec[k] !== undefined) fields[k] = rec[k]; });
+      if(!Object.keys(fields).length) return null; // no balance figures on this row — nothing for this flow to do
+      return { fields };
     });
 
     if(!toUpdate.length){
       toast(unmatched
         ? `Found ${unmatched} row${unmatched === 1 ? '' : 's'}, but none matched an existing customer — nothing imported.`
-        : 'Found rows, but none had usable balance figures or remarks.');
+        : 'Found rows, but none had usable balance figures.');
       return;
     }
 
     const msg = `Found ${allRecords.length} data row${allRecords.length === 1 ? '' : 's'}: `
-      + `${toUpdate.length} account${toUpdate.length === 1 ? '' : 's'} will be updated`
-      + (remarkRows ? ` (${remarkRows} of them get a new auditor remark — the current one moves into Previous Audit Remarks)` : '')
+      + `${toUpdate.length} account${toUpdate.length === 1 ? '' : 's'} will have Due This Month / Payment (Adv) / Penalty Due updated`
       + (duplicateNameRows ? `. ${duplicateNameRows} name${duplicateNameRows === 1 ? '' : 's'} had no engine number to disambiguate and matched more than one account — all of them will be updated` : '')
       + (unmatched ? `. ${unmatched} unmatched row${unmatched === 1 ? '' : 's'} will be skipped (no new customers are created by import)` : '')
-      + '. Continue?';
+      + '. Remarks are not touched by this import. Continue?';
     if(!confirm(msg)) return;
 
     const total = toUpdate.length;
-
-    // Bulk writes go through batchUpdateCustomer, which applies many rows
-    // — including the remark-history push for any row that carries one —
-    // in ONE Apps Script execution instead of one HTTP round trip per row.
-    // Chunked so the URL stays a safe length and progress can be
-    // reported; a few chunks run concurrently for extra speed. If a batch
-    // call fails for any reason (including an old, not-yet-redeployed
-    // backend), that chunk automatically retries one row at a time via
-    // updateCustomerFull (which also understands the remark) so the
-    // import still completes — just slower for that chunk.
     document.getElementById('importStatus').textContent = `Importing 0 / ${total}…`;
     toast(`Importing ${total} record${total === 1 ? '' : 's'}…`);
 
+    // Bulk writes go through batchUpdateCustomer in ONE Apps Script
+    // execution per chunk instead of one HTTP round trip per row. No
+    // `remark`/`historyAppend` is ever sent here, so this flow can never
+    // touch Auditor Remarks / Previous Audit Remarks / Date of Audit.
     const updateResult = await runBatched_(
       toUpdate, 'batchUpdateCustomer', 'updates',
-      item => ({ row: item.row, fields: item.fields, remark: item.remark || '' }),
-      'updateCustomerFull', item => ({ row: item.row, fields: item.fields, remark: item.remark || '' }),
+      item => ({ row: item.row, fields: item.fields }),
+      'updateCustomer', item => ({ row: item.row, fields: item.fields }),
       total, 0
     );
 
     const updated = updateResult.succeeded, failed = updateResult.failed;
+    toast(`Import complete: ${updated} updated${failed ? ', ' + failed + ' failed' : ''}${unmatched ? ', ' + unmatched + ' skipped (no match)' : ''}.`);
+    document.getElementById('importStatus').textContent = '';
+    await loadData();
+  }
 
+  // ---- Import Remarks ---------------------------------------------------
+  // Only ever reads the customer/engine + a Remarks/Auditor Remarks
+  // column. Any balance columns in the file are ignored completely. The
+  // imported text is appended straight into Previous Audit Remarks as a
+  // new dated entry — current Auditor Remarks and Date of Audit are never
+  // written by this flow.
+  async function handleImportRemarksFiles(fileList){
+    const allRecords = await parseImportFiles_(fileList);
+    if(!allRecords.length){ toast('No customer rows found to import.'); return; }
+
+    const { toUpdate, unmatched, duplicateNameRows } = matchImportRecords_(allRecords, rec => {
+      const historyAppend = rec.auditorRemarks ? String(rec.auditorRemarks).trim() : '';
+      if(!historyAppend) return null; // no remark text on this row — nothing for this flow to do
+      return { historyAppend };
+    });
+
+    if(!toUpdate.length){
+      toast(unmatched
+        ? `Found ${unmatched} row${unmatched === 1 ? '' : 's'}, but none matched an existing customer — nothing imported.`
+        : 'Found rows, but none had usable remarks.');
+      return;
+    }
+
+    const msg = `Found ${allRecords.length} data row${allRecords.length === 1 ? '' : 's'}: `
+      + `${toUpdate.length} account${toUpdate.length === 1 ? '' : 's'} will get the imported text added to Previous Audit Remarks`
+      + (duplicateNameRows ? `. ${duplicateNameRows} name${duplicateNameRows === 1 ? '' : 's'} had no engine number to disambiguate and matched more than one account — all of them will be updated` : '')
+      + (unmatched ? `. ${unmatched} unmatched row${unmatched === 1 ? '' : 's'} will be skipped (no new customers are created by import)` : '')
+      + '. Current Auditor Remarks and Date of Audit are not touched. Continue?';
+    if(!confirm(msg)) return;
+
+    const total = toUpdate.length;
+    document.getElementById('importStatus').textContent = `Importing 0 / ${total}…`;
+    toast(`Importing ${total} record${total === 1 ? '' : 's'}…`);
+
+    // Bulk writes go through batchUpdateCustomer in ONE Apps Script
+    // execution per chunk. No `fields`/`remark` is ever sent here, so this
+    // flow can never touch balances, current Auditor Remarks, or Date of
+    // Audit — only Previous Audit Remarks gets a new dated line.
+    const updateResult = await runBatched_(
+      toUpdate, 'batchUpdateCustomer', 'updates',
+      item => ({ row: item.row, historyAppend: item.historyAppend }),
+      'appendRemarkHistoryRow', item => ({ row: item.row, entry: item.historyAppend }),
+      total, 0
+    );
+
+    const updated = updateResult.succeeded, failed = updateResult.failed;
     toast(`Import complete: ${updated} updated${failed ? ', ' + failed + ' failed' : ''}${unmatched ? ', ' + unmatched + ' skipped (no match)' : ''}.`);
     document.getElementById('importStatus').textContent = '';
     await loadData();
@@ -925,8 +1006,12 @@
     return { succeeded, failed, done };
   }
 
-  document.getElementById('importInput').addEventListener('change', (e)=>{
-    handleImportFiles(e.target.files);
+  document.getElementById('importBalancesInput').addEventListener('change', (e)=>{
+    handleImportBalancesFiles(e.target.files);
+    e.target.value = ''; // allow re-importing the same file(s) later
+  });
+  document.getElementById('importRemarksInput').addEventListener('change', (e)=>{
+    handleImportRemarksFiles(e.target.files);
     e.target.value = ''; // allow re-importing the same file(s) later
   });
 
