@@ -232,6 +232,22 @@
   .conflict-item .ci-actions button.save{background:var(--accent);color:#fff;border-color:var(--accent);}
   .conflict-item .ci-actions button:disabled{opacity:.5;cursor:not-allowed;}
 
+  /* Branch profiles (hamburger menu + drawer) */
+  .hamburger-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#DCE3FA;font-size:15px;cursor:pointer;padding:8px 11px;line-height:1;border-radius:8px;transition:background .15s;flex-shrink:0;}
+  .hamburger-btn:hover{background:rgba(255,255,255,.16);color:#fff;}
+  .modal.profile-modal{max-width:480px;}
+  .profile-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;max-height:52vh;overflow-y:auto;padding-right:2px;}
+  .profile-loading{color:var(--muted);font-size:12.5px;padding:14px 2px;}
+  .profile-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;transition:background .12s,border-color .12s;}
+  .profile-item:hover{background:#F7F8FD;border-color:#C9D1EE;}
+  .profile-item.active{background:var(--accent-soft);border-color:var(--accent);}
+  .profile-item .p-name{flex:1;font-weight:600;font-size:13.5px;color:var(--text);cursor:pointer;min-width:0;overflow-wrap:anywhere;}
+  .profile-item.active .p-name{color:var(--accent-dark);}
+  .p-check{color:var(--accent);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;margin-left:6px;}
+  .profile-item .p-actions{display:flex;gap:6px;flex-shrink:0;}
+  .profile-add-row{display:flex;gap:8px;align-items:center;}
+  .profile-rename-input{flex:1;border:1px solid var(--accent);border-radius:8px;padding:7px 9px;font-size:13.5px;font-weight:600;font-family:inherit;outline:none;min-width:0;}
+
   .tag-pending{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8B6A1F;background:var(--rstr-soft);border-radius:20px;padding:2px 8px;margin-left:6px;}
   .tag-pending.err{color:var(--del);background:var(--del-soft);}
   .rec.is-pending::before{background:var(--rstr);}
@@ -249,9 +265,10 @@
 <div class="shell">
   <header class="topband">
     <div class="brand">
+      <button class="hamburger-btn" onclick="openProfileMenu()" title="Branch profiles">☰</button>
       <div class="names">
         <div class="mark">Audited Accounts</div>
-        <div class="sub">Subsidiary Ledger</div>
+        <div class="sub" id="activeProfileLabel">Subsidiary Ledger</div>
       </div>
     </div>
     <div class="header-sync">
@@ -357,6 +374,27 @@
   </div>
 </div>
 
+<div class="overlay" id="profileOverlay">
+  <div class="modal profile-modal">
+    <div class="modal-head">
+      <div>
+        <h2>Branch Profiles</h2>
+        <div class="meta">Each profile is its own sheet tab — switch, rename, or add a branch</div>
+      </div>
+      <button class="modal-close" onclick="closeProfileMenu()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="profileList" class="profile-list">
+        <div class="profile-loading">Loading profiles…</div>
+      </div>
+      <div class="profile-add-row">
+        <input class="input" id="newProfileName" placeholder="New branch name, e.g. Batangas" style="flex:1;min-width:0;">
+        <button class="btn primary" onclick="createProfile_()">+ Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -365,6 +403,12 @@
   // screen, e.g. 'https://script.google.com/macros/s/AKfycb.../exec'
   let API_URL = 'https://script.google.com/macros/s/AKfycbxDmICui1qLjjdFfxPdSsDUTz_Kz7H696e7F_T_k6llQrbAf8PjDelruxoA2Gt2IJuS/exec';
   // -----------------------------------------------------------------------
+
+  // ---- Branch profiles (multi-sheet) -----------------------------------
+  // A "profile" is a sheet tab in the same spreadsheet, sharing the exact
+  // same columns as the NICHO template — one per branch being audited.
+  // currentSheet is which tab every read/write is scoped to right now.
+  let currentSheet = 'NICHO';
 
   // Field definitions drive both the edit/create form and payload building.
   const FIELDS = [
@@ -410,7 +454,7 @@
   let outbox = [];
   let isSyncing = false;
 
-  function outboxKey_(){ return 'nicho_outbox_v1:' + API_URL; }
+  function outboxKey_(){ return 'nicho_outbox_v1:' + API_URL + ':' + currentSheet; }
 
   function saveOutbox_(){
     try{ localStorage.setItem(outboxKey_(), JSON.stringify(outbox)); }catch(e){ /* storage full/unavailable — nothing else to do */ }
@@ -1029,8 +1073,11 @@
       return;
     }
     API_URL = val;
+    loadCurrentSheet_();
     document.getElementById('setupPanel').style.display = 'none';
     document.getElementById('dashPanel').style.display = 'block';
+    loadOutbox_();
+    updateSyncUI();
     loadData();
   }
 
@@ -1040,7 +1087,7 @@
   // GET requests keep their query string across that redirect, so every
   // write action is sent as a GET with the payload JSON-encoded in the URL.
   function apiCall(action, payload){
-    const url = API_URL + '?action=' + encodeURIComponent(action) + '&payload=' + encodeURIComponent(JSON.stringify(payload)) + '&_=' + Date.now();
+    const url = API_URL + '?action=' + encodeURIComponent(action) + '&sheet=' + encodeURIComponent(currentSheet) + '&payload=' + encodeURIComponent(JSON.stringify(payload)) + '&_=' + Date.now();
     return fetch(url, { cache: 'no-store' });
   }
 
@@ -1052,6 +1099,162 @@
     const data = await res.json();
     if(data.error) throw new Error(data.error);
     return data;
+  }
+
+  // ---- Branch profiles: menu, switch, create, rename, delete ----------
+
+  function currentSheetKey_(){ return 'nicho_current_sheet_v1:' + API_URL; }
+
+  function loadCurrentSheet_(){
+    try{
+      const v = localStorage.getItem(currentSheetKey_());
+      currentSheet = (v && v.trim()) ? v : 'NICHO';
+    }catch(e){ currentSheet = 'NICHO'; }
+    updateActiveProfileLabel_();
+  }
+
+  function saveCurrentSheet_(){
+    try{ localStorage.setItem(currentSheetKey_(), currentSheet); }catch(e){ /* fine, just won't survive a reload */ }
+    updateActiveProfileLabel_();
+  }
+
+  function updateActiveProfileLabel_(){
+    const el = document.getElementById('activeProfileLabel');
+    if(el) el.textContent = currentSheet;
+  }
+
+  // Escapes a branch name for safe embedding inside a single-quoted JS
+  // string literal within an onclick="..." attribute.
+  function jsAttr_(s){ return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+  let profilesCache_ = [];
+
+  function openProfileMenu(){
+    document.getElementById('profileOverlay').classList.add('open');
+    loadProfiles_();
+  }
+
+  function closeProfileMenu(){
+    document.getElementById('profileOverlay').classList.remove('open');
+  }
+
+  async function loadProfiles_(){
+    const listEl = document.getElementById('profileList');
+    listEl.innerHTML = '<div class="profile-loading">Loading profiles…</div>';
+    try{
+      const data = await apiCallJson_('listSheets', {});
+      profilesCache_ = data.sheets || [];
+      renderProfileList_(profilesCache_);
+    }catch(err){
+      listEl.innerHTML = '<div class="profile-loading">Could not load branch profiles: ' + escapeHtml(err.message) + '</div>';
+    }
+  }
+
+  function renderProfileList_(sheets){
+    const listEl = document.getElementById('profileList');
+    if(!sheets.length){
+      listEl.innerHTML = '<div class="profile-loading">No branch profiles yet — add one below.</div>';
+      return;
+    }
+    listEl.innerHTML = sheets.map(name => {
+      const isActive = name === currentSheet;
+      const canDelete = sheets.length > 1;
+      return '<div class="profile-item' + (isActive ? ' active' : '') + '">'
+        + '<span class="p-name" onclick="switchProfile_(\'' + jsAttr_(name) + '\')">' + escapeHtml(name)
+        + (isActive ? '<span class="p-check">✓ current</span>' : '') + '</span>'
+        + '<div class="p-actions">'
+        + '<button class="icon-btn" title="Rename" onclick="startRenameProfile_(this, \'' + jsAttr_(name) + '\')">✎</button>'
+        + (canDelete ? '<button class="icon-btn" title="Delete" onclick="deleteProfile_(\'' + jsAttr_(name) + '\')">🗑</button>' : '')
+        + '</div></div>';
+    }).join('');
+  }
+
+  async function switchProfile_(name){
+    closeProfileMenu();
+    if(name === currentSheet) return;
+    if(outbox.length){
+      if(!confirm('You have ' + outbox.length + ' unsynced change(s) on "' + currentSheet + '". Switching branches now leaves them queued until you come back and sync. Continue?')){
+        openProfileMenu();
+        return;
+      }
+    }
+    currentSheet = name;
+    saveCurrentSheet_();
+    customers = [];
+    lastListHash = null;
+    document.getElementById('tableBody').innerHTML = '';
+    loadOutbox_();
+    updateSyncUI();
+    await loadData();
+    toast('Switched to ' + name + '.');
+  }
+
+  async function createProfile_(){
+    const input = document.getElementById('newProfileName');
+    const name = input.value.trim();
+    if(!name){ toast('Enter a branch name first.'); return; }
+    try{
+      await apiCallJson_('createSheet', { name });
+      input.value = '';
+      toast('Branch "' + name + '" created.');
+      await loadProfiles_();
+      await switchProfile_(name);
+      openProfileMenu();
+      renderProfileList_(profilesCache_);
+    }catch(err){
+      toast('Could not create branch: ' + err.message);
+    }
+  }
+
+  function startRenameProfile_(btn, oldName){
+    const item = btn.closest('.profile-item');
+    const nameSpan = item.querySelector('.p-name');
+    nameSpan.outerHTML = '<input class="profile-rename-input" value="' + escapeHtml(oldName) + '">';
+    const input = item.querySelector('.profile-rename-input');
+    input.focus();
+    input.select();
+    let settled = false;
+    const commit = async () => {
+      if(settled) return;
+      settled = true;
+      const newName = input.value.trim();
+      if(!newName || newName === oldName){ renderProfileList_(profilesCache_); return; }
+      try{
+        await apiCallJson_('renameSheet', { oldName, newName });
+        if(currentSheet === oldName){ currentSheet = newName; saveCurrentSheet_(); }
+        toast('Renamed to "' + newName + '".');
+        await loadProfiles_();
+      }catch(err){
+        toast('Could not rename: ' + err.message);
+        renderProfileList_(profilesCache_);
+      }
+    };
+    input.addEventListener('keydown', e => {
+      if(e.key === 'Enter'){ e.preventDefault(); input.blur(); }
+      if(e.key === 'Escape'){ settled = true; renderProfileList_(profilesCache_); }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  async function deleteProfile_(name){
+    if(!confirm('Delete branch "' + name + '" and all its data? This cannot be undone.')) return;
+    try{
+      await apiCallJson_('deleteSheet', { name });
+      toast('Deleted "' + name + '".');
+      if(currentSheet === name){
+        const remaining = (profilesCache_ || []).filter(n => n !== name);
+        currentSheet = remaining[0] || 'NICHO';
+        saveCurrentSheet_();
+        customers = [];
+        lastListHash = null;
+        loadOutbox_();
+        updateSyncUI();
+        await loadData();
+      }
+      await loadProfiles_();
+    }catch(err){
+      toast('Could not delete: ' + err.message);
+    }
   }
 
   // Human-readable label for a field key, reusing the same labels shown
@@ -1464,7 +1667,7 @@
     let serverList = null;
     let listErr = null;
     try{
-      const res = await fetch(API_URL + '?action=list&_=' + Date.now(), { cache: 'no-store' });
+      const res = await fetch(API_URL + '?action=list&sheet=' + encodeURIComponent(currentSheet) + '&_=' + Date.now(), { cache: 'no-store' });
       const data = await res.json();
       if(data.error) throw new Error(data.error);
       serverList = data.customers || [];
@@ -1730,7 +1933,7 @@
   const LOCAL_CACHE_PREFIX = 'nicho_cache_v1:';
 
   function localCacheKey_(){
-    return LOCAL_CACHE_PREFIX + API_URL;
+    return LOCAL_CACHE_PREFIX + API_URL + ':' + currentSheet;
   }
 
   function saveLocalCache_(list){
@@ -1790,7 +1993,7 @@
       // (and any CDN in front of the page, e.g. GitHub Pages) can never
       // serve back a stale cached response for this request — including
       // an old failed/404 response from before a deployment was fixed.
-      const res = await fetch(API_URL + '?action=list&_=' + Date.now(), { cache: 'no-store' });
+      const res = await fetch(API_URL + '?action=list&sheet=' + encodeURIComponent(currentSheet) + '&_=' + Date.now(), { cache: 'no-store' });
       const data = await res.json();
       if(data.error) throw new Error(data.error);
       const fresh = data.customers || [];
@@ -2186,7 +2389,14 @@
   document.getElementById('statusFilter').addEventListener('change', render);
   document.getElementById('remarkFilter').addEventListener('change', render);
   document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
-  document.addEventListener('keydown', e=>{ if(e.key === 'Escape') closeModal(); });
+  document.getElementById('profileOverlay').addEventListener('click', e=>{ if(e.target.id==='profileOverlay') closeProfileMenu(); });
+  document.getElementById('newProfileName').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); createProfile_(); } });
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape'){
+      closeModal();
+      closeProfileMenu();
+    }
+  });
 
   // Auto-refresh: quietly re-pull the list on an interval so edits made by
   // someone else (another tab, or a direct edit in the sheet) show up
@@ -2210,6 +2420,7 @@
 
   // Boot
   if(API_URL){
+    loadCurrentSheet_();
     loadOutbox_();
     updateSyncUI();
     document.getElementById('dashPanel').style.display = 'block';
