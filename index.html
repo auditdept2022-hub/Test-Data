@@ -1119,6 +1119,11 @@
       c.auditorRemarks = item.auditor ? item.remark + '  — ' + item.auditor : item.remark;
       c.dateOfAudit = todayStr_();
     }
+    // Confirmed means it's no longer just a locally-queued guess — clear
+    // the "syncing…" badge this row may have been carrying since it was
+    // first queued offline. (No-op for the online-immediate path, which
+    // never sets _pending in the first place.)
+    delete c._pending;
     saveLocalCache_(customers);
   }
 
@@ -1292,6 +1297,7 @@
 
     const remaining = [];
     let syncedAny = false;
+    let needsFullReload = false; // set true only if an item can't be trusted to patch in locally (see below)
     let hitConnectionError = false;
     let connErrMsg = '';
 
@@ -1316,7 +1322,11 @@
             // desired end state — just drop the queued item. For an
             // update, there's nothing left to update — flag it so the
             // user notices rather than silently losing the edit.
-            if(item.kind === 'delete'){ syncedAny = true; continue; }
+            if(item.kind === 'delete'){
+              applyConfirmedDelete_(item);
+              syncedAny = true;
+              continue;
+            }
             item.status = 'conflict';
             item.serverSnapshot = null; // signals "row no longer exists"
             remaining.push(item);
@@ -1338,10 +1348,33 @@
 
         if(item.kind === 'create'){
           // Fix up local optimistic row + any later queued items that
-          // referenced this same temp row.
+          // referenced this same temp row. Creates never go through the
+          // per-field conflict picker, so the optimistic patch applied
+          // at queue time is always still accurate — safe to keep local.
           const local = customers.find(x => x.row === item.tempRow);
           if(local){ local.row = result.row; delete local._pending; }
           outbox.forEach(other => { if(other !== item && other.tempRow === item.tempRow) other.row = result.row; });
+        } else if(item.kind === 'update'){
+          if(item._needsFreshPull){
+            // This item's fields/remark were merged via the per-field
+            // conflict picker, so the local row (patched optimistically
+            // with the PRE-merge values back when it was queued) can no
+            // longer be trusted to match exactly what was just sent —
+            // fall back to a real reload for correctness on this pass.
+            needsFullReload = true;
+          } else {
+            // Nothing about this item was touched by conflict merging —
+            // the local row already reflects exactly what was just
+            // written (applyOptimisticUpdate_ applied the very same
+            // fields/remark/currentEdit/historyEdit when it was queued).
+            // Just mark it confirmed instead of re-fetching the whole
+            // sheet to learn something we already know.
+            applyConfirmedUpdate_(item);
+          }
+        } else if(item.kind === 'delete'){
+          // Deletion is unambiguous — nothing to merge — always safe to
+          // apply locally without a reload.
+          applyConfirmedDelete_(item);
         }
         syncedAny = true;
       }catch(err){
@@ -1369,7 +1402,19 @@
     isSyncing = false;
     updateSyncUI();
 
-    if(syncedAny) await loadData(); // pulls fresh server state and re-renders
+    // Only pay for a full server round-trip (guaranteed slow — every
+    // write we just made already cleared the backend's list cache, so
+    // this would force a full uncached sheet read) when something
+    // couldn't be trusted to patch in locally. Otherwise the sync loop
+    // above already applied every result directly to `customers`, so a
+    // local re-render is enough — no network call needed at all.
+    if(needsFullReload){
+      await loadData(); // pulls fresh server state and re-renders
+    } else if(syncedAny){
+      saveLocalCache_(customers);
+      render();
+      document.getElementById('connStatus').textContent = 'synced ' + new Date().toLocaleTimeString();
+    }
 
     if(syncedAny && !outbox.length){
       toast('Offline changes synced.');
@@ -1425,6 +1470,14 @@
     item.status = 'pending';
     delete item.snapshot;
     delete item.serverSnapshot;
+    // The local `customers` row was optimistically patched back when this
+    // item was first queued, using the PRE-merge fields/remark. Since
+    // some of those may have just been overwritten above with "theirs"
+    // (dropped from what gets sent), that earlier optimistic patch can
+    // no longer be trusted to match what's about to be sent — flag it so
+    // the sync that follows falls back to a real reload for this item
+    // instead of trusting a local patch that might be stale.
+    item._needsFreshPull = true;
     saveOutbox_();
     updateSyncUI();
     syncOutbox();
