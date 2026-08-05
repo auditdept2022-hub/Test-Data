@@ -236,19 +236,49 @@
   .hamburger-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#DCE3FA;font-size:15px;cursor:pointer;padding:8px 11px;line-height:1;border-radius:8px;transition:background .15s;flex-shrink:0;}
   .hamburger-btn:hover{background:rgba(255,255,255,.16);color:#fff;}
   .modal.profile-modal{max-width:480px;}
-  .profile-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;max-height:52vh;overflow-y:auto;padding-right:2px;}
-  .profile-loading{color:var(--muted);font-size:12.5px;padding:14px 2px;}
-  .profile-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;transition:background .12s,border-color .12s;}
+
+  .profile-search-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .profile-search{flex:1;min-width:0;background:#F1F3FB url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238B94B3' stroke-width='2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>") no-repeat 11px center;background-size:14px;padding-left:32px;}
+  .profile-count{font-size:11px;color:var(--muted-2);white-space:nowrap;font-family:'JetBrains Mono',monospace;}
+
+  .profile-list{display:flex;flex-direction:column;gap:6px;margin-bottom:18px;max-height:48vh;overflow-y:auto;padding-right:2px;}
+  .profile-loading{color:var(--muted);font-size:12.5px;padding:14px 2px;display:flex;align-items:center;gap:8px;}
+  .profile-loading.is-error{color:var(--del);}
+  .profile-loading .retry-link{color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;margin-left:auto;flex-shrink:0;}
+
+  .profile-skeleton{height:46px;border-radius:10px;background:linear-gradient(100deg,#EEF0F9 30%,#F7F8FD 45%,#EEF0F9 60%);background-size:200% 100%;animation:skeleton-sheen 1.3s ease-in-out infinite;}
+  @keyframes skeleton-sheen{0%{background-position:0% 0;}100%{background-position:-200% 0;}}
+
+  .profile-item{
+    position:relative;display:flex;align-items:center;gap:11px;padding:9px 12px 9px 14px;
+    border:1px solid var(--line);border-radius:10px;background:#fff;
+    transition:background .12s,border-color .12s,transform .1s;
+    animation:profile-item-in .18s ease both;
+  }
+  @keyframes profile-item-in{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:translateY(0);}}
   .profile-item:hover{background:#F7F8FD;border-color:#C9D1EE;}
   .profile-item.active{background:var(--accent-soft);border-color:var(--accent);}
-  .profile-item .p-name{flex:1;font-weight:600;font-size:13.5px;color:var(--text);cursor:pointer;min-width:0;overflow-wrap:anywhere;}
+  .profile-item.active::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--accent);}
+  .profile-item.hidden-by-search{display:none;}
+
+  .p-avatar{
+    flex-shrink:0;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    font-family:'Spectral',serif;font-weight:700;font-size:12.5px;color:#fff;
+    background:linear-gradient(155deg,var(--accent),var(--accent-dark));
+  }
+  .profile-item.active .p-avatar{background:linear-gradient(155deg,var(--gold),#93712E);}
+
+  .p-name-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;cursor:pointer;}
+  .profile-item .p-name{font-weight:600;font-size:13.5px;color:var(--text);min-width:0;overflow-wrap:anywhere;line-height:1.3;}
   .profile-item.active .p-name{color:var(--accent-dark);}
-  .p-check{color:var(--accent);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;margin-left:6px;}
+  .p-check{color:var(--accent);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:3px;}
+
   .profile-item .p-actions{display:flex;gap:6px;flex-shrink:0;}
   .profile-add-row{display:flex;gap:8px;align-items:center;}
-  .profile-add-block{display:flex;flex-direction:column;gap:8px;}
+  .profile-add-block{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--line);}
   .profile-add-hint{font-size:11px;color:var(--muted);line-height:1.4;}
   .profile-rename-input{flex:1;border:1px solid var(--accent);border-radius:8px;padding:7px 9px;font-size:13.5px;font-weight:600;font-family:inherit;outline:none;min-width:0;}
+  .profile-empty-search{color:var(--muted);font-size:12.5px;padding:16px 2px;text-align:center;}
 
   .tag-pending{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8B6A1F;background:var(--rstr-soft);border-radius:20px;padding:2px 8px;margin-left:6px;}
   .tag-pending.err{color:var(--del);background:var(--del-soft);}
@@ -386,6 +416,10 @@
       <button class="modal-close" onclick="closeProfileMenu()">✕</button>
     </div>
     <div class="modal-body">
+      <div class="profile-search-row">
+        <input class="input profile-search" id="profileSearch" placeholder="Search branches…" oninput="filterProfileList_(this.value)">
+        <span class="profile-count" id="profileCount"></span>
+      </div>
       <div id="profileList" class="profile-list">
         <div class="profile-loading">Loading profiles…</div>
       </div>
@@ -396,7 +430,7 @@
         </div>
         <div class="profile-add-row">
           <select class="input" id="newProfileTemplate" style="flex:1;min-width:0;" title="Copy columns from"></select>
-          <button class="btn primary" onclick="createProfile_()">+ Add</button>
+          <button class="btn primary" id="addProfileBtn" onclick="createProfile_()">+ Add</button>
         </div>
       </div>
     </div>
@@ -1156,6 +1190,8 @@
 
   function openProfileMenu(){
     document.getElementById('profileOverlay').classList.add('open');
+    const searchInput = document.getElementById('profileSearch');
+    if(searchInput) searchInput.value = '';
     loadProfiles_();
   }
 
@@ -1165,15 +1201,52 @@
 
   async function loadProfiles_(){
     const listEl = document.getElementById('profileList');
-    listEl.innerHTML = '<div class="profile-loading">Loading profiles…</div>';
+    listEl.innerHTML = '<div class="profile-skeleton"></div><div class="profile-skeleton"></div><div class="profile-skeleton"></div>';
     try{
       const data = await apiCallJson_('listSheets', {});
       profilesCache_ = data.sheets || [];
       renderProfileList_(profilesCache_);
       populateTemplateSelect_(profilesCache_);
     }catch(err){
-      listEl.innerHTML = '<div class="profile-loading">Could not load branch profiles: ' + escapeHtml(err.message) + '</div>';
+      listEl.innerHTML = '<div class="profile-loading is-error">⚠ Could not load branch profiles: ' + escapeHtml(err.message) + '<span class="retry-link" onclick="loadProfiles_()">Retry</span></div>';
+      document.getElementById('profileCount').textContent = '';
     }
+  }
+
+  // Filters the already-rendered list client-side (no re-fetch) as the
+  // person types in the search box — matters once there are a couple
+  // dozen branches and the drawer would otherwise be one long scroll.
+  function filterProfileList_(query){
+    const q = (query || '').trim().toLowerCase();
+    const items = document.querySelectorAll('#profileList .profile-item');
+    let visible = 0;
+    items.forEach(item => {
+      const name = (item.getAttribute('data-name') || '').toLowerCase();
+      const match = !q || name.indexOf(q) !== -1;
+      item.classList.toggle('hidden-by-search', !match);
+      if(match) visible++;
+    });
+    const emptyEl = document.getElementById('profileSearchEmpty');
+    if(emptyEl) emptyEl.remove();
+    if(q && visible === 0){
+      document.getElementById('profileList').insertAdjacentHTML('beforeend',
+        '<div class="profile-empty-search" id="profileSearchEmpty">No branches match "' + escapeHtml(query) + '".</div>');
+    }
+    const countEl = document.getElementById('profileCount');
+    const total = (profilesCache_ || []).length;
+    if(countEl) countEl.textContent = q ? (visible + ' of ' + total) : (total ? total + (total === 1 ? ' branch' : ' branches') : '');
+  }
+
+  function updateProfileCount_(){
+    const el = document.getElementById('profileCount');
+    if(!el) return;
+    const total = (profilesCache_ || []).length;
+    el.textContent = total ? (total + (total === 1 ? ' branch' : ' branches')) : '';
+  }
+
+  function profileInitial_(name){
+    const clean = (name || '').trim();
+    return clean ? clean.charAt(0).toUpperCase() : '?';
   }
 
   function populateTemplateSelect_(sheets){
@@ -1191,21 +1264,28 @@
 
   function renderProfileList_(sheets){
     const listEl = document.getElementById('profileList');
+    updateProfileCount_();
     if(!sheets.length){
       listEl.innerHTML = '<div class="profile-loading">No branch profiles yet — add one below.</div>';
       return;
     }
-    listEl.innerHTML = sheets.map(name => {
+    listEl.innerHTML = sheets.map((name, i) => {
       const isActive = name === currentSheet;
       const canDelete = sheets.length > 1;
-      return '<div class="profile-item' + (isActive ? ' active' : '') + '">'
-        + '<span class="p-name" onclick="switchProfile_(\'' + jsAttr_(name) + '\')">' + escapeHtml(name)
-        + (isActive ? '<span class="p-check">✓ current</span>' : '') + '</span>'
+      return '<div class="profile-item' + (isActive ? ' active' : '') + '" data-name="' + escapeHtml(name) + '" style="animation-delay:' + Math.min(i * 20, 200) + 'ms">'
+        + '<div class="p-avatar">' + escapeHtml(profileInitial_(name)) + '</div>'
+        + '<div class="p-name-wrap" onclick="switchProfile_(\'' + jsAttr_(name) + '\')">'
+        + '<span class="p-name">' + escapeHtml(name) + '</span>'
+        + (isActive ? '<span class="p-check">✓ Current branch</span>' : '')
+        + '</div>'
         + '<div class="p-actions">'
         + '<button class="icon-btn" title="Rename" onclick="startRenameProfile_(this, \'' + jsAttr_(name) + '\')">✎</button>'
         + (canDelete ? '<button class="icon-btn" title="Delete" onclick="deleteProfile_(\'' + jsAttr_(name) + '\')">🗑</button>' : '')
         + '</div></div>';
     }).join('');
+    // re-apply any in-progress search filter after a re-render (e.g. after rename/delete)
+    const searchInput = document.getElementById('profileSearch');
+    if(searchInput && searchInput.value.trim()) filterProfileList_(searchInput.value);
   }
 
   async function switchProfile_(name){
