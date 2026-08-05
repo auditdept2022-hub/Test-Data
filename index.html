@@ -152,6 +152,13 @@
   .history{display:flex;flex-direction:column;gap:10px;max-height:180px;overflow-y:auto;padding-right:4px;}
   .history-item{border-left:2px solid var(--panel);padding-left:12px;font-size:12.5px;color:var(--text);}
   .history-item .date{font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+
+  /* Directly-editable current remark & history (edit modal) */
+  .current-remark-date{font-size:11px;color:var(--rstr);font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;}
+  .current-remark-edit{background:#FBF6EE;border-color:#F0E1C4;min-height:70px;}
+  .history-edit{min-height:140px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.6;}
+  .history-hint{font-size:11px;color:var(--muted);margin-top:6px;}
+  .history-hint code{background:#F2EEE3;padding:1px 5px;border-radius:4px;}
   .modal-foot{padding:16px 24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;background:#FBFAF6;}
   .modal-foot .right{display:flex;gap:10px;}
 
@@ -304,12 +311,14 @@
 
       <div class="section" id="remarksSection">
         <div class="section-title">Current remark</div>
-        <div class="current-remark" id="mCurrent"></div>
+        <div class="current-remark-date" id="mCurrentDate"></div>
+        <textarea id="mCurrentEdit" class="current-remark-edit" placeholder="No remarks recorded yet."></textarea>
       </div>
 
       <div class="section" id="historySection">
         <div class="section-title">Previous audit remarks</div>
-        <div class="history" id="mHistory"></div>
+        <textarea id="mHistoryEdit" class="history-edit" placeholder="No earlier remarks on file."></textarea>
+        <div class="history-hint">One entry per line, formatted as <code>[YYYY-MM-DD] remark text</code>. Edit directly to correct a past entry.</div>
       </div>
 
       <div class="section" style="margin-bottom:0;">
@@ -398,6 +407,16 @@
   }
 
   function genId_(){ return 'o' + Date.now() + Math.random().toString(36).slice(2, 8); }
+
+  // Snapshots of the current-remark / history text as last painted into
+  // the edit modal's textareas, taken in openEditModal(). saveModal()
+  // diffs the live textarea value against these to decide whether the
+  // user actually made a direct edit (as opposed to just using "Add new
+  // remark", which is unrelated) — so a save that doesn't touch these
+  // fields never sends the extra editCurrentRemark/editRemarkHistory
+  // calls at all.
+  let editorOriginalCurrent = '';
+  let editorOriginalHistory = '';
 
   // True negative row ids mark a customer that was created offline and
   // hasn't been assigned a real sheet row yet.
@@ -900,6 +919,12 @@
       const mineRemark = item.remark + (item.auditor ? '  — ' + item.auditor : '');
       rows.push({ key: '__remark', label: 'Auditor Remarks', mineVal: mineRemark, theirsVal: snap.auditorRemarks });
     }
+    if(item.currentEdit !== undefined && item.currentEdit !== null && item.currentEdit !== snap.auditorRemarks){
+      rows.push({ key: '__currentEdit', label: 'Current Remark (direct edit)', mineVal: item.currentEdit, theirsVal: snap.auditorRemarks });
+    }
+    if(item.historyEdit !== undefined && item.historyEdit !== null && item.historyEdit !== snap.previousRemarks){
+      rows.push({ key: '__historyEdit', label: 'Previous Audit Remarks (direct edit)', mineVal: item.historyEdit, theirsVal: snap.previousRemarks });
+    }
 
     if(!rows.length){
       return `<div class="ci-picker"><div class="ci-empty">No fields actually differ from what's on the sheet now — safe to save.</div></div>`;
@@ -936,6 +961,12 @@
     }
     if(item.remark){
       mineHtml += `<div class="ci-field changed"><span class="ci-field-label">New Remark</span><span class="ci-field-val">${ciVal_(item.remark)}${item.auditor ? ' — ' + escapeHtml(item.auditor) : ''}</span></div>`;
+    }
+    if(item.currentEdit !== undefined && item.currentEdit !== null){
+      mineHtml += `<div class="ci-field changed"><span class="ci-field-label">Current Remark (direct edit)</span><span class="ci-field-val">${ciVal_(item.currentEdit)}</span></div>`;
+    }
+    if(item.historyEdit !== undefined && item.historyEdit !== null){
+      mineHtml += `<div class="ci-field changed"><span class="ci-field-label">Previous Audit Remarks (direct edit)</span><span class="ci-field-val">${ciVal_(item.historyEdit)}</span></div>`;
     }
     if(!mineHtml) mineHtml = `<div class="ci-empty">No field changes queued.</div>`;
     return `<div class="ci-versions" style="grid-template-columns:1fr;">
@@ -1022,6 +1053,15 @@
     const c = customers.find(x => x.row === item.row);
     if(!c) return;
     Object.assign(c, item.fields);
+    // Same order as sendOne_: history edit, then current-remark edit,
+    // then a brand new remark (which itself reads the just-edited
+    // current remark/history below).
+    if(item.historyEdit !== undefined && item.historyEdit !== null){
+      c.previousRemarks = item.historyEdit;
+    }
+    if(item.currentEdit !== undefined && item.currentEdit !== null){
+      c.auditorRemarks = item.currentEdit || 'NO REMARKS';
+    }
     if(item.remark){
       if(c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS'){
         const entry = '[' + (c.dateOfAudit || 'undated') + '] ' + c.auditorRemarks;
@@ -1065,6 +1105,12 @@
     const c = customers.find(x => x.row === item.row);
     if(!c) return;
     Object.assign(c, item.fields);
+    if(item.historyEdit !== undefined && item.historyEdit !== null){
+      c.previousRemarks = item.historyEdit;
+    }
+    if(item.currentEdit !== undefined && item.currentEdit !== null){
+      c.auditorRemarks = item.currentEdit || 'NO REMARKS';
+    }
     if(item.remark){
       if(c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS'){
         const entry = '[' + (c.dateOfAudit || 'undated') + '] ' + c.auditorRemarks;
@@ -1185,6 +1231,18 @@
     }
     if(item.kind === 'update'){
       await apiCallJson_('updateCustomer', { row: item.row, fields: item.fields });
+      // History correction, then current-remark correction, then a brand
+      // new remark (in that order) — addRemark() reads whatever is
+      // sitting in the current-remark/history cells AT CALL TIME and
+      // pushes the current remark into history, so any direct edits to
+      // either must land first or addRemark would push the stale
+      // pre-edit text instead of the corrected text.
+      if(item.historyEdit !== undefined && item.historyEdit !== null){
+        await apiCallJson_('editRemarkHistory', { row: item.row, history: item.historyEdit });
+      }
+      if(item.currentEdit !== undefined && item.currentEdit !== null){
+        await apiCallJson_('editCurrentRemark', { row: item.row, remark: item.currentEdit });
+      }
       if(item.remark){
         await apiCallJson_('addRemark', { row: item.row, remark: item.remark, auditor: item.auditor || '' });
       }
@@ -1352,6 +1410,13 @@
         if(key === '__remark'){
           item.remark = null;
           item.auditor = null;
+        } else if(key === '__currentEdit'){
+          // Drop the direct edit entirely — leave the sheet's current
+          // remark exactly as it is, don't call editCurrentRemark at all.
+          item.currentEdit = null;
+        } else if(key === '__historyEdit'){
+          // Same for the history edit.
+          item.historyEdit = null;
         } else if(item.fields && key in item.fields){
           item.fields[key] = snap[key];
         }
@@ -1712,15 +1777,12 @@
     buildFieldGrid(c);
 
     const hasRemark = c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS';
-    document.getElementById('mCurrent').innerHTML = hasRemark
-      ? `<div class="date">${escapeHtml(c.dateOfAudit || 'Undated')}</div>${escapeHtml(c.auditorRemarks)}`
-      : `<span style="color:#B4AD9B;font-style:italic;">No remarks recorded yet.</span>`;
+    document.getElementById('mCurrentDate').textContent = hasRemark ? (c.dateOfAudit || 'Undated') : '';
+    editorOriginalCurrent = hasRemark ? str_(c.auditorRemarks) : '';
+    document.getElementById('mCurrentEdit').value = editorOriginalCurrent;
 
-    const hist = parseHistory(c.previousRemarks);
-    const histEl = document.getElementById('mHistory');
-    histEl.innerHTML = hist.length
-      ? hist.map(h => `<div class="history-item"><div class="date">${escapeHtml(h.date)}</div>${escapeHtml(h.remark)}</div>`).join('')
-      : `<div style="color:#B4AD9B;font-style:italic;font-size:12.5px;">No earlier remarks on file.</div>`;
+    editorOriginalHistory = str_(c.previousRemarks);
+    document.getElementById('mHistoryEdit').value = editorOriginalHistory;
 
     document.getElementById('mNewRemark').value = '';
     document.getElementById('mAuditor').value = '';
@@ -1742,6 +1804,11 @@
     document.getElementById('saveBtn').textContent = 'Create customer';
 
     buildFieldGrid({});
+    editorOriginalCurrent = '';
+    editorOriginalHistory = '';
+    document.getElementById('mCurrentDate').textContent = '';
+    document.getElementById('mCurrentEdit').value = '';
+    document.getElementById('mHistoryEdit').value = '';
     document.getElementById('mNewRemark').value = '';
     document.getElementById('mAuditor').value = '';
     document.getElementById('overlay').classList.add('open');
@@ -1781,6 +1848,17 @@
         toast(result && result.queued ? 'No connection — saved on this device, will sync automatically.' : 'Customer added.');
       } else {
         const c = customers.find(x => x.row === activeRow);
+
+        // Direct edits to the current remark / history textareas, only
+        // sent if they actually differ from what was painted in when the
+        // modal opened — leaving these unset (undefined) means sendOne_
+        // skips the corresponding editCurrentRemark/editRemarkHistory
+        // call entirely for an unrelated field-only or new-remark-only save.
+        const currentEditVal = document.getElementById('mCurrentEdit').value.trim();
+        const historyEditVal = document.getElementById('mHistoryEdit').value.trim();
+        const currentEdit = currentEditVal !== editorOriginalCurrent.trim() ? currentEditVal : undefined;
+        const historyEdit = historyEditVal !== editorOriginalHistory.trim() ? historyEditVal : undefined;
+
         const item = {
           id: genId_(),
           kind: 'update',
@@ -1788,12 +1866,14 @@
           fields,
           remark: remark || null,
           auditor: auditor || null,
+          currentEdit,
+          historyEdit,
           status: 'pending',
           // Snapshot of what THIS client last saw on the server for the
           // fields being touched — used at sync time to detect if
           // someone else changed this row in the meantime.
           snapshot: c ? Object.assign(
-            { customer: c.customer, auditorRemarks: c.auditorRemarks, dateOfAudit: c.dateOfAudit },
+            { customer: c.customer, auditorRemarks: c.auditorRemarks, dateOfAudit: c.dateOfAudit, previousRemarks: c.previousRemarks },
             Object.fromEntries(Object.keys(fields).map(k => [k, c[k]]))
           ) : null
         };
