@@ -195,6 +195,20 @@
   .ci-empty{color:var(--muted);font-style:italic;}
   @media(max-width:640px){ .ci-versions{grid-template-columns:1fr;} }
 
+  .ci-picker{margin-bottom:10px;}
+  .ci-pick-field{border:1px solid #EFE3BC;border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#FFFCF4;}
+  .ci-pick-field:last-child{margin-bottom:0;}
+  .ci-pick-label{font-weight:700;font-size:11px;color:var(--text);margin-bottom:6px;}
+  .ci-pick-opt{display:flex;align-items:flex-start;gap:7px;padding:6px 7px;border-radius:6px;cursor:pointer;font-size:11.5px;line-height:1.45;}
+  .ci-pick-opt:hover{background:#F3ECD8;}
+  .ci-pick-opt input{margin-top:3px;flex:0 0 auto;}
+  .ci-pick-opt .ci-pick-tag{font-weight:700;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:1px;}
+  .ci-pick-opt.mine .ci-pick-tag{color:var(--accent-dark);}
+  .ci-pick-opt.theirs .ci-pick-tag{color:var(--del);}
+  .ci-pick-opt .ci-pick-val{color:var(--text);white-space:pre-wrap;word-break:break-word;}
+  .conflict-item .ci-actions button.save{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .conflict-item .ci-actions button:disabled{opacity:.5;cursor:not-allowed;}
+
   .tag-pending{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8B6A1F;background:var(--rstr-soft);border-radius:20px;padding:2px 8px;margin-left:6px;}
   .tag-pending.err{color:var(--del);background:var(--del-soft);}
   .rec.is-pending{border-left:3px solid var(--rstr);}
@@ -852,46 +866,59 @@
     return escapeHtml(String(v));
   }
 
-  // Builds the side-by-side "your version" vs "currently on the sheet"
-  // comparison shown inside a conflict item, so the person resolving it
-  // can actually see what each side contains — especially the auditor
-  // remarks — instead of picking blind.
-  function renderConflictVersions_(item){
-    const keys = Array.from(new Set([
-      ...Object.keys(item.fields || {}),
-      ...Object.keys(item.snapshot || {})
-    ])).filter(k => k !== 'row');
-
-    let mineHtml = '';
+  // Builds a per-field picker for a conflict: instead of an all-or-nothing
+  // "keep mine" / "discard mine", every field that actually DIFFERS
+  // between your queued change and what's currently on the sheet gets its
+  // own pair of radio options, defaulted to "your version". Fields that
+  // match on both sides are left out entirely — there's nothing to decide
+  // there, and showing them just buries the one or two that matter (e.g.
+  // "Customer Name" and "Auditor Remarks") in a wall of identical rows.
+  //
+  // The remark is treated as its own pseudo-field ('__remark') compared
+  // against the sheet's CURRENT auditorRemarks, since your new remark is
+  // additive (it becomes the new "current" remark and pushes whatever's
+  // already there into history) rather than a plain field overwrite.
+  function renderConflictPicker_(item){
     if(item.kind === 'delete'){
-      mineHtml += `<div class="ci-field"><span class="ci-field-label">Action</span><span class="ci-field-val">Delete this record</span></div>`;
-    } else {
-      keys.forEach(k => {
-        if(!item.fields || !(k in item.fields)) return; // only fields you actually changed
-        mineHtml += `<div class="ci-field changed"><span class="ci-field-label">${escapeHtml(fieldLabel_(k))}</span><span class="ci-field-val">${ciVal_(item.fields[k])}</span></div>`;
-      });
+      return `<div class="ci-picker"><div class="ci-empty">This change deletes the record entirely — there's nothing to merge field-by-field. Use the buttons below to delete it or leave it as-is.</div></div>`;
     }
+    const snap = item.serverSnapshot;
+    if(snap === null){
+      return `<div class="ci-picker"><div class="ci-empty">This row no longer exists on the sheet — it may have been deleted. It can't be merged field-by-field; discard your change or leave it queued to retry.</div></div>`;
+    }
+    if(!snap){
+      return `<div class="ci-picker"><div class="ci-empty">Current sheet values unavailable.</div></div>`;
+    }
+
+    const rows = [];
+    Object.keys(item.fields || {}).forEach(k => {
+      if(k === 'row') return;
+      if(String(item.fields[k] ?? '') === String(snap[k] ?? '')) return; // unchanged — nothing to pick
+      rows.push({ key: k, label: fieldLabel_(k), mineVal: item.fields[k], theirsVal: snap[k] });
+    });
     if(item.remark){
-      mineHtml += `<div class="ci-field changed"><span class="ci-field-label">New Remark</span><span class="ci-field-val">${ciVal_(item.remark)}${item.auditor ? ' — ' + escapeHtml(item.auditor) : ''}</span></div>`;
-    }
-    if(!mineHtml) mineHtml = `<div class="ci-empty">No field changes queued.</div>`;
-
-    let theirsHtml = '';
-    if(item.serverSnapshot === null){
-      theirsHtml = `<div class="ci-empty">This row no longer exists on the sheet — it may have been deleted.</div>`;
-    } else if(item.serverSnapshot){
-      keys.forEach(k => {
-        theirsHtml += `<div class="ci-field"><span class="ci-field-label">${escapeHtml(fieldLabel_(k))}</span><span class="ci-field-val">${ciVal_(item.serverSnapshot[k])}</span></div>`;
-      });
-      if(!theirsHtml) theirsHtml = `<div class="ci-empty">No conflicting fields found.</div>`;
-    } else {
-      theirsHtml = `<div class="ci-empty">Current sheet values unavailable.</div>`;
+      const mineRemark = item.remark + (item.auditor ? '  — ' + item.auditor : '');
+      rows.push({ key: '__remark', label: 'Auditor Remarks', mineVal: mineRemark, theirsVal: snap.auditorRemarks });
     }
 
-    return `<div class="ci-versions">
-      <div class="ci-version mine"><div class="ci-version-label">Your version (offline)</div>${mineHtml}</div>
-      <div class="ci-version theirs"><div class="ci-version-label">Currently on the sheet</div>${theirsHtml}</div>
-    </div>`;
+    if(!rows.length){
+      return `<div class="ci-picker"><div class="ci-empty">No fields actually differ from what's on the sheet now — safe to save.</div></div>`;
+    }
+
+    const fieldsHtml = rows.map(r => `
+      <div class="ci-pick-field" data-key="${escapeHtml(r.key)}">
+        <div class="ci-pick-label">${escapeHtml(r.label)}</div>
+        <label class="ci-pick-opt mine">
+          <input type="radio" name="pick_${item.id}_${escapeHtml(r.key)}" value="mine" checked>
+          <span><span class="ci-pick-tag">Your version</span><span class="ci-pick-val">${ciVal_(r.mineVal)}</span></span>
+        </label>
+        <label class="ci-pick-opt theirs">
+          <input type="radio" name="pick_${item.id}_${escapeHtml(r.key)}" value="theirs">
+          <span><span class="ci-pick-tag">Currently on the sheet</span><span class="ci-pick-val">${ciVal_(r.theirsVal)}</span></span>
+        </label>
+      </div>`).join('');
+
+    return `<div class="ci-picker" data-item="${item.id}">${fieldsHtml}</div>`;
   }
 
   // Single-column version of the above for the "failed to save" list,
@@ -939,13 +966,17 @@
       html += `<div class="conflict-banner"><div class="cb-head">⚠ ${conflicts.length} change${conflicts.length>1?'s':''} couldn't auto-sync — someone else edited ${conflicts.length>1?'these':'this'} while you were offline</div>` +
         conflicts.map(c=>{
           const name = (c.fields && c.fields.customer) || (c.snapshot && c.snapshot.customer) || 'this customer';
+          const isDelete = c.kind === 'delete';
           return `<div class="conflict-item">
             <div class="ci-name">${escapeHtml(name)}</div>
-            <div class="ci-detail">Your offline change to this record conflicts with a newer change already on the sheet. Compare both versions below, then keep yours (overwrites the sheet's current value) or discard yours (keeps what's on the sheet).</div>
-            ${renderConflictVersions_(c)}
+            <div class="ci-detail">${isDelete ? "Someone else edited this record while you had it queued for deletion. Choose whether to delete it or leave it as-is." : "Someone else edited this record while you were offline. Only the fields that actually differ are shown below — pick which side to keep for each, then Save."}</div>
+            ${renderConflictPicker_(c)}
             <div class="ci-actions">
-              <button class="keep" onclick="resolveConflict('${c.id}','keep')">Keep my version</button>
-              <button class="discard" onclick="resolveConflict('${c.id}','discard')">Discard mine</button>
+              ${isDelete
+                ? `<button class="discard" onclick="resolveConflict('${c.id}','keep')">Delete anyway</button>
+                   <button class="save" onclick="resolveConflict('${c.id}','discard')">Keep record (cancel delete)</button>`
+                : `<button class="save" onclick="applyConflictPick('${c.id}')">Save selection</button>
+                   <button class="discard" onclick="resolveConflict('${c.id}','discard')">Discard all my changes</button>`}
             </div>
           </div>`;
         }).join('');
@@ -1291,6 +1322,48 @@
     } else if(syncedAny){
       toast('Offline changes synced.');
     }
+  }
+
+  // Applies the per-field picks made in a conflict's radio picker. For
+  // every field where "Currently on the sheet" was chosen, that field is
+  // dropped from what gets sent — it's overwritten with the sheet's own
+  // current value, i.e. left alone. For every field where "Your version"
+  // was chosen (the default), your queued value is kept as-is.
+  //
+  // The remark ('__remark') is special: choosing "Currently on the sheet"
+  // clears item.remark entirely so no addRemark call is made at all — the
+  // sheet's current remark is left completely untouched, nothing gets
+  // pushed into its history. Choosing "Your version" sends your remark
+  // exactly as before, which correctly pushes whatever's on the sheet
+  // right now into the history as the single most recent "previous"
+  // entry, with your remark becoming current — no double-counting, no
+  // stray in-between entries.
+  function applyConflictPick(id){
+    const item = outbox.find(o => o.id === id);
+    if(!item) return;
+    const snap = item.serverSnapshot;
+    const picker = document.querySelector(`.ci-picker[data-item="${id}"]`);
+    if(picker && snap){
+      picker.querySelectorAll('.ci-pick-field').forEach(fieldEl => {
+        const key = fieldEl.dataset.key;
+        const checked = fieldEl.querySelector('input[type="radio"]:checked');
+        const choice = checked ? checked.value : 'mine';
+        if(choice !== 'theirs') return; // 'mine' needs no change — already queued as-is
+        if(key === '__remark'){
+          item.remark = null;
+          item.auditor = null;
+        } else if(item.fields && key in item.fields){
+          item.fields[key] = snap[key];
+        }
+      });
+    }
+    item.status = 'pending';
+    delete item.snapshot;
+    delete item.serverSnapshot;
+    saveOutbox_();
+    updateSyncUI();
+    syncOutbox();
+    toast('Saved your picks — syncing…');
   }
 
   async function resolveConflict(id, choice){
