@@ -741,6 +741,45 @@
 
   let isLoading = false;
 
+  // ---- Local list cache -----------------------------------------------
+  // Every network round trip to an Apps Script /exec URL costs at least
+  // one redirect (Apps Script always 302s to script.googleusercontent.com)
+  // plus script boot time, so even a server-side CacheService hit is
+  // rarely under ~1s and a cold start can run several seconds. That
+  // latency is unavoidable on Apps Script's end, but the dashboard doesn't
+  // need to make the user sit through it on every visit: the last
+  // successfully loaded list is stashed in localStorage (keyed per
+  // API_URL, so switching sheets doesn't mix data) and painted immediately
+  // on boot, while a fresh copy is quietly fetched in the background and
+  // swapped in the moment it arrives. The only thing that still waits on
+  // the network is the very first load on a given browser/device.
+  const LOCAL_CACHE_PREFIX = 'nicho_cache_v1:';
+
+  function localCacheKey_(){
+    return LOCAL_CACHE_PREFIX + API_URL;
+  }
+
+  function saveLocalCache_(list){
+    try{
+      localStorage.setItem(localCacheKey_(), JSON.stringify({ customers: list, ts: Date.now() }));
+    }catch(e){
+      // storage full/unavailable (private browsing, quota, etc.) — fine,
+      // this is purely a speed optimization, not a source of truth
+    }
+  }
+
+  function loadLocalCache_(){
+    try{
+      const raw = localStorage.getItem(localCacheKey_());
+      if(!raw) return null;
+      const parsed = JSON.parse(raw);
+      if(!parsed || !Array.isArray(parsed.customers)) return null;
+      return parsed;
+    }catch(e){
+      return null;
+    }
+  }
+
   async function loadData(){
     if(!API_URL){
       document.getElementById('setupPanel').style.display = 'block';
@@ -749,10 +788,29 @@
     }
     if(isLoading) return; // avoid piling up duplicate in-flight requests
     isLoading = true;
-    document.getElementById('connStatus').textContent = 'Loading…';
+
+    // Paint instantly from whatever we last saw for this API_URL, if the
+    // page hasn't already got rows in memory (e.g. first load in a new
+    // tab). The user sees their ledger right away instead of a skeleton,
+    // while the real fetch below runs quietly underneath it.
+    let paintedFromCache = false;
     if(customers.length === 0){
-      document.getElementById('tableBody').innerHTML = skeletonHtml(6);
+      const cached = loadLocalCache_();
+      if(cached && cached.customers.length){
+        customers = cached.customers;
+        paintedFromCache = true;
+        render();
+        document.getElementById('connStatus').textContent =
+          'showing cached data from ' + new Date(cached.ts).toLocaleTimeString() + ' — syncing…';
+      }
     }
+    if(!paintedFromCache){
+      document.getElementById('connStatus').textContent = 'Loading…';
+      if(customers.length === 0){
+        document.getElementById('tableBody').innerHTML = skeletonHtml(6);
+      }
+    }
+
     try{
       // cache: 'no-store' plus a timestamp query param means the browser
       // (and any CDN in front of the page, e.g. GitHub Pages) can never
@@ -762,10 +820,20 @@
       const data = await res.json();
       if(data.error) throw new Error(data.error);
       customers = data.customers || [];
+      saveLocalCache_(customers);
       document.getElementById('connStatus').textContent = 'synced ' + new Date().toLocaleTimeString();
       render();
     }catch(err){
-      document.getElementById('connStatus').textContent = 'Connection error.';
+      // If we already painted cached data, leave it on screen — a failed
+      // background refresh shouldn't yank the table out from under the
+      // user. Only fall back to the hard "Connection error" messaging
+      // when there was nothing to show in the first place.
+      if(paintedFromCache){
+        document.getElementById('connStatus').textContent =
+          'Sync failed — showing cached data. (' + err.message + ')';
+      } else {
+        document.getElementById('connStatus').textContent = 'Connection error.';
+      }
       toast('Could not load data: ' + err.message);
     }finally{
       isLoading = false;
