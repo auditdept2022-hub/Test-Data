@@ -59,7 +59,6 @@
     border-bottom:1px solid rgba(255,255,255,.08);
   }
   .brand{display:flex;align-items:center;gap:12px;}
-  .brand .crest{width:36px;height:36px;border-radius:10px;background:linear-gradient(155deg,var(--panel-4),var(--gold) 145%);display:flex;align-items:center;justify-content:center;font-family:'Spectral',serif;font-weight:700;font-size:16px;color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.25);flex-shrink:0;}
   .brand .names{display:flex;flex-direction:column;gap:2px;}
   .brand .mark{font-family:'Spectral',serif;font-weight:700;font-size:19px;letter-spacing:.2px;color:#fff;line-height:1.1;}
   .brand .sub{font-size:11px;color:#AEB9E8;letter-spacing:.5px;text-transform:uppercase;}
@@ -250,7 +249,6 @@
 <div class="shell">
   <header class="topband">
     <div class="brand">
-      <div class="crest">A</div>
       <div class="names">
         <div class="mark">Audited Accounts</div>
         <div class="sub">Subsidiary Ledger</div>
@@ -282,7 +280,7 @@
         <div class="left">
           <button class="btn" onclick="document.getElementById('importBalancesInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name (and engine no. when the file has one, so same-name/different-unit customers are told apart) and updates ONLY Due This Month, Payment (Adv) &amp; Penalty Due. Any remarks/Auditor Remarks column in the file is ignored. Existing customers only; unmatched rows are skipped, never added.">⇪ Import Balances</button>
           <input type="file" id="importBalancesInput" accept=".csv,.xls,.xlsx" multiple style="display:none">
-          <button class="btn" onclick="document.getElementById('importRemarksInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name (and engine no. when the file has one). Takes ONLY the customer name and a Remarks/Auditor Remarks column and appends each as a dated entry directly into Previous Audit Remarks. The current Auditor Remarks and Date of Audit are never touched. Any balance columns in the file are ignored. Existing customers only; unmatched rows are skipped, never added.">⇪ Import Remarks</button>
+          <button class="btn" onclick="document.getElementById('importRemarksInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name (and engine no. when the file has one). Takes ONLY the customer name and a Remarks/Auditor Remarks column and adds each one as a new line directly into Previous Audit Remarks (no date stamp). The current Auditor Remarks and Date of Audit are never touched. Any balance columns in the file are ignored. Existing customers only; unmatched rows are skipped, never added.">⇪ Import Remarks</button>
           <input type="file" id="importRemarksInput" accept=".csv,.xls,.xlsx" multiple style="display:none">
           <span id="importStatus" class="import-status"></span>
           <button class="btn" onclick="exportCSV()" title="Export all customers to CSV">⇩ Export</button>
@@ -475,7 +473,8 @@
   //   - Reads ONLY the customer (+engine no.) and an Auditor Remarks/
   //     Remarks column. Any balance columns in the file are completely
   //     ignored — never read, never written.
-  //   - The imported text is appended as a new dated entry directly into
+  //   - The imported text is appended as a new line, as-is (no date
+  //     stamp), directly into
   //     Previous Audit Remarks. It does NOT touch the current Auditor
   //     Remarks or Date of Audit at all — those stay exactly as they were
   //     before the import. (This is different from "Add new remark" in the
@@ -889,8 +888,8 @@
   // Only ever reads the customer/engine + a Remarks/Auditor Remarks
   // column. Any balance columns in the file are ignored completely. The
   // imported text is appended straight into Previous Audit Remarks as a
-  // new dated entry — current Auditor Remarks and Date of Audit are never
-  // written by this flow.
+  // new line, as-is (no date stamp) — current Auditor Remarks and Date of
+  // Audit are never written by this flow.
   async function handleImportRemarksFiles(fileList){
     const allRecords = await parseImportFiles_(fileList);
     if(!allRecords.length){ toast('No customer rows found to import.'); return; }
@@ -922,7 +921,8 @@
     // Bulk writes go through batchUpdateCustomer in ONE Apps Script
     // execution per chunk. No `fields`/`remark` is ever sent here, so this
     // flow can never touch balances, current Auditor Remarks, or Date of
-    // Audit — only Previous Audit Remarks gets a new dated line.
+    // Audit — only Previous Audit Remarks gets a new line, as-is (no date
+    // stamp).
     const updateResult = await runBatched_(
       toUpdate, 'batchUpdateCustomer', 'updates',
       item => ({ row: item.row, historyAppend: item.historyAppend }),
