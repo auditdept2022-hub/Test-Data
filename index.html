@@ -180,6 +180,21 @@
   .conflict-item .ci-actions button.keep{background:var(--accent);color:#fff;border-color:var(--accent);}
   .conflict-item .ci-actions button.discard{color:var(--del);border-color:#E4C9C7;}
 
+  .ci-versions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  .ci-version{border-radius:8px;padding:9px 10px;font-size:11.5px;line-height:1.5;}
+  .ci-version.mine{background:var(--accent-soft);border:1px solid #E7C7AE;}
+  .ci-version.theirs{background:var(--del-soft);border:1px solid #E4C9C7;}
+  .ci-version-label{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;}
+  .ci-version.mine .ci-version-label{color:var(--accent-dark);}
+  .ci-version.theirs .ci-version-label{color:var(--del);}
+  .ci-field{margin-bottom:4px;}
+  .ci-field:last-child{margin-bottom:0;}
+  .ci-field .ci-field-label{color:var(--muted);font-size:10.5px;display:block;}
+  .ci-field .ci-field-val{color:var(--text);white-space:pre-wrap;word-break:break-word;}
+  .ci-field.changed .ci-field-val{font-weight:600;}
+  .ci-empty{color:var(--muted);font-style:italic;}
+  @media(max-width:640px){ .ci-versions{grid-template-columns:1fr;} }
+
   .tag-pending{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8B6A1F;background:var(--rstr-soft);border-radius:20px;padding:2px 8px;margin-left:6px;}
   .tag-pending.err{color:var(--del);background:var(--del-soft);}
   .rec.is-pending{border-left:3px solid var(--rstr);}
@@ -330,6 +345,7 @@
   ];
 
   let customers = [];
+  let lastListHash = null; // tracks the last server list we actually rendered, so loadData() can skip re-rendering when nothing changed
   let activeRow = null;      // null while creating
   let modalMode = 'edit';    // 'edit' | 'create'
 
@@ -819,6 +835,87 @@
     return data;
   }
 
+  // Human-readable label for a field key, reusing the same labels shown
+  // in the edit form so the conflict banner reads consistently with the
+  // rest of the UI.
+  function fieldLabel_(key){
+    const f = FIELDS.find(f => f.key === key);
+    if(f) return f.label;
+    if(key === 'auditorRemarks') return 'Auditor Remarks';
+    if(key === 'dateOfAudit') return 'Date of Audit';
+    if(key === 'customer') return 'Customer Name';
+    return key;
+  }
+
+  function ciVal_(v){
+    if(v === undefined || v === null || v === '') return '<span class="ci-empty">(blank)</span>';
+    return escapeHtml(String(v));
+  }
+
+  // Builds the side-by-side "your version" vs "currently on the sheet"
+  // comparison shown inside a conflict item, so the person resolving it
+  // can actually see what each side contains — especially the auditor
+  // remarks — instead of picking blind.
+  function renderConflictVersions_(item){
+    const keys = Array.from(new Set([
+      ...Object.keys(item.fields || {}),
+      ...Object.keys(item.snapshot || {})
+    ])).filter(k => k !== 'row');
+
+    let mineHtml = '';
+    if(item.kind === 'delete'){
+      mineHtml += `<div class="ci-field"><span class="ci-field-label">Action</span><span class="ci-field-val">Delete this record</span></div>`;
+    } else {
+      keys.forEach(k => {
+        if(!item.fields || !(k in item.fields)) return; // only fields you actually changed
+        mineHtml += `<div class="ci-field changed"><span class="ci-field-label">${escapeHtml(fieldLabel_(k))}</span><span class="ci-field-val">${ciVal_(item.fields[k])}</span></div>`;
+      });
+    }
+    if(item.remark){
+      mineHtml += `<div class="ci-field changed"><span class="ci-field-label">New Remark</span><span class="ci-field-val">${ciVal_(item.remark)}${item.auditor ? ' — ' + escapeHtml(item.auditor) : ''}</span></div>`;
+    }
+    if(!mineHtml) mineHtml = `<div class="ci-empty">No field changes queued.</div>`;
+
+    let theirsHtml = '';
+    if(item.serverSnapshot === null){
+      theirsHtml = `<div class="ci-empty">This row no longer exists on the sheet — it may have been deleted.</div>`;
+    } else if(item.serverSnapshot){
+      keys.forEach(k => {
+        theirsHtml += `<div class="ci-field"><span class="ci-field-label">${escapeHtml(fieldLabel_(k))}</span><span class="ci-field-val">${ciVal_(item.serverSnapshot[k])}</span></div>`;
+      });
+      if(!theirsHtml) theirsHtml = `<div class="ci-empty">No conflicting fields found.</div>`;
+    } else {
+      theirsHtml = `<div class="ci-empty">Current sheet values unavailable.</div>`;
+    }
+
+    return `<div class="ci-versions">
+      <div class="ci-version mine"><div class="ci-version-label">Your version (offline)</div>${mineHtml}</div>
+      <div class="ci-version theirs"><div class="ci-version-label">Currently on the sheet</div>${theirsHtml}</div>
+    </div>`;
+  }
+
+  // Single-column version of the above for the "failed to save" list,
+  // where there's no second "sheet version" to compare against — just
+  // shows what would be retried or discarded.
+  function renderMineVersion_(item){
+    const keys = Object.keys(item.fields || {});
+    let mineHtml = '';
+    if(item.kind === 'delete'){
+      mineHtml += `<div class="ci-field"><span class="ci-field-label">Action</span><span class="ci-field-val">Delete this record</span></div>`;
+    } else {
+      keys.forEach(k => {
+        mineHtml += `<div class="ci-field changed"><span class="ci-field-label">${escapeHtml(fieldLabel_(k))}</span><span class="ci-field-val">${ciVal_(item.fields[k])}</span></div>`;
+      });
+    }
+    if(item.remark){
+      mineHtml += `<div class="ci-field changed"><span class="ci-field-label">New Remark</span><span class="ci-field-val">${ciVal_(item.remark)}${item.auditor ? ' — ' + escapeHtml(item.auditor) : ''}</span></div>`;
+    }
+    if(!mineHtml) mineHtml = `<div class="ci-empty">No field changes queued.</div>`;
+    return `<div class="ci-versions" style="grid-template-columns:1fr;">
+      <div class="ci-version mine"><div class="ci-version-label">Your version (queued)</div>${mineHtml}</div>
+    </div>`;
+  }
+
   function updateSyncUI(){
     const online = navigator.onLine;
     document.getElementById('netDot').classList.toggle('offline', !online);
@@ -844,7 +941,8 @@
           const name = (c.fields && c.fields.customer) || (c.snapshot && c.snapshot.customer) || 'this customer';
           return `<div class="conflict-item">
             <div class="ci-name">${escapeHtml(name)}</div>
-            <div class="ci-detail">Your offline change to this record conflicts with a newer change already on the sheet. Keep your version (overwrites the sheet's current value) or discard your offline change and keep what's on the sheet.</div>
+            <div class="ci-detail">Your offline change to this record conflicts with a newer change already on the sheet. Compare both versions below, then keep yours (overwrites the sheet's current value) or discard yours (keeps what's on the sheet).</div>
+            ${renderConflictVersions_(c)}
             <div class="ci-actions">
               <button class="keep" onclick="resolveConflict('${c.id}','keep')">Keep my version</button>
               <button class="discard" onclick="resolveConflict('${c.id}','discard')">Discard mine</button>
@@ -860,6 +958,7 @@
           return `<div class="conflict-item">
             <div class="ci-name">${escapeHtml(name)}</div>
             <div class="ci-detail">Server said: ${escapeHtml(c.error || 'unknown error')}</div>
+            ${renderMineVersion_(c)}
             <div class="ci-actions">
               <button class="keep" onclick="resolveConflict('${c.id}','retry')">Retry</button>
               <button class="discard" onclick="resolveConflict('${c.id}','discard')">Discard mine</button>
@@ -910,6 +1009,47 @@
     saveLocalCache_(customers);
   }
 
+  // ---- Confirmed local apply --------------------------------------------
+  // Used right after a write actually succeeds against the live server
+  // (the "online, sent immediately" path). Rather than turning around and
+  // firing a full "list" call to re-fetch every row just to see the one
+  // change we already know happened, we patch that one record into the
+  // in-memory array directly. This cuts the API calls a single edit makes
+  // roughly in half, which matters because Apps Script Web Apps apply
+  // their own per-user/per-script quotas — hammering "list" after every
+  // click is what was tripping "Connection error" / stuck "Not connected
+  // yet." under normal use, not an actual outage.
+
+  function applyConfirmedCreate_(item, result){
+    customers.unshift(Object.assign({
+      row: (result && result.row) || item.tempRow,
+      auditorRemarks: item.remark ? (item.auditor ? item.remark + '  — ' + item.auditor : item.remark) : 'NO REMARKS',
+      dateOfAudit: item.remark ? todayStr_() : '',
+      previousRemarks: ''
+    }, item.fields));
+    saveLocalCache_(customers);
+  }
+
+  function applyConfirmedUpdate_(item){
+    const c = customers.find(x => x.row === item.row);
+    if(!c) return;
+    Object.assign(c, item.fields);
+    if(item.remark){
+      if(c.auditorRemarks && c.auditorRemarks.toUpperCase() !== 'NO REMARKS'){
+        const entry = '[' + (c.dateOfAudit || 'undated') + '] ' + c.auditorRemarks;
+        c.previousRemarks = c.previousRemarks ? entry + '\n' + c.previousRemarks : entry;
+      }
+      c.auditorRemarks = item.auditor ? item.remark + '  — ' + item.auditor : item.remark;
+      c.dateOfAudit = todayStr_();
+    }
+    saveLocalCache_(customers);
+  }
+
+  function applyConfirmedDelete_(item){
+    customers = customers.filter(x => x.row !== item.row);
+    saveLocalCache_(customers);
+  }
+
   // Re-overlays every still-unsynced outbox item onto `customers` right
   // after it's been freshly replaced with server data (loadData does
   // this on every load/auto-refresh), so a pending offline change keeps
@@ -929,6 +1069,18 @@
   function todayStr_(){
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  // Cheap fingerprint of a server list response, used to tell "nothing
+  // changed since last time" apart from "the sheet actually moved" so
+  // loadData() can skip an unnecessary re-render/re-overlay.
+  function listHash_(list){
+    return JSON.stringify(list.map(c => [
+      c.row, c.customer, c.model, c.engineNo, c.releaseDate, c.dueDate, c.term,
+      c.ma, c.begBal, c.dueThisMonth, c.paymentAdv, c.penaltyDue,
+      c.customerStatus, c.unitStatus, c.paymentMode, c.dateOfAudit,
+      c.auditorRemarks, c.previousRemarks
+    ]));
   }
 
   // Tells apart "couldn't reach the server at all" (offline, DNS failure,
@@ -965,7 +1117,14 @@
   async function queueOrSend_(item){
     if(navigator.onLine){
       try{
-        return await sendOne_(item);
+        const result = await sendOne_(item);
+        // Patch the one record we just wrote instead of re-fetching the
+        // whole list — see the note above applyConfirmedCreate_.
+        if(item.kind === 'create') applyConfirmedCreate_(item, result);
+        else if(item.kind === 'update') applyConfirmedUpdate_(item);
+        else if(item.kind === 'delete') applyConfirmedDelete_(item);
+        render();
+        return result;
       }catch(err){
         if(!isConnectionError_(err)) throw err; // real error — let the caller show it
         // else fall through to queue below
@@ -1070,12 +1229,17 @@
             // user notices rather than silently losing the edit.
             if(item.kind === 'delete'){ syncedAny = true; continue; }
             item.status = 'conflict';
+            item.serverSnapshot = null; // signals "row no longer exists"
             remaining.push(item);
             continue;
           }
           const drifted = Object.keys(item.snapshot).some(k => String(serverRow[k] ?? '') !== String(item.snapshot[k] ?? ''));
           if(drifted){
             item.status = 'conflict';
+            // Freeze what the sheet actually holds right now, so the
+            // conflict banner can show it next to "your version" even
+            // after this sync pass finishes and serverList goes away.
+            item.serverSnapshot = Object.assign({}, serverRow);
             remaining.push(item);
             continue;
           }
@@ -1133,6 +1297,10 @@
     const item = outbox.find(o => o.id === id);
     if(!item) return;
     if(choice === 'discard'){
+      // Discarding "my" version: drop the queued change entirely and
+      // reload fresh from the sheet, so the version left standing is
+      // unambiguously the one that was on the sheet — nothing of mine
+      // lingers in the outbox or the on-screen row.
       outbox = outbox.filter(o => o.id !== id);
       const c = customers.find(x => x.row === item.row);
       if(c){ delete c._pending; delete c._pendingDelete; }
@@ -1150,11 +1318,14 @@
       updateSyncUI();
       syncOutbox();
     } else {
-      // Keep mine (conflict resolution): drop the stale snapshot so the
-      // next sync applies the change unconditionally instead of
-      // flagging it again.
+      // Keep mine (conflict resolution): drop the stale snapshot and the
+      // frozen "sheet version" we showed for comparison, so the next
+      // sync applies my change unconditionally instead of flagging it
+      // again — this is what overwrites/removes the version that wasn't
+      // picked.
       item.status = 'pending';
       delete item.snapshot;
+      delete item.serverSnapshot;
       saveOutbox_();
       updateSyncUI();
       syncOutbox();
@@ -1245,11 +1416,23 @@
       const res = await fetch(API_URL + '?action=list&_=' + Date.now(), { cache: 'no-store' });
       const data = await res.json();
       if(data.error) throw new Error(data.error);
-      customers = data.customers || [];
-      reapplyOutbox_(); // keep still-unsynced offline edits visible on top of the fresh server data
-      saveLocalCache_(customers);
+      const fresh = data.customers || [];
+
+      // Only actually swap in and re-render when the sheet has genuinely
+      // changed since our last successful fetch. On a quiet sheet this
+      // means auto-refresh (and re-opening the app) does one lightweight
+      // read and otherwise leaves the screen — and any outbox items
+      // overlaid on it — exactly as it was, instead of re-rendering and
+      // re-overlaying every few minutes for no reason.
+      const freshHash = listHash_(fresh);
+      if(freshHash !== lastListHash){
+        lastListHash = freshHash;
+        customers = fresh;
+        reapplyOutbox_(); // keep still-unsynced offline edits visible on top of the fresh server data
+        saveLocalCache_(customers);
+        render();
+      }
       document.getElementById('connStatus').textContent = 'synced ' + new Date().toLocaleTimeString();
-      render();
       updateSyncUI();
     }catch(err){
       // If we already painted cached data, leave it on screen — a failed
@@ -1534,7 +1717,9 @@
         toast(result && result.queued ? 'No connection — saved on this device, will sync automatically.' : 'Changes saved.');
       }
       closeModal();
-      if(navigator.onLine) await loadData(); else render();
+      // queueOrSend_ already patched `customers` and re-rendered (either
+      // with the confirmed server result, or as an optimistic offline
+      // entry) — no need to also fire a full "list" reload here.
     }catch(err){
       toast('Could not save: ' + err.message);
     }finally{
@@ -1559,7 +1744,7 @@
       const result = await queueOrSend_(item);
       toast(result && result.queued ? 'No connection — delete queued, will sync automatically.' : 'Customer deleted.');
       closeModal();
-      if(navigator.onLine) await loadData(); else render();
+      // no full reload needed — queueOrSend_ already updated the list.
     }catch(err){
       toast('Could not delete: ' + err.message);
     }finally{
@@ -1579,7 +1764,7 @@
       };
       const result = await queueOrSend_(item);
       toast(result && result.queued ? 'No connection — delete queued, will sync automatically.' : 'Customer deleted.');
-      if(navigator.onLine) await loadData(); else render();
+      // no full reload needed — queueOrSend_ already updated the list.
     }catch(err){
       toast('Could not delete: ' + err.message);
     }
@@ -1600,9 +1785,13 @@
   // without the user having to hit the ⟳ button. Skipped whenever it would
   // be disruptive: a modal is open (don't yank data out from under an
   // in-progress edit), the tab isn't visible, or a load is already in
-  // flight. Cheap to run often since the backend serves these from cache
-  // (see Code.gs) rather than re-reading the whole sheet each time.
-  const AUTO_REFRESH_MS = 30000;
+  // flight. Every 5 minutes rather than more often — loadData() only ever
+  // gets called here, on the manual ⟳ button, and once after a sync now
+  // (single edits patch themselves in locally instead), so this is the
+  // only "get everything" call happening on a timer, and 5 minutes is
+  // plenty for another tab's edits to show up without adding to the
+  // Apps Script Web App's request volume.
+  const AUTO_REFRESH_MS = 5 * 60 * 1000;
   setInterval(() => {
     if(!API_URL) return;
     if(isLoading) return;
