@@ -180,8 +180,14 @@
   .field-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 14px;}
   .field{display:flex;flex-direction:column;gap:5px;}
   .field.span2{grid-column:1 / -1;}
-  .field label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
+  .field label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;display:flex;align-items:center;gap:5px;}
   .field input, .field select{width:100%;}
+
+  .field-locked .input.locked{
+    background:#F1F2F8;color:var(--muted);cursor:not-allowed;border-color:#E4E7F3;
+    font-variant-numeric:tabular-nums;font-family:'JetBrains Mono',monospace;font-size:12.5px;
+  }
+  .lock-tag{font-size:10px;opacity:.55;cursor:help;text-transform:none;letter-spacing:0;}
 
   .current-remark{background:#F6F7FD;border:1px solid #E5E8F7;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.5;}
   .current-remark .date{font-size:11px;color:var(--accent);font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;}
@@ -547,21 +553,26 @@
   let currentSheet = null;
 
   // Field definitions drive both the edit/create form and payload building.
+  // `lockedOnEdit:false` marks the only fields an auditor may change on an
+  // EXISTING customer (plus the remarks/history sections, handled
+  // separately). Everything else is shown for reference but locked —
+  // when creating a brand-new customer none of this applies and every
+  // field is editable (see buildFieldGrid()).
   const FIELDS = [
-    { key:'customer',       label:'Customer Name',                type:'text',   span:2, required:true },
-    { key:'model',          label:'Model',                        type:'text' },
-    { key:'engineNo',       label:'Engine No.',                   type:'text' },
-    { key:'releaseDate',    label:'Release / Restructure Date',   type:'date' },
-    { key:'dueDate',        label:'Due Date',                     type:'text' },
-    { key:'term',           label:'Term',                         type:'text' },
-    { key:'ma',             label:'MA (₱)',                       type:'number' },
-    { key:'begBal',         label:'Beginning Balance (₱)',        type:'number' },
-    { key:'dueThisMonth',   label:'Due This Month (₱)',           type:'number' },
-    { key:'paymentAdv',     label:'Payment / Advance (₱)',        type:'number' },
-    { key:'penaltyDue',     label:'Penalty Due (₱)',              type:'number' },
-    { key:'customerStatus', label:'Customer Status',              type:'text', placeholder:'e.g. OD, DEL, RSTR, CURRENT' },
-    { key:'unitStatus',     label:'Unit Status',                  type:'text' },
-    { key:'paymentMode',    label:'Payment Mode',                 type:'text' },
+    { key:'customer',       label:'Customer Name',                type:'text',   span:2, required:true, lockedOnEdit:true },
+    { key:'model',          label:'Model',                        type:'text',   lockedOnEdit:true },
+    { key:'engineNo',       label:'Engine No.',                   type:'text',   lockedOnEdit:true },
+    { key:'releaseDate',    label:'Release / Restructure Date',   type:'date',   lockedOnEdit:true },
+    { key:'dueDate',        label:'Due Date',                     type:'text',   lockedOnEdit:true },
+    { key:'term',           label:'Term',                         type:'text',   lockedOnEdit:true },
+    { key:'ma',             label:'MA (₱)',                       type:'number', lockedOnEdit:true, money:true },
+    { key:'begBal',         label:'Beginning Balance (₱)',        type:'number', lockedOnEdit:true, money:true },
+    { key:'dueThisMonth',   label:'Due This Month (₱)',           type:'number', lockedOnEdit:true, money:true },
+    { key:'paymentAdv',     label:'Payment / Advance (₱)',        type:'number', lockedOnEdit:true, money:true },
+    { key:'penaltyDue',     label:'Penalty Due (₱)',              type:'number', lockedOnEdit:true, money:true },
+    { key:'customerStatus', label:'Customer Status',              type:'text', placeholder:'e.g. OD, DEL, RSTR, CURRENT', lockedOnEdit:true },
+    { key:'unitStatus',     label:'Unit Status',                  type:'text', lockedOnEdit:false },
+    { key:'paymentMode',    label:'Payment Mode',                 type:'text', lockedOnEdit:false },
   ];
 
   let customers = [];
@@ -2436,14 +2447,32 @@
 
   function buildFieldGrid(values){
     const grid = document.getElementById('fieldGrid');
+    // Locking only applies when editing an EXISTING customer — a brand
+    // new record has nothing to lock yet, so every field stays editable.
+    const isEdit = modalMode === 'edit';
     grid.innerHTML = FIELDS.map(f=>{
-      const val = values && values[f.key] !== undefined ? values[f.key] : '';
-      const cls = 'field' + (f.span === 2 ? ' span2' : '');
+      const raw = values && values[f.key] !== undefined ? values[f.key] : '';
+      const locked = isEdit && f.lockedOnEdit;
+      const cls = 'field' + (f.span === 2 ? ' span2' : '') + (locked ? ' field-locked' : '');
+
+      if(locked){
+        // Read-only reference view. Money fields get the ₱ sign and
+        // thousands separators (fmtMoney) so it's unmistakably a peso
+        // amount at a glance, same formatting as the record cards use.
+        const display = f.money
+          ? (raw !== '' && raw != null ? '₱' + fmtMoney(raw) : '—')
+          : (raw !== '' && raw != null && raw !== '' ? String(raw) : '—');
+        return `<div class="${cls}">
+          <label>${escapeHtml(f.label)} <span class="lock-tag" title="Locked — only Unit Status, Payment Mode and Remarks can be edited here">🔒</span></label>
+          <input class="input locked" type="text" value="${escapeHtml(display)}" disabled readonly>
+        </div>`;
+      }
+
       const ph = f.placeholder ? ` placeholder="${escapeHtml(f.placeholder)}"` : '';
       const step = f.type === 'number' ? ' step="0.01"' : '';
       return `<div class="${cls}">
         <label>${escapeHtml(f.label)}${f.required ? ' *' : ''}</label>
-        <input class="input" data-key="${f.key}" type="${f.type}" value="${escapeHtml(val)}"${ph}${step}>
+        <input class="input" data-key="${f.key}" type="${f.type}" value="${escapeHtml(raw)}"${ph}${step}>
       </div>`;
     }).join('');
   }
@@ -2451,6 +2480,10 @@
   function collectFieldValues(){
     const out = {};
     document.querySelectorAll('#fieldGrid [data-key]').forEach(el=>{
+      // Locked fields render without a data-key (see buildFieldGrid), but
+      // guard on .disabled too in case that ever changes — locked/read-only
+      // values must never be sent back to the server as an "edit".
+      if(el.disabled) return;
       out[el.dataset.key] = el.value.trim();
     });
     return out;
@@ -2519,7 +2552,7 @@
 
   async function saveModal(){
     const fields = collectFieldValues();
-    if(!fields.customer){ toast('Customer name is required.'); return; }
+    if(modalMode === 'create' && !fields.customer){ toast('Customer name is required.'); return; }
 
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
