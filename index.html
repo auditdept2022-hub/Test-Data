@@ -829,13 +829,17 @@
     document.getElementById('pendingCount').textContent = pending;
 
     const conflicts = outbox.filter(o => o.status === 'conflict');
+    const errored = outbox.filter(o => o.status === 'error');
     const banner = document.getElementById('conflictBanner');
-    if(!conflicts.length){
+    if(!conflicts.length && !errored.length){
       banner.style.display = 'none';
       banner.innerHTML = '';
-    }else{
-      banner.style.display = 'block';
-      banner.innerHTML = `<div class="conflict-banner"><div class="cb-head">⚠ ${conflicts.length} change${conflicts.length>1?'s':''} couldn't auto-sync — someone else edited these while you were offline</div>` +
+      return;
+    }
+    banner.style.display = 'block';
+    let html = '';
+    if(conflicts.length){
+      html += `<div class="conflict-banner"><div class="cb-head">⚠ ${conflicts.length} change${conflicts.length>1?'s':''} couldn't auto-sync — someone else edited ${conflicts.length>1?'these':'this'} while you were offline</div>` +
         conflicts.map(c=>{
           const name = (c.fields && c.fields.customer) || (c.snapshot && c.snapshot.customer) || 'this customer';
           return `<div class="conflict-item">
@@ -847,8 +851,26 @@
             </div>
           </div>`;
         }).join('');
+      html += `</div>`;
     }
+    if(errored.length){
+      html += `<div class="conflict-banner"><div class="cb-head">⚠ ${errored.length} change${errored.length>1?'s':''} failed to save to the sheet</div>` +
+        errored.map(c=>{
+          const name = (c.fields && c.fields.customer) || (c.snapshot && c.snapshot.customer) || 'this customer';
+          return `<div class="conflict-item">
+            <div class="ci-name">${escapeHtml(name)}</div>
+            <div class="ci-detail">Server said: ${escapeHtml(c.error || 'unknown error')}</div>
+            <div class="ci-actions">
+              <button class="keep" onclick="resolveConflict('${c.id}','retry')">Retry</button>
+              <button class="discard" onclick="resolveConflict('${c.id}','discard')">Discard mine</button>
+            </div>
+          </div>`;
+        }).join('');
+      html += `</div>`;
+    }
+    banner.innerHTML = html;
   }
+
 
   // ---- Optimistic local apply -----------------------------------------
   // Applies a queued action to the in-memory `customers` array right
@@ -909,18 +931,44 @@
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   }
 
+  // Tells apart "couldn't reach the server at all" (offline, DNS failure,
+  // CORS block, or the server sent back something that isn't JSON — e.g.
+  // a Google sign-in page because the deployment isn't set to "Anyone
+  // with the link") from "reached the server fine, and it told us this
+  // specific change is invalid" (bad row, missing column, empty remark,
+  // etc.). Only the first kind should be silently retried later — the
+  // second kind needs to be shown to the user, because retrying it will
+  // just fail again in exactly the same way forever.
+  //   TypeError  = fetch() itself failed (no connection / CORS / DNS)
+  //   SyntaxError = got a response, but res.json() couldn't parse it
+  //                 (almost always an Apps Script auth/config problem,
+  //                 not a dropped connection — the message says so)
+  function isConnectionError_(err){
+    return err instanceof TypeError || err instanceof SyntaxError || !navigator.onLine;
+  }
+  function connectionErrorLabel_(err){
+    if(err instanceof SyntaxError){
+      return 'The server didn\'t send back valid data — this usually means the Apps Script deployment needs redeploying, or its access isn\'t set to "Anyone with the link."';
+    }
+    return 'No connection to the server.';
+  }
+
   // ---- Queueing ---------------------------------------------------------
   // Tries the real network call first (covers "technically online but
   // this one request happened to fail"); only falls back to queueing for
-  // later when that attempt fails, or immediately queues without even
-  // trying when the browser already knows it's offline.
+  // later when that attempt fails because of a CONNECTION problem. A
+  // real application error (e.g. "Customer name is required") is
+  // surfaced immediately instead — silently queuing it would just mean
+  // it fails again, identically, on every retry, with the user never
+  // finding out why.
 
   async function queueOrSend_(item){
     if(navigator.onLine){
       try{
         return await sendOne_(item);
       }catch(err){
-        // fall through to queue below
+        if(!isConnectionError_(err)) throw err; // real error — let the caller show it
+        // else fall through to queue below
       }
     }
     outbox.push(item);
@@ -975,16 +1023,20 @@
 
     // Fresh server truth to diff conflict snapshots against.
     let serverList = null;
+    let listErr = null;
     try{
       const res = await fetch(API_URL + '?action=list&_=' + Date.now(), { cache: 'no-store' });
       const data = await res.json();
-      if(!data.error) serverList = data.customers || [];
-    }catch(e){ /* couldn't reach the server at all — bail, try later */ }
+      if(data.error) throw new Error(data.error);
+      serverList = data.customers || [];
+    }catch(e){ listErr = e; }
 
     if(serverList === null){
       isSyncing = false;
       updateSyncUI();
-      document.getElementById('connStatus').textContent = 'Sync failed — no connection.';
+      document.getElementById('connStatus').textContent = isConnectionError_(listErr)
+        ? 'Sync paused — ' + connectionErrorLabel_(listErr)
+        : 'Sync failed: ' + listErr.message;
       return;
     }
     const serverByRow = {};
@@ -992,14 +1044,24 @@
 
     const remaining = [];
     let syncedAny = false;
-    let hitNetworkFailure = false;
+    let hitConnectionError = false;
+    let connErrMsg = '';
 
     for(const item of outbox){
-      if(hitNetworkFailure){ remaining.push(item); continue; }
+      // A connection problem means nothing further can be sent this
+      // pass — leave everything from here on exactly as queued and try
+      // again later. This does NOT apply to per-item application errors
+      // below, which only affect that one item.
+      if(hitConnectionError){ remaining.push(item); continue; }
       if(item.status === 'conflict'){ remaining.push(item); continue; } // awaiting user decision
 
+      // Waiting on this item's own offline "create" to sync first
+      // (should always have happened earlier in this same pass, since
+      // the create was queued first — this is just a safety net).
+      if(item.kind !== 'create' && isTempRow(item.row)){ remaining.push(item); continue; }
+
       try{
-        if(item.kind !== 'create' && !isTempRow(item.row) && item.snapshot){
+        if(item.kind !== 'create' && item.snapshot){
           const serverRow = serverByRow[item.row];
           if(!serverRow){
             // Row is gone server-side. For a delete, that's already the
@@ -1030,12 +1092,22 @@
         }
         syncedAny = true;
       }catch(err){
-        // Ambiguous whether this was a network drop or a real server
-        // error. Treat as "try again later" rather than surfacing a
-        // conflict, unless it happens repeatedly (left for the user to
-        // notice via the pending count not shrinking).
-        hitNetworkFailure = true;
-        remaining.push(item);
+        if(isConnectionError_(err)){
+          // Can't reach the server at all right now — stop sending
+          // further items this pass, but leave this one (and everything
+          // behind it) queued to retry as-is.
+          hitConnectionError = true;
+          connErrMsg = connectionErrorLabel_(err);
+          remaining.push(item);
+        } else {
+          // The server responded and rejected THIS specific change.
+          // Retrying it unmodified will fail the same way forever, so
+          // flag it and move on — it must not block anything else in
+          // the queue from syncing.
+          item.status = 'error';
+          item.error = err.message;
+          remaining.push(item);
+        }
       }
     }
 
@@ -1044,13 +1116,16 @@
     isSyncing = false;
     updateSyncUI();
 
-    if(syncedAny){
+    if(syncedAny) await loadData(); // pulls fresh server state and re-renders
+
+    if(syncedAny && !outbox.length){
       toast('Offline changes synced.');
-      await loadData();
-    } else if(outbox.some(o => o.status === 'conflict')){
+    } else if(outbox.some(o => o.status === 'conflict' || o.status === 'error')){
       document.getElementById('connStatus').textContent = 'Some offline changes need your attention.';
-    } else if(hitNetworkFailure){
-      document.getElementById('connStatus').textContent = 'Sync incomplete — will retry.';
+    } else if(hitConnectionError){
+      document.getElementById('connStatus').textContent = 'Sync paused — ' + connErrMsg;
+    } else if(syncedAny){
+      toast('Offline changes synced.');
     }
   }
 
@@ -1065,9 +1140,19 @@
       updateSyncUI();
       await loadData();
       toast('Discarded your offline change.');
+    } else if(choice === 'retry'){
+      // A per-item error (server rejected it) — try exactly the same
+      // change again as-is. Useful once you've fixed the underlying
+      // cause (e.g. redeployed the script, freed up a column name).
+      item.status = 'pending';
+      delete item.error;
+      saveOutbox_();
+      updateSyncUI();
+      syncOutbox();
     } else {
-      // Keep mine: drop the stale snapshot so the next sync applies the
-      // change unconditionally instead of flagging it again.
+      // Keep mine (conflict resolution): drop the stale snapshot so the
+      // next sync applies the change unconditionally instead of
+      // flagging it again.
       item.status = 'pending';
       delete item.snapshot;
       saveOutbox_();
@@ -1209,7 +1294,7 @@
     const statusF = document.getElementById('statusFilter').value;
     const remarkF = document.getElementById('remarkFilter').value;
 
-    const conflictRows = new Set(outbox.filter(o => o.status === 'conflict').map(o => o.row));
+    const conflictRows = new Set(outbox.filter(o => o.status === 'conflict' || o.status === 'error').map(o => o.row));
 
     const filtered = customers.filter(c=>{
       if(c._pendingDelete) return false; // queued for deletion, hide immediately
