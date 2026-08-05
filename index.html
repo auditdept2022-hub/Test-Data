@@ -161,6 +161,30 @@
   .toast{position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.25);}
   .toast.show{opacity:1;transform:translateY(0);}
 
+  /* Offline / sync status */
+  .net-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#5CC58A;box-shadow:0 0 0 3px rgba(92,197,138,.18);}
+  .net-dot.offline{background:#D97757;box-shadow:0 0 0 3px rgba(217,119,87,.18);}
+  .sync-pill{display:flex;align-items:center;gap:6px;font-size:11px;color:#DCE3FA;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);border-radius:20px;padding:5px 12px;white-space:nowrap;}
+  .sync-pill button{background:none;border:none;color:#DCE3FA;font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;}
+  .sync-pill button:hover{color:#fff;}
+  .sync-pill .count{background:var(--accent);color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;font-size:10.5px;}
+
+  .conflict-banner{background:var(--rstr-soft);border:1px solid #E7D08C;border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--text);}
+  .conflict-banner .cb-head{font-weight:700;margin-bottom:8px;color:var(--rstr);}
+  .conflict-item{background:#fff;border:1px solid #EFE3BC;border-radius:8px;padding:10px 12px;margin-bottom:8px;}
+  .conflict-item:last-child{margin-bottom:0;}
+  .conflict-item .ci-name{font-weight:700;margin-bottom:4px;}
+  .conflict-item .ci-detail{color:var(--muted);font-size:11.5px;margin-bottom:8px;line-height:1.5;}
+  .conflict-item .ci-actions{display:flex;gap:8px;}
+  .conflict-item .ci-actions button{font-size:11.5px;padding:5px 10px;border-radius:6px;border:1px solid #DDD6C4;background:#fff;cursor:pointer;}
+  .conflict-item .ci-actions button.keep{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .conflict-item .ci-actions button.discard{color:var(--del);border-color:#E4C9C7;}
+
+  .tag-pending{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8B6A1F;background:var(--rstr-soft);border-radius:20px;padding:2px 8px;margin-left:6px;}
+  .tag-pending.err{color:var(--del);background:var(--del-soft);}
+  .rec.is-pending{border-left:3px solid var(--rstr);}
+  .rec.is-conflict{border-left:3px solid var(--del);}
+
   @media(max-width:900px){
     .topband{flex-wrap:wrap;row-gap:10px;}
     .field-grid{grid-template-columns:1fr;}
@@ -179,6 +203,11 @@
     <div class="header-sync">
       <button class="sync-btn" onclick="loadData()" title="Refresh">⟳</button>
       <span id="connStatus">Not connected yet.</span>
+      <div class="sync-pill" id="syncPill" title="Offline/sync status">
+        <span class="net-dot" id="netDot"></span>
+        <span id="netLabel">Online</span>
+        <span id="pendingWrap" style="display:none;">· <span class="count" id="pendingCount">0</span> pending <button onclick="syncOutbox()">Sync now</button></span>
+      </div>
     </div>
   </header>
 
@@ -192,6 +221,7 @@
     </div>
 
     <div id="dashPanel" style="display:none;">
+      <div id="conflictBanner" style="display:none;"></div>
       <div class="toolbar" style="margin-top:6px;">
         <div class="left">
           <button class="btn" onclick="document.getElementById('importInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name and updates Due This Month, Payment (Adv) &amp; Penalty Due on existing customers only; unmatched names are skipped, never added.">⇪ Import</button>
@@ -302,6 +332,46 @@
   let customers = [];
   let activeRow = null;      // null while creating
   let modalMode = 'edit';    // 'edit' | 'create'
+
+  // ---- Offline outbox ------------------------------------------------
+  //
+  // Every write (create/update/delete/addRemark) is applied to the local
+  // `customers` array immediately (optimistic UI) and queued in
+  // `outbox`. If the network call behind it succeeds right away, the
+  // queued entry is removed immediately after. If it fails — no
+  // internet, a flaky connection, mid-drive dead zone, whatever — the
+  // entry just stays queued instead of the change being lost, and gets
+  // retried automatically the moment the browser regains connectivity
+  // (or when the user hits "Sync now"). The outbox itself lives in
+  // localStorage so it survives a full page reload/crash/browser close
+  // too, not just a dropped request.
+  //
+  // Each entry: { id, kind:'create'|'update'|'delete', tempRow (create
+  // only, negative placeholder id), row (real row; filled in once a
+  // pending create syncs), fields, remark, auditor, snapshot (server
+  // values as last known when queued, for conflict detection),
+  // status:'pending'|'conflict'|'error', error }
+  let outbox = [];
+  let isSyncing = false;
+
+  function outboxKey_(){ return 'nicho_outbox_v1:' + API_URL; }
+
+  function saveOutbox_(){
+    try{ localStorage.setItem(outboxKey_(), JSON.stringify(outbox)); }catch(e){ /* storage full/unavailable — nothing else to do */ }
+  }
+
+  function loadOutbox_(){
+    try{
+      const raw = localStorage.getItem(outboxKey_());
+      outbox = raw ? JSON.parse(raw) : [];
+    }catch(e){ outbox = []; }
+  }
+
+  function genId_(){ return 'o' + Date.now() + Math.random().toString(36).slice(2, 8); }
+
+  // True negative row ids mark a customer that was created offline and
+  // hasn't been assigned a real sheet row yet.
+  function isTempRow(row){ return typeof row === 'number' && row < 0; }
 
   // ---- Import / Export ----------------------------------------------------
   //
@@ -739,6 +809,277 @@
     return fetch(url, { cache: 'no-store' });
   }
 
+  // Runs one apiCall and parses its JSON, throwing on either a network
+  // failure or a {error:...} response, so callers have one place to
+  // catch "this didn't actually save."
+  async function apiCallJson_(action, payload){
+    const res = await apiCall(action, payload);
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+    return data;
+  }
+
+  function updateSyncUI(){
+    const online = navigator.onLine;
+    document.getElementById('netDot').classList.toggle('offline', !online);
+    document.getElementById('netLabel').textContent = online ? 'Online' : 'Offline';
+    const pending = outbox.length;
+    const wrap = document.getElementById('pendingWrap');
+    wrap.style.display = pending ? 'inline' : 'none';
+    document.getElementById('pendingCount').textContent = pending;
+
+    const conflicts = outbox.filter(o => o.status === 'conflict');
+    const banner = document.getElementById('conflictBanner');
+    if(!conflicts.length){
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+    }else{
+      banner.style.display = 'block';
+      banner.innerHTML = `<div class="conflict-banner"><div class="cb-head">⚠ ${conflicts.length} change${conflicts.length>1?'s':''} couldn't auto-sync — someone else edited these while you were offline</div>` +
+        conflicts.map(c=>{
+          const name = (c.fields && c.fields.customer) || (c.snapshot && c.snapshot.customer) || 'this customer';
+          return `<div class="conflict-item">
+            <div class="ci-name">${escapeHtml(name)}</div>
+            <div class="ci-detail">Your offline change to this record conflicts with a newer change already on the sheet. Keep your version (overwrites the sheet's current value) or discard your offline change and keep what's on the sheet.</div>
+            <div class="ci-actions">
+              <button class="keep" onclick="resolveConflict('${c.id}','keep')">Keep my version</button>
+              <button class="discard" onclick="resolveConflict('${c.id}','discard')">Discard mine</button>
+            </div>
+          </div>`;
+        }).join('');
+    }
+  }
+
+  // ---- Optimistic local apply -----------------------------------------
+  // Applies a queued action to the in-memory `customers` array right
+  // away so the UI reflects the change instantly, before it's actually
+  // reached the sheet.
+
+  function applyOptimisticCreate_(item){
+    customers.unshift(Object.assign({
+      row: item.tempRow,
+      auditorRemarks: item.remark ? (item.auditor ? item.remark + '  — ' + item.auditor : item.remark) : 'NO REMARKS',
+      dateOfAudit: item.remark ? todayStr_() : '',
+      previousRemarks: '',
+      _pending: true
+    }, item.fields));
+    saveLocalCache_(customers);
+  }
+
+  function applyOptimisticUpdate_(item){
+    const c = customers.find(x => x.row === item.row);
+    if(!c) return;
+    Object.assign(c, item.fields);
+    if(item.remark){
+      if(c.auditorRemarks && c.auditorRemarks.toUpperCase() !== 'NO REMARKS'){
+        const entry = '[' + (c.dateOfAudit || 'undated') + '] ' + c.auditorRemarks;
+        c.previousRemarks = c.previousRemarks ? entry + '\n' + c.previousRemarks : entry;
+      }
+      c.auditorRemarks = item.auditor ? item.remark + '  — ' + item.auditor : item.remark;
+      c.dateOfAudit = todayStr_();
+    }
+    c._pending = true;
+    saveLocalCache_(customers);
+  }
+
+  function applyOptimisticDelete_(item){
+    const c = customers.find(x => x.row === item.row);
+    if(c) c._pendingDelete = true;
+    saveLocalCache_(customers);
+  }
+
+  // Re-overlays every still-unsynced outbox item onto `customers` right
+  // after it's been freshly replaced with server data (loadData does
+  // this on every load/auto-refresh), so a pending offline change keeps
+  // showing up in the UI instead of getting wiped out the moment a
+  // background refresh pulls the un-changed server copy. Safe to call
+  // repeatedly: it always starts from the just-fetched server snapshot,
+  // never from a previous optimistic result, so it can't compound.
+  function reapplyOutbox_(){
+    outbox.forEach(item => {
+      if(item.status === 'conflict') return; // leave server value showing; banner covers it
+      if(item.kind === 'create') applyOptimisticCreate_(item);
+      else if(item.kind === 'update') applyOptimisticUpdate_(item);
+      else if(item.kind === 'delete') applyOptimisticDelete_(item);
+    });
+  }
+
+  function todayStr_(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  // ---- Queueing ---------------------------------------------------------
+  // Tries the real network call first (covers "technically online but
+  // this one request happened to fail"); only falls back to queueing for
+  // later when that attempt fails, or immediately queues without even
+  // trying when the browser already knows it's offline.
+
+  async function queueOrSend_(item){
+    if(navigator.onLine){
+      try{
+        return await sendOne_(item);
+      }catch(err){
+        // fall through to queue below
+      }
+    }
+    outbox.push(item);
+    saveOutbox_();
+    if(item.kind === 'create') applyOptimisticCreate_(item);
+    else if(item.kind === 'update') applyOptimisticUpdate_(item);
+    else if(item.kind === 'delete') applyOptimisticDelete_(item);
+    render();
+    updateSyncUI();
+    return { queued: true };
+  }
+
+  // Sends one item for real, right now (used both for the "try live
+  // first" path and for replaying queued items during sync). Throws on
+  // any failure — network or server-side.
+  async function sendOne_(item){
+    if(item.kind === 'create'){
+      const data = await apiCallJson_('createCustomer', { fields: item.fields });
+      let remarkResult = null;
+      if(item.remark){
+        remarkResult = await apiCallJson_('addRemark', { row: data.row, remark: item.remark, auditor: item.auditor || '' });
+      }
+      return { row: data.row, remarkResult };
+    }
+    if(item.kind === 'update'){
+      await apiCallJson_('updateCustomer', { row: item.row, fields: item.fields });
+      if(item.remark){
+        await apiCallJson_('addRemark', { row: item.row, remark: item.remark, auditor: item.auditor || '' });
+      }
+      return { row: item.row };
+    }
+    if(item.kind === 'delete'){
+      await apiCallJson_('deleteCustomer', { row: item.row });
+      return { row: item.row };
+    }
+  }
+
+  // ---- Sync ---------------------------------------------------------------
+  // Replays the outbox in order against the real backend. Before
+  // replaying an update/delete against an existing row, re-checks that
+  // row's current server-side field values against the snapshot taken
+  // when the change was queued — if they've drifted (someone else, or
+  // another device, changed that row while this one was offline) the
+  // item is marked 'conflict' and left for the user to resolve instead
+  // of silently overwriting or dropping either side.
+  async function syncOutbox(){
+    if(isSyncing) return;
+    if(!outbox.length) return;
+    if(!navigator.onLine) { updateSyncUI(); return; }
+    isSyncing = true;
+    document.getElementById('connStatus').textContent = 'Syncing offline changes…';
+
+    // Fresh server truth to diff conflict snapshots against.
+    let serverList = null;
+    try{
+      const res = await fetch(API_URL + '?action=list&_=' + Date.now(), { cache: 'no-store' });
+      const data = await res.json();
+      if(!data.error) serverList = data.customers || [];
+    }catch(e){ /* couldn't reach the server at all — bail, try later */ }
+
+    if(serverList === null){
+      isSyncing = false;
+      updateSyncUI();
+      document.getElementById('connStatus').textContent = 'Sync failed — no connection.';
+      return;
+    }
+    const serverByRow = {};
+    serverList.forEach(c => { serverByRow[c.row] = c; });
+
+    const remaining = [];
+    let syncedAny = false;
+    let hitNetworkFailure = false;
+
+    for(const item of outbox){
+      if(hitNetworkFailure){ remaining.push(item); continue; }
+      if(item.status === 'conflict'){ remaining.push(item); continue; } // awaiting user decision
+
+      try{
+        if(item.kind !== 'create' && !isTempRow(item.row) && item.snapshot){
+          const serverRow = serverByRow[item.row];
+          if(!serverRow){
+            // Row is gone server-side. For a delete, that's already the
+            // desired end state — just drop the queued item. For an
+            // update, there's nothing left to update — flag it so the
+            // user notices rather than silently losing the edit.
+            if(item.kind === 'delete'){ syncedAny = true; continue; }
+            item.status = 'conflict';
+            remaining.push(item);
+            continue;
+          }
+          const drifted = Object.keys(item.snapshot).some(k => String(serverRow[k] ?? '') !== String(item.snapshot[k] ?? ''));
+          if(drifted){
+            item.status = 'conflict';
+            remaining.push(item);
+            continue;
+          }
+        }
+
+        const result = await sendOne_(item);
+
+        if(item.kind === 'create'){
+          // Fix up local optimistic row + any later queued items that
+          // referenced this same temp row.
+          const local = customers.find(x => x.row === item.tempRow);
+          if(local){ local.row = result.row; delete local._pending; }
+          outbox.forEach(other => { if(other !== item && other.tempRow === item.tempRow) other.row = result.row; });
+        }
+        syncedAny = true;
+      }catch(err){
+        // Ambiguous whether this was a network drop or a real server
+        // error. Treat as "try again later" rather than surfacing a
+        // conflict, unless it happens repeatedly (left for the user to
+        // notice via the pending count not shrinking).
+        hitNetworkFailure = true;
+        remaining.push(item);
+      }
+    }
+
+    outbox = remaining;
+    saveOutbox_();
+    isSyncing = false;
+    updateSyncUI();
+
+    if(syncedAny){
+      toast('Offline changes synced.');
+      await loadData();
+    } else if(outbox.some(o => o.status === 'conflict')){
+      document.getElementById('connStatus').textContent = 'Some offline changes need your attention.';
+    } else if(hitNetworkFailure){
+      document.getElementById('connStatus').textContent = 'Sync incomplete — will retry.';
+    }
+  }
+
+  async function resolveConflict(id, choice){
+    const item = outbox.find(o => o.id === id);
+    if(!item) return;
+    if(choice === 'discard'){
+      outbox = outbox.filter(o => o.id !== id);
+      const c = customers.find(x => x.row === item.row);
+      if(c){ delete c._pending; delete c._pendingDelete; }
+      saveOutbox_();
+      updateSyncUI();
+      await loadData();
+      toast('Discarded your offline change.');
+    } else {
+      // Keep mine: drop the stale snapshot so the next sync applies the
+      // change unconditionally instead of flagging it again.
+      item.status = 'pending';
+      delete item.snapshot;
+      saveOutbox_();
+      updateSyncUI();
+      syncOutbox();
+    }
+  }
+
+  window.addEventListener('online', () => { updateSyncUI(); syncOutbox(); });
+  window.addEventListener('offline', updateSyncUI);
+  setInterval(() => { if(navigator.onLine && outbox.length) syncOutbox(); }, 20000);
+
   let isLoading = false;
 
   // ---- Local list cache -----------------------------------------------
@@ -820,9 +1161,11 @@
       const data = await res.json();
       if(data.error) throw new Error(data.error);
       customers = data.customers || [];
+      reapplyOutbox_(); // keep still-unsynced offline edits visible on top of the fresh server data
       saveLocalCache_(customers);
       document.getElementById('connStatus').textContent = 'synced ' + new Date().toLocaleTimeString();
       render();
+      updateSyncUI();
     }catch(err){
       // If we already painted cached data, leave it on screen — a failed
       // background refresh shouldn't yank the table out from under the
@@ -866,7 +1209,10 @@
     const statusF = document.getElementById('statusFilter').value;
     const remarkF = document.getElementById('remarkFilter').value;
 
+    const conflictRows = new Set(outbox.filter(o => o.status === 'conflict').map(o => o.row));
+
     const filtered = customers.filter(c=>{
+      if(c._pendingDelete) return false; // queued for deletion, hide immediately
       if(q){
         const hay = (c.customer + ' ' + c.model + ' ' + c.engineNo).toLowerCase();
         if(hay.indexOf(q) === -1) return false;
@@ -915,11 +1261,18 @@
         remarksHtml += `<div class="rline"><div class="rdate">${escapeHtml(hist[j].date || 'Undated')}</div><div class="rtext">${escapeHtml(hist[j].remark)}</div></div>`;
       }
 
-      parts[i] = `<div class="rec" data-row="${c.row}">
+      const isConflict = conflictRows.has(c.row);
+      const pendingTag = isConflict
+        ? `<span class="tag-pending err">⚠ Needs attention</span>`
+        : (c._pending ? `<span class="tag-pending">⏳ Syncing</span>` : '');
+      const recClass = 'rec' + (isConflict ? ' is-conflict' : (c._pending ? ' is-pending' : ''));
+
+      parts[i] = `<div class="${recClass}" data-row="${c.row}">
         <div class="rec-top">
           <div class="rec-id">
             <div class="cust-name">${escapeHtml(c.customer)}</div>
             <span class="badge ${g}">${escapeHtml(c.customerStatus || '—')}</span>
+            ${pendingTag}
           </div>
           <div class="rec-right">
             <div class="row-actions">
@@ -1058,40 +1411,45 @@
     const originalLabel = btn.textContent;
     btn.textContent = modalMode === 'create' ? 'Creating…' : 'Saving…';
 
+    const remark = document.getElementById('mNewRemark').value.trim();
+    const auditor = document.getElementById('mAuditor').value.trim();
+
     try{
       if(modalMode === 'create'){
-        const res = await apiCall('createCustomer', { fields });
-        const data = await res.json();
-        if(data.error) throw new Error(data.error);
-        if(!data.ok) throw new Error('Save failed: unexpected response from server.');
-
-        const remark = document.getElementById('mNewRemark').value.trim();
-        if(remark){
-          const auditor = document.getElementById('mAuditor').value.trim();
-          const res2 = await apiCall('addRemark', { row: data.row, remark, auditor });
-          const data2 = await res2.json();
-          if(data2.error) throw new Error(data2.error);
-          if(!data2.ok) throw new Error('Remark failed: unexpected response from server.');
-        }
-        toast('Customer added.');
+        const item = {
+          id: genId_(),
+          kind: 'create',
+          tempRow: -Date.now(),
+          fields,
+          remark: remark || null,
+          auditor: auditor || null,
+          status: 'pending'
+        };
+        const result = await queueOrSend_(item);
+        toast(result && result.queued ? 'No connection — saved on this device, will sync automatically.' : 'Customer added.');
       } else {
-        const res = await apiCall('updateCustomer', { row: activeRow, fields });
-        const data = await res.json();
-        if(data.error) throw new Error(data.error);
-        if(!data.ok) throw new Error('Save failed: unexpected response from server.');
-
-        const remark = document.getElementById('mNewRemark').value.trim();
-        if(remark){
-          const auditor = document.getElementById('mAuditor').value.trim();
-          const res2 = await apiCall('addRemark', { row: activeRow, remark, auditor });
-          const data2 = await res2.json();
-          if(data2.error) throw new Error(data2.error);
-          if(!data2.ok) throw new Error('Remark failed: unexpected response from server.');
-        }
-        toast('Changes saved.');
+        const c = customers.find(x => x.row === activeRow);
+        const item = {
+          id: genId_(),
+          kind: 'update',
+          row: activeRow,
+          fields,
+          remark: remark || null,
+          auditor: auditor || null,
+          status: 'pending',
+          // Snapshot of what THIS client last saw on the server for the
+          // fields being touched — used at sync time to detect if
+          // someone else changed this row in the meantime.
+          snapshot: c ? Object.assign(
+            { customer: c.customer, auditorRemarks: c.auditorRemarks, dateOfAudit: c.dateOfAudit },
+            Object.fromEntries(Object.keys(fields).map(k => [k, c[k]]))
+          ) : null
+        };
+        const result = await queueOrSend_(item);
+        toast(result && result.queued ? 'No connection — saved on this device, will sync automatically.' : 'Changes saved.');
       }
       closeModal();
-      await loadData();
+      if(navigator.onLine) await loadData(); else render();
     }catch(err){
       toast('Could not save: ' + err.message);
     }finally{
@@ -1109,13 +1467,14 @@
     const btn = document.getElementById('deleteBtn');
     btn.disabled = true; btn.textContent = 'Deleting…';
     try{
-      const res = await apiCall('deleteCustomer', { row: activeRow });
-      const data = await res.json();
-      if(data.error) throw new Error(data.error);
-      if(!data.ok) throw new Error('Delete failed: unexpected response from server.');
-      toast('Customer deleted.');
+      const item = {
+        id: genId_(), kind: 'delete', row: activeRow, status: 'pending',
+        snapshot: c ? { customer: c.customer, auditorRemarks: c.auditorRemarks } : null
+      };
+      const result = await queueOrSend_(item);
+      toast(result && result.queued ? 'No connection — delete queued, will sync automatically.' : 'Customer deleted.');
       closeModal();
-      await loadData();
+      if(navigator.onLine) await loadData(); else render();
     }catch(err){
       toast('Could not delete: ' + err.message);
     }finally{
@@ -1129,12 +1488,13 @@
     const name = c ? c.customer : 'this customer';
     if(!confirm(`Delete ${name}? This permanently removes the row from the sheet.`)) return;
     try{
-      const res = await apiCall('deleteCustomer', { row });
-      const data = await res.json();
-      if(data.error) throw new Error(data.error);
-      if(!data.ok) throw new Error('Delete failed: unexpected response from server.');
-      toast('Customer deleted.');
-      await loadData();
+      const item = {
+        id: genId_(), kind: 'delete', row, status: 'pending',
+        snapshot: c ? { customer: c.customer, auditorRemarks: c.auditorRemarks } : null
+      };
+      const result = await queueOrSend_(item);
+      toast(result && result.queued ? 'No connection — delete queued, will sync automatically.' : 'Customer deleted.');
+      if(navigator.onLine) await loadData(); else render();
     }catch(err){
       toast('Could not delete: ' + err.message);
     }
@@ -1168,8 +1528,10 @@
 
   // Boot
   if(API_URL){
+    loadOutbox_();
+    updateSyncUI();
     document.getElementById('dashPanel').style.display = 'block';
-    loadData();
+    loadData().then(() => { if(outbox.length) syncOutbox(); });
   } else {
     document.getElementById('setupPanel').style.display = 'block';
   }
