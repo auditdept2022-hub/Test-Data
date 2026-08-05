@@ -280,7 +280,7 @@
       <div id="conflictBanner" style="display:none;"></div>
       <div class="toolbar" style="margin-top:6px;">
         <div class="left">
-          <button class="btn" onclick="document.getElementById('importInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name and updates Due This Month, Payment (Adv) &amp; Penalty Due on existing customers only; unmatched names are skipped, never added.">⇪ Import</button>
+          <button class="btn" onclick="document.getElementById('importInput').click()" title="Import CSV or Excel (.xls/.xlsx) files. Matches customers by name (and engine no. when the file has one, so same-name/different-unit customers are told apart) and updates Due This Month, Payment (Adv) &amp; Penalty Due. An 'Auditor Remarks' column is added as a new remark — the old current remark moves into Previous Audit Remarks. Existing customers only; unmatched rows are skipped, never added.">⇪ Import</button>
           <input type="file" id="importInput" accept=".csv,.xls,.xlsx" multiple style="display:none">
           <span id="importStatus" class="import-status"></span>
           <button class="btn" onclick="exportCSV()" title="Export all customers to CSV">⇩ Export</button>
@@ -442,22 +442,32 @@
   // ---- Import / Export ----------------------------------------------------
   //
   // Import accepts CSV, .xls, or .xlsx. It works on ANY file that has a
-  // customer-name column plus at least one of Due This Month / Payment (Adv)
-  // / Penalty Due, wherever those columns happen to sit and however many
-  // title/section rows sit above them (e.g. an aging/collection report
-  // exported straight from the accounting system).
+  // customer-name column plus at least one of Due This Month / Payment
+  // (Adv) / Penalty Due / Auditor Remarks, wherever those columns happen to
+  // sit and however many title/section rows sit above them — e.g. an
+  // aging/collection report exported straight from the accounting system,
+  // OR a branch's own audit sheet (like Sta. Rosa's) that carries a
+  // per-visit "Auditor Remarks" column instead of/alongside balances.
   //
   // Behaviour:
-  //   - Customer name matches someone already on the list  -> ONLY their
-  //     Due This Month, Payment (Adv) and Penalty Due are updated. Nothing
-  //     else about that customer (model, status, remarks, etc.) is touched.
-  //   - Customer name has no match on the list               -> added as a
-  //     new customer, using whatever recognizable fields were found for
-  //     them (same as the original full-record CSV import).
+  //   - Customer name matches someone already on the list  -> their Due
+  //     This Month, Payment (Adv) and Penalty Due are updated if present in
+  //     the file. Nothing else (model, status, etc.) is touched.
+  //   - The row also has an Engine No. column               -> matching
+  //     prefers name+engine together, so two accounts that share a name but
+  //     are actually different units are told apart and only the correct
+  //     one gets updated (both stay on the list as separate customers).
+  //   - The row has an Auditor Remarks value                -> handled
+  //     exactly like using "Add new remark" in the edit modal: whatever is
+  //     currently the customer's remark is pushed into Previous Audit
+  //     Remarks (dated), and the imported text becomes the new current
+  //     remark.
+  //   - Customer name has no match on the list               -> skipped.
+  //     Import never creates new customers.
   //   - Rows that aren't real customer data (section headers like "30 DAYS",
   //     sub-total rows, blank rows) are skipped automatically, because they
-  //     have a name but no balance figures, or a balance-column position
-  //     that isn't actually a name.
+  //     have a name but no balance figures/remark, or a balance-column
+  //     position that isn't actually a name.
 
   // Alternate header names accepted on import, in addition to each field's
   // own label and key, so files from slightly different sources still map.
@@ -475,6 +485,14 @@
     paymentMode: ['payment mode', 'paymentmode']
   };
 
+  // Not a form field (it's edited through the remark textareas, not
+  // buildFieldGrid), so it isn't in FIELDS — mapped separately below.
+  // Any matching column ("Auditor Remarks", "Remarks", ...) is picked up
+  // as a fresh remark for that row: on import, its OLD current remark is
+  // pushed into Previous Audit Remarks and this becomes the new current
+  // one — exactly what addRemark() / the app's own "Add new remark" does.
+  const AUDITOR_REMARKS_ALIASES = ['auditor remarks', 'auditor remark', 'audit remarks', 'audit remark', 'remarks', 'remark'];
+
   // Normalized header text ("due this month", "payment (adv)", ...) -> field key.
   const ALIAS_TO_FIELD = (() => {
     const map = {};
@@ -482,6 +500,7 @@
       const names = [f.key, f.label, ...(FIELD_ALIASES[f.key] || [])];
       names.forEach(n => { map[normHeader_(n)] = f.key; });
     });
+    AUDITOR_REMARKS_ALIASES.forEach(n => { map[normHeader_(n)] = 'auditorRemarks'; });
     return map;
   })();
 
@@ -565,26 +584,55 @@
   // blank spacer rows without needing to hard-code any file's layout.
   function detectHeaderAndParseRows_(matrix){
     const maxScan = Math.min(30, matrix.length);
-    let bestRow = -1, bestMap = null, bestScore = -1;
+    let bestRow = -1, bestMap = null, bestScore = -1, bestBlankCols = null;
 
     for(let r = 0; r < maxScan; r++){
       const row = matrix[r] || [];
       const map = {};
+      const blankCols = [];
       let score = 0, hasCustomer = false, hasFinancial = false;
       row.forEach((cell, idx) => {
-        const key = ALIAS_TO_FIELD[normHeader_(cell)];
+        const norm = normHeader_(cell);
+        const key = ALIAS_TO_FIELD[norm];
         if(key && map[key] === undefined){
           map[key] = idx;
           score++;
           if(key === 'customer') hasCustomer = true;
-          if(key === 'dueThisMonth' || key === 'paymentAdv' || key === 'penaltyDue') hasFinancial = true;
+          if(key === 'dueThisMonth' || key === 'paymentAdv' || key === 'penaltyDue' || key === 'auditorRemarks') hasFinancial = true;
+        } else if(!key && !norm){
+          blankCols.push(idx); // untitled column — candidate for an unlabeled name column (see fallback below)
         }
       });
-      if(hasCustomer && (hasFinancial || score >= 3) && score > bestScore){
-        bestScore = score; bestRow = r; bestMap = map;
+      // Some audit sheets (e.g. a branch's own tracker) leave the name
+      // column's header blank entirely instead of writing "Customer" —
+      // still accept the row as a header if it otherwise looks like one
+      // (several recognizable fields, including a balance/remark column),
+      // and let the fallback below recover the name column from a blank
+      // header cell.
+      const qualifies = hasCustomer ? (hasFinancial || score >= 3) : (hasFinancial && score >= 2 && blankCols.length);
+      if(qualifies && score > bestScore){
+        bestScore = score; bestRow = r; bestMap = map; bestBlankCols = blankCols;
       }
     }
     if(bestRow === -1) return { records: [], headerFound: false };
+
+    // Fallback: header row matched real fields but no explicit "Customer
+    // Name" column — try the leftmost untitled column whose first couple
+    // of data rows actually look like names (non-empty text, not a bare
+    // number/date), and adopt it as the customer column.
+    if(bestMap.customer === undefined && bestBlankCols && bestBlankCols.length){
+      for(const idx of bestBlankCols){
+        let looksLikeNames = 0, checked = 0;
+        for(let r = bestRow + 1; r < Math.min(bestRow + 6, matrix.length); r++){
+          const v = (matrix[r] || [])[idx];
+          if(v === undefined || v === null || v === '') continue;
+          checked++;
+          if(typeof v === 'string' && v.trim() && isNaN(Number(v.trim()))) looksLikeNames++;
+        }
+        if(checked && looksLikeNames === checked){ bestMap.customer = idx; break; }
+      }
+      if(bestMap.customer === undefined) return { records: [], headerFound: false };
+    }
 
     const NUMERIC_KEYS = ['ma', 'begBal', 'dueThisMonth', 'paymentAdv', 'penaltyDue'];
     const records = [];
@@ -607,8 +655,12 @@
       if(!rec.customer) continue;
       if(typeof row[bestMap.customer] === 'number') continue; // e.g. sub-total rows put a count here, not a name
       if(/^\s*(sub[\s-]?total|grand total|total|subtotal)\b/i.test(rec.customer)) continue; // summary rows, not customers
+      // A row counts as real customer data if it carries a balance figure
+      // OR an auditor remark — an audit sheet (like Sta. Rosa's) often has
+      // a remark with no balance columns filled in at all for that visit.
       const hasBalance = ['dueThisMonth', 'paymentAdv', 'penaltyDue'].some(k => rec[k] !== undefined);
-      if(!hasBalance) continue;
+      const hasRemark = !!(rec.auditorRemarks && String(rec.auditorRemarks).trim());
+      if(!hasBalance && !hasRemark) continue;
       records.push(rec);
     }
     return { records, headerFound: true };
@@ -699,68 +751,100 @@
     if(!allRecords.length){ toast('No customer rows found to import.'); return; }
 
     // Match every parsed row against the currently loaded list by customer
-    // name. Import ONLY updates Due This Month / Payment (Adv) / Penalty
-    // Due on an existing, already-matched customer. It never creates new
-    // customers — a name with no match in the current list is skipped
-    // entirely, not added as a new row.
+    // name — and, whenever the row also carries an engine number, by
+    // name+engine together. Import ONLY updates existing, already-matched
+    // customers. It never creates new customers — a name with no match in
+    // the current list is skipped entirely, not added as a new row.
     //
     // Some names appear more than once in the list (e.g. the same person
-    // with two separate accounts/units). Since the import file only gives
-    // a name with no other identifying info, there's no way to tell which
-    // account a row is meant for — so every customer sharing that name
-    // gets the same update, rather than silently updating just one of them
-    // and leaving the other(s) untouched.
+    // with two separate units). When the import row includes an engine
+    // number, it's used to tell those apart: only the customer whose
+    // engine number actually matches gets updated, and the two accounts
+    // stay independent (each keeps its own balances/remarks). Only when a
+    // row has NO engine number, and the name is ambiguous, do we fall back
+    // to updating every account under that name — same as before.
+    function normalizeEngine_(s){ return String(s || '').replace(/[\s-]+/g, '').toUpperCase(); }
+
     const nameIndex = {};
+    const compoundIndex = {};
     customers.forEach(c => {
-      const key = normalizeName_(c.customer);
-      (nameIndex[key] = nameIndex[key] || []).push(c);
+      const nameKey = normalizeName_(c.customer);
+      (nameIndex[nameKey] = nameIndex[nameKey] || []).push(c);
+      const engKey = normalizeEngine_(c.engineNo);
+      if(engKey){
+        const key = nameKey + '|' + engKey;
+        (compoundIndex[key] = compoundIndex[key] || []).push(c);
+      }
     });
 
     const toUpdate = [];
     let unmatched = 0;
     let duplicateNameRows = 0;
+    let remarkRows = 0;
     allRecords.forEach(rec => {
-      const matches = nameIndex[normalizeName_(rec.customer)];
+      const nameKey = normalizeName_(rec.customer);
+      const engKey = normalizeEngine_(rec.engineNo);
+      let matches = null;
+
+      if(engKey){
+        // Engine number given — match that exact unit only. If it
+        // doesn't line up with anything on file, don't guess: skip the
+        // row rather than risk updating (or worse, remark-stamping) the
+        // wrong account.
+        matches = compoundIndex[nameKey + '|' + engKey] || null;
+        if(!matches){
+          const byName = nameIndex[nameKey];
+          if(byName && byName.length === 1) matches = byName; // only one account with this name — safe even if the engine text differs slightly
+        }
+      } else {
+        matches = nameIndex[nameKey] || null;
+      }
+
       if(!matches || !matches.length){ unmatched++; return; }
+
       const fields = {};
       ['dueThisMonth', 'paymentAdv', 'penaltyDue'].forEach(k => { if(rec[k] !== undefined) fields[k] = rec[k]; });
-      if(!Object.keys(fields).length) return;
-      if(matches.length > 1) duplicateNameRows++;
-      matches.forEach(m => toUpdate.push({ row: m.row, fields }));
+      const remark = rec.auditorRemarks ? String(rec.auditorRemarks).trim() : '';
+      if(!Object.keys(fields).length && !remark) return;
+
+      if(!engKey && matches.length > 1) duplicateNameRows++;
+      if(remark) remarkRows += matches.length;
+      matches.forEach(m => toUpdate.push({ row: m.row, fields, remark }));
     });
 
     if(!toUpdate.length){
       toast(unmatched
         ? `Found ${unmatched} row${unmatched === 1 ? '' : 's'}, but none matched an existing customer — nothing imported.`
-        : 'Found rows, but none had usable balance figures.');
+        : 'Found rows, but none had usable balance figures or remarks.');
       return;
     }
 
     const msg = `Found ${allRecords.length} data row${allRecords.length === 1 ? '' : 's'}: `
-      + `${toUpdate.length} account${toUpdate.length === 1 ? '' : 's'} will get Due This Month / Payment (Adv) / Penalty Due updated`
-      + (duplicateNameRows ? ` (${duplicateNameRows} name${duplicateNameRows === 1 ? '' : 's'} matched more than one account — all of them will be updated)` : '')
-      + (unmatched ? `. ${unmatched} unmatched name${unmatched === 1 ? '' : 's'} will be skipped (no new customers are created by import)` : '')
+      + `${toUpdate.length} account${toUpdate.length === 1 ? '' : 's'} will be updated`
+      + (remarkRows ? ` (${remarkRows} of them get a new auditor remark — the current one moves into Previous Audit Remarks)` : '')
+      + (duplicateNameRows ? `. ${duplicateNameRows} name${duplicateNameRows === 1 ? '' : 's'} had no engine number to disambiguate and matched more than one account — all of them will be updated` : '')
+      + (unmatched ? `. ${unmatched} unmatched row${unmatched === 1 ? '' : 's'} will be skipped (no new customers are created by import)` : '')
       + '. Continue?';
     if(!confirm(msg)) return;
 
     const total = toUpdate.length;
 
     // Bulk writes go through batchUpdateCustomer, which applies many rows
-    // in ONE Apps Script execution instead of one HTTP round trip per row
-    // — that round-trip overhead (network + script cold start) is what
-    // made large imports slow. Chunked so the URL stays a safe length and
-    // progress can be reported; a few chunks run concurrently for extra
-    // speed. If a batch call fails for any reason (including an old,
-    // not-yet-redeployed backend), that chunk automatically retries one
-    // row at a time so the import still completes — just slower for that
-    // chunk.
+    // — including the remark-history push for any row that carries one —
+    // in ONE Apps Script execution instead of one HTTP round trip per row.
+    // Chunked so the URL stays a safe length and progress can be
+    // reported; a few chunks run concurrently for extra speed. If a batch
+    // call fails for any reason (including an old, not-yet-redeployed
+    // backend), that chunk automatically retries one row at a time via
+    // updateCustomerFull (which also understands the remark) so the
+    // import still completes — just slower for that chunk.
     document.getElementById('importStatus').textContent = `Importing 0 / ${total}…`;
     toast(`Importing ${total} record${total === 1 ? '' : 's'}…`);
 
     const updateResult = await runBatched_(
       toUpdate, 'batchUpdateCustomer', 'updates',
-      item => ({ row: item.row, fields: item.fields }),
-      'updateCustomer', item => ({ row: item.row, fields: item.fields }),
+      item => ({ row: item.row, fields: item.fields, remark: item.remark || '' }),
+      'updateCustomerFull', item => ({ row: item.row, fields: item.fields, remark: item.remark || '' }),
       total, 0
     );
 
