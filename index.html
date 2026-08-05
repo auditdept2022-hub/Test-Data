@@ -1610,6 +1610,27 @@
     return n.toLocaleString('en-PH', {minimumFractionDigits:0, maximumFractionDigits:0});
   }
 
+  // Per-row rendered-HTML cache, keyed by sheet row number. render() gets
+  // called after every single edit (and on every keystroke in the search
+  // box, debounced), but previously rebuilt EVERY row's fact-grid and
+  // remarks HTML from scratch each time even though only one row (or
+  // none — a pure filter change) actually changed. Caching each row's
+  // last-built HTML alongside a cheap signature of the fields that went
+  // into it means an unchanged row is reused as-is; only rows whose data
+  // (or pending/conflict badge state) actually differs get rebuilt. Pure
+  // memory, no behavior change — output is identical either way.
+  const rowHtmlCache = new Map();
+
+  function rowSignature_(c, isConflict){
+    return c.customer + '\u0001' + c.model + '\u0001' + c.engineNo + '\u0001' +
+      c.releaseDate + '\u0001' + c.dueDate + '\u0001' + c.term + '\u0001' +
+      c.ma + '\u0001' + c.begBal + '\u0001' + c.dueThisMonth + '\u0001' +
+      c.paymentAdv + '\u0001' + c.penaltyDue + '\u0001' + c.customerStatus + '\u0001' +
+      c.unitStatus + '\u0001' + c.paymentMode + '\u0001' + c.dateOfAudit + '\u0001' +
+      c.auditorRemarks + '\u0001' + c.previousRemarks + '\u0001' +
+      (c._pending ? 1 : 0) + '\u0001' + (isConflict ? 1 : 0);
+  }
+
   function render(){
     const q = document.getElementById('searchBox').value.trim().toLowerCase();
     const statusF = document.getElementById('statusFilter').value;
@@ -1636,6 +1657,15 @@
 
     for(let i = 0; i < filtered.length; i++){
       const c = filtered[i];
+      const isConflict = conflictRows.has(c.row);
+      const sig = rowSignature_(c, isConflict);
+
+      const cached = rowHtmlCache.get(c.row);
+      if(cached && cached.sig === sig){
+        parts[i] = cached.html;
+        continue;
+      }
+
       const g = statusGroup(c.customerStatus);
       const hasRemark = c.auditorRemarks && str_(c.auditorRemarks).toUpperCase() !== 'NO REMARKS';
       const hist = parseHistory(c.previousRemarks);
@@ -1667,13 +1697,12 @@
         remarksHtml += `<div class="rline"><div class="rdate">${escapeHtml(hist[j].date || 'Undated')}</div><div class="rtext">${escapeHtml(hist[j].remark)}</div></div>`;
       }
 
-      const isConflict = conflictRows.has(c.row);
       const pendingTag = isConflict
         ? `<span class="tag-pending err">⚠ Needs attention</span>`
         : (c._pending ? `<span class="tag-pending">⏳ Syncing</span>` : '');
       const recClass = 'rec' + (isConflict ? ' is-conflict' : (c._pending ? ' is-pending' : ''));
 
-      parts[i] = `<div class="${recClass}" data-row="${c.row}">
+      const html = `<div class="${recClass}" data-row="${c.row}">
         <div class="rec-top">
           <div class="rec-id">
             <div class="cust-name">${escapeHtml(c.customer)}</div>
@@ -1690,10 +1719,26 @@
         <div class="fact-grid">${factsHtml}</div>
         <div class="rec-remarks">${remarksHtml}</div>
       </div>`;
+
+      parts[i] = html;
+      rowHtmlCache.set(c.row, { sig, html });
     }
 
     // Single DOM write avoids a reflow per row.
     document.getElementById('tableBody').innerHTML = parts.join('');
+
+    // Drop cache entries for rows that no longer exist at all (deleted,
+    // or a synced-away temp row) so the Map doesn't grow unbounded over a
+    // long session. Rows merely hidden by the current filter are NOT
+    // touched here — filtered.length only reflects what matched this
+    // search/status pass, and evicting those would defeat the point of
+    // the cache the moment the user clears the search box.
+    if(rowHtmlCache.size > customers.length){
+      const liveRows = new Set(customers.map(c => c.row));
+      for(const key of rowHtmlCache.keys()){
+        if(!liveRows.has(key)) rowHtmlCache.delete(key);
+      }
+    }
   }
 
   // Event delegation: one listener handles clicks for every row, including
