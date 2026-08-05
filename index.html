@@ -313,6 +313,7 @@
   .profile-add-combo .btn.primary{border-radius:0;border:none;box-shadow:none;flex-shrink:0;}
   .profile-rename-input{flex:1;border:1px solid var(--accent);border-radius:8px;padding:7px 9px;font-size:13.5px;font-weight:600;font-family:inherit;outline:none;min-width:0;}
   .profile-empty-search{color:var(--muted);font-size:12.5px;padding:16px 2px;text-align:center;}
+  .profile-offline-note{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--rstr);background:var(--rstr-soft);border:1px solid #E7D08C;border-radius:8px;padding:8px 10px;margin-bottom:10px;}
 
   .tag-pending{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8B6A1F;background:var(--rstr-soft);border-radius:20px;padding:2px 8px;margin-left:6px;}
   .tag-pending.err{color:var(--del);background:var(--del-soft);}
@@ -513,6 +514,7 @@
         <input class="input profile-search" id="profileSearch" placeholder="Search branches…" oninput="filterProfileList_(this.value)">
         <span class="profile-count" id="profileCount"></span>
       </div>
+      <div id="profileOfflineNote" class="profile-offline-note" style="display:none;"></div>
       <div id="profileList" class="profile-list">
         <div class="profile-loading">Loading profiles…</div>
       </div>
@@ -1252,6 +1254,33 @@
 
   function currentSheetKey_(){ return 'nicho_current_sheet_v1:' + API_URL; }
 
+  // The branch list itself (the hamburger drawer) is cached the same way
+  // the customer list is: last-known-good copy in localStorage, keyed per
+  // API_URL. Without this, going offline meant the drawer could only show
+  // an error — you couldn't even switch to a branch you'd already visited
+  // and whose data was sitting right there in the per-branch cache below.
+  const SHEETS_LOCAL_CACHE_PREFIX = 'nicho_sheets_cache_v1:';
+  function sheetsLocalCacheKey_(){ return SHEETS_LOCAL_CACHE_PREFIX + API_URL; }
+
+  function saveSheetsCache_(sheets){
+    try{
+      localStorage.setItem(sheetsLocalCacheKey_(), JSON.stringify({ sheets: sheets, ts: Date.now() }));
+    }catch(e){ /* storage full/unavailable — fine, purely a speed/offline optimization */ }
+  }
+
+  function loadSheetsCache_(){
+    try{
+      const raw = localStorage.getItem(sheetsLocalCacheKey_());
+      if(!raw) return null;
+      const parsed = JSON.parse(raw);
+      if(!parsed || !Array.isArray(parsed.sheets)) return null;
+      return parsed;
+    }catch(e){
+      return null;
+    }
+  }
+
+
   // Resolves currentSheet exactly once per connection: a saved
   // preference wins, otherwise we ask the backend for the real list of
   // tabs and use whichever one is first — never a hardcoded guess.
@@ -1263,9 +1292,16 @@
     try{
       const data = await apiCallJson_('listSheets', {});
       const sheets = data.sheets || [];
+      saveSheetsCache_(sheets);
       currentSheet = sheets[0] || null;
     }catch(e){
-      currentSheet = null;
+      // No saved preference AND the network call failed (e.g. first-ever
+      // visit happens to be offline) — fall back to whatever branch list
+      // we last cached, if any, rather than stranding the person on "No
+      // branch profiles yet" when their data is actually sitting in
+      // localStorage from a previous session.
+      const cached = loadSheetsCache_();
+      currentSheet = (cached && cached.sheets && cached.sheets[0]) || null;
     }
     saveCurrentSheet_();
   }
@@ -1302,14 +1338,39 @@
 
   async function loadProfiles_(){
     const listEl = document.getElementById('profileList');
-    listEl.innerHTML = '<div class="profile-skeleton"></div><div class="profile-skeleton"></div><div class="profile-skeleton"></div>';
+    const noteEl = document.getElementById('profileOfflineNote');
+    noteEl.style.display = 'none';
+
+    // Paint instantly from whatever branch list we last saw, so opening
+    // the drawer never stalls on a skeleton if we already know the
+    // answer — matters most exactly when it's needed most: offline.
+    const cached = loadSheetsCache_();
+    if(cached && cached.sheets.length){
+      profilesCache_ = cached.sheets;
+      renderProfileList_(profilesCache_);
+    } else {
+      listEl.innerHTML = '<div class="profile-skeleton"></div><div class="profile-skeleton"></div><div class="profile-skeleton"></div>';
+    }
+
     try{
       const data = await apiCallJson_('listSheets', {});
       profilesCache_ = data.sheets || [];
+      saveSheetsCache_(profilesCache_);
       renderProfileList_(profilesCache_);
     }catch(err){
-      listEl.innerHTML = '<div class="profile-loading is-error">⚠ Could not load branch profiles: ' + escapeHtml(err.message) + '<span class="retry-link" onclick="loadProfiles_()">Retry</span></div>';
-      document.getElementById('profileCount').textContent = '';
+      if(cached && cached.sheets.length){
+        // Already showing a working list from cache — don't blow it away
+        // over a failed background refresh, just flag that it might be
+        // stale (a branch added/renamed/deleted elsewhere wouldn't show
+        // up here until back online).
+        noteEl.style.display = 'flex';
+        noteEl.textContent = isConnectionError_(err)
+          ? '⚠ Offline — showing the last known branch list. Switching branches still works; changes made elsewhere won\'t show up until you reconnect.'
+          : '⚠ Could not refresh branch list: ' + err.message;
+      } else {
+        listEl.innerHTML = '<div class="profile-loading is-error">⚠ Could not load branch profiles: ' + escapeHtml(err.message) + '<span class="retry-link" onclick="loadProfiles_()">Retry</span></div>';
+        document.getElementById('profileCount').textContent = '';
+      }
     }
   }
 
@@ -1419,7 +1480,9 @@
       openProfileMenu();
       renderProfileList_(profilesCache_);
     }catch(err){
-      toast('Could not create branch: ' + err.message);
+      toast(isConnectionError_(err)
+        ? 'You\'re offline — creating a branch needs a connection (it changes the spreadsheet itself). Try again once you\'re back online.'
+        : 'Could not create branch: ' + err.message);
     }
   }
 
@@ -1442,7 +1505,9 @@
         toast('Renamed to "' + newName + '".');
         await loadProfiles_();
       }catch(err){
-        toast('Could not rename: ' + err.message);
+        toast(isConnectionError_(err)
+          ? 'You\'re offline — renaming a branch needs a connection.'
+          : 'Could not rename: ' + err.message);
         renderProfileList_(profilesCache_);
       }
     };
@@ -1470,7 +1535,9 @@
       }
       await loadProfiles_();
     }catch(err){
-      toast('Could not delete: ' + err.message);
+      toast(isConnectionError_(err)
+        ? 'You\'re offline — deleting a branch needs a connection.'
+        : 'Could not delete: ' + err.message);
     }
   }
 
