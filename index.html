@@ -4751,6 +4751,7 @@ html.page-fade-ready body {
         </div>
       </div>
 
+      <div class="flex flex-col gap-4">
       <div class="bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md flex flex-col">
         <div>
           <h3 class="text-base font-bold tracking-tight text-slate-900 mb-2 flex items-center gap-2">
@@ -4819,19 +4820,18 @@ html.page-fade-ready body {
           </div>
         </div>
       </div>
-    </div>
 
-    <div id="section-notifications" class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md reveal-up">
-      <div class="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-coolBorder">
-        <h3 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
-          <span class="w-8 h-8 rounded-xl bg-accentRose/10 text-accentRose flex items-center justify-center shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+      <div class="bg-coolCard border border-coolBorder rounded-2xl p-3 shadow-md">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-xs font-bold text-slate-700 tracking-wide uppercase flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-accentRose shrink-0"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+            Notifications &amp; Alerts
           </span>
-          Notifications &amp; Alerts
-        </h3>
-        <span id="notificationStackCount" class="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">0 Active</span>
+          <span id="notificationStackCount" class="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">0 Active</span>
+        </div>
+        <div id="notificationStackList" class="space-y-1.5 max-h-[160px] overflow-y-auto custom-scrollbar pr-1"></div>
       </div>
-      <div id="notificationStackList" class="space-y-2 max-h-[340px] overflow-y-auto custom-scrollbar pr-1"></div>
+      </div>
     </div>
 
     <div id="section-rankings" class="dash-card-accent bg-coolCard border border-coolBorder rounded-2xl p-4 shadow-md mb-4 reveal-up">
