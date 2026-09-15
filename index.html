@@ -351,12 +351,16 @@
        card with real gutters between them, rather than a dense hairline
        list — reads more like a deck of records than a spreadsheet. */
     .mv-scroll { padding: 12px; }
-    .mv-grid { background: transparent; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; align-content: start; }
+    .mv-grid { background: transparent; display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 10px; align-content: start; }
     .mv-item { display: block; width: 100%; text-align: left; border: 1px solid #e7e9f2; border-radius: 11px; background: #fff; padding: 11px 13px; cursor: pointer; box-shadow: 0 1px 2px rgba(15,23,42,.04); transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease; }
     .mv-item:hover { border-color: #d7d3fb; box-shadow: 0 6px 16px rgba(91,61,240,.12); transform: translateY(-1px); }
     .mv-item:focus-visible { outline: 2px solid #5b3df0; outline-offset: 2px; }
     .mv-item-name { display: block; font-size: 12.5px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mv-item-meta { display: block; font-size: 11px; color: #94a3b8; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Date ranges ("Old: ... -> Latest: ...") were forced onto a single
+       nowrap line with an ellipsis, which cut most of the date off on
+       anything but a very wide card. Let it wrap onto 2 lines instead so
+       the full date is actually readable. */
+    .mv-item-meta { display: block; font-size: 11px; color: #94a3b8; margin-top: 3px; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.45; word-break: break-word; }
     .mv-empty { padding: 22px 14px; text-align: center; font-size: 12.5px; color: #94a3b8; }
 
     .mv-chip { display: inline-block; vertical-align: 1px; margin-left: 5px; padding: 1px 6px; border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
@@ -13207,13 +13211,17 @@ html.page-fade-ready body {
         return;
       }
       const diff = current - previous;
+      if (diff === 0) {
+        el.innerHTML = ''; // nothing changed since last check -- show nothing instead of a "no change" badge
+        return;
+      }
       let color = 'text-slate-400';
-      if (diff !== 0 && goodDirection !== 'neutral') {
+      if (goodDirection !== 'neutral') {
         const isGood = goodDirection === 'down' ? diff < 0 : diff > 0;
         color = isGood ? 'text-accentEmerald' : 'text-accentRose';
       }
-      const icon = diff > 0 ? '\u25b2' : (diff < 0 ? '\u25bc' : '\u2192');
-      const diffLabel = diff > 0 ? `+${diff}` : (diff < 0 ? `\u2212${Math.abs(diff)}` : 'no change');
+      const icon = diff > 0 ? '\u25b2' : '\u25bc';
+      const diffLabel = diff > 0 ? `+${diff}` : `\u2212${Math.abs(diff)}`;
       el.innerHTML = `<span class="${color}">${icon} ${diffLabel}</span> <span class="text-slate-400 font-normal">since last check</span>`;
     }
 
@@ -14141,6 +14149,19 @@ html.page-fade-ready body {
             let noOfRepoAprParsed = parseInt(row[6]) || 0;   // Column G
             let noOfRepoLatestParsed = parseInt(row[7]) || 0; // Column H
 
+            // Efficiency (Columns L/M/N) is percentage-formatted in Sheets the
+            // same way Repo Rate (Columns I/J/K) is -- stored internally as a
+            // raw fraction (e.g. 0.87 for a cell showing "87%"), not a whole
+            // number. Reading it with plain parseInt() truncated any value
+            // under 1 straight down to 0, which is why Efficiency read as 0%
+            // (or otherwise understated) for branches where the cell held a
+            // fraction. Reuse parseRepoPct()'s ×100-if-under-1 normalization,
+            // then round to a whole number since Efficiency is always shown
+            // and compared (effAccent, sort, etc.) as an integer percentage.
+            let effMarParsed = Math.round(parseRepoPct(row[11]));   // Column L
+            let effAprParsed = Math.round(parseRepoPct(row[12]));   // Column M
+            let effLatestParsed = Math.round(parseRepoPct(row[13])); // Column N
+
             tempBranchesMap[branchName] = {
               name: branchName,
               accountsMar: parseInt(row[2]) || 0,
@@ -14154,9 +14175,9 @@ html.page-fade-ready body {
               noOfRepoMar: noOfRepoMarParsed,
               noOfRepoApr: noOfRepoAprParsed,
               noOfRepoLatest: noOfRepoLatestParsed,
-              effMar: parseInt(row[11]) || 0,
-              effApr: parseInt(row[12]) || 0,
-              effLatest: parseInt(row[13]) || 0, 
+              effMar: effMarParsed,
+              effApr: effAprParsed,
+              effLatest: effLatestParsed, 
               collection: finalColStat,
               sales: finalSaleStat,
               serviceTarget: parseInt(row[28]) || 0,
