@@ -15330,20 +15330,12 @@ html.page-fade-ready body {
             Refresh
           </button>
         </div>
-        ${buildOverallDataStatusFilter(state.tab)}
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
-          <div class="relative flex-1 min-w-[180px]">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-2.5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-slate-400"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
-            </span>
-            <input type="text" placeholder="Search branch..." value="${escapeFindingHTML(state.search || '')}" oninput="setOverallDataSearch(this.value)" class="w-full pl-8 pr-3 py-1.5 bg-white border border-coolBorder rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-accentCyan transition-all">
-          </div>
-          <span class="text-[11px] font-semibold text-slate-400 whitespace-nowrap sm:ml-auto">${(data && data.totalBranches) || 0} branches tracked \u00b7 ${months.length} month(s) shown</span>
+        <div class="flex items-center justify-end gap-2 mb-3">
+          <span class="text-[11px] font-semibold text-slate-400 whitespace-nowrap">${(data && data.totalBranches) || 0} branches tracked \u00b7 ${months.length} month(s) shown</span>
         </div>
         <div class="bg-white border border-coolBorder rounded-xl p-3 mb-3">
           <div class="flex items-center justify-between gap-2 mb-1 flex-wrap">
             <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Trend \u00b7 ${months.length ? months.join(' \u2192 ') : '\u2014'}</span>
-            <div id="overallDataChartControls"></div>
           </div>
           <div id="overallDataChartBox" style="min-height: 260px;"></div>
         </div>
@@ -15400,9 +15392,6 @@ html.page-fade-ready body {
     // the same ApexCharts instance already loaded for the ranking charts
     // elsewhere on the dashboard, styled to match (CHART_FONT, colors).
     function renderOverallDataChart() {
-      const controlsEl = document.getElementById('overallDataChartControls');
-      if (controlsEl) controlsEl.innerHTML = buildOverallDataChartControls();
-
       const el = document.querySelector('#overallDataChartBox');
       if (!el) return; // modal isn't open / this body isn't mounted
 
@@ -15422,7 +15411,12 @@ html.page-fade-ready body {
       const isService = state.tab === 'service';
       const metric = state.chartMetric || (isService ? null
         : (state.tab === 'collection' ? (data.collectionMetrics || [])[0] : (data.salesSubLabels || [])[0]));
-      const isRepoRate = !isService && /repo/i.test(metric || '') && /rate/i.test(metric || '');
+      // Percentage-style metrics — Repo Rate and Efficiency (Rate) — are
+      // both stored as raw fractions (e.g. 0.78 for "78%"), same as the
+      // table's fmt() below. Matching either one here means the Efficiency
+      // trend line now gets averaged (not summed) and rendered as "%" on
+      // the axis/tooltip/label, the same way Repo Rate already did.
+      const isRepoRate = !isService && ((/repo/i.test(metric || '') && /rate/i.test(metric || '')) || /effic/i.test(metric || ''));
 
       const values = months.map(function (m) {
         let total = 0;
@@ -15475,7 +15469,7 @@ html.page-fade-ready body {
           axisBorder: { show: false }, axisTicks: { show: false },
           crosshairs: { show: true, stroke: { color: tabColor, width: 1, dashArray: 4 } }
         },
-        yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '10px' }, formatter: function (v) { return OVERALL_DATA_NUM_FMT.format(Math.round(v)); } } },
+        yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '10px' }, formatter: function (v) { return isRepoRate ? Math.round(v) + '%' : OVERALL_DATA_NUM_FMT.format(Math.round(v)); } } },
         colors: [tabColor],
         stroke: { curve: 'smooth', width: 3.5, lineCap: 'round' },
         fill: {
@@ -15592,26 +15586,29 @@ html.page-fade-ready body {
         return (av - bv) * sortDir;
       });
 
-      // `fmt` is label/column-aware now: the Collection "Repo Rate"
-      // sub-column always renders as a percentage with exactly 2
-      // decimals — "0.00%" style. The OVERALL DATA sheet stores this
-      // as a raw fraction (e.g. 0.0038 for a cell showing "0.38%" in
-      // Sheets' own percentage formatting), same as AUDIT DATA (FINAL)'s
-      // repo rate columns — so this normalizes it the same way
-      // parseRepoPct() does elsewhere on this dashboard: anything under 1
-      // is treated as a fraction and scaled ×100 into percentage points
-      // before formatting; anything ≥1 is assumed already-scaled and left
-      // alone. Without this, small rates (well under 1 as a fraction)
-      // were rounding straight down to "0.00%" instead of showing their
-      // real value. Service's single value per month is a peso amount,
-      // so it always gets a "\u20b1" prefix.
+      // `fmt` is label/column-aware now: the Collection "Repo Rate" AND
+      // "Efficiency" sub-columns both always render as a whole-number
+      // percentage — "78%" style — across every branch/month. The
+      // OVERALL DATA sheet stores these as a raw fraction (e.g. 0.78 for
+      // a cell showing "78%" in Sheets' own percentage formatting), same
+      // as AUDIT DATA (FINAL)'s repo rate / efficiency columns — so this
+      // normalizes it the same way parseRepoPct() does elsewhere on this
+      // dashboard: anything under 1 is treated as a fraction and scaled
+      // ×100 into percentage points before formatting; anything ≥1 is
+      // assumed already-scaled and left alone. Without this, small rates
+      // (well under 1 as a fraction) were rounding straight down to "0%"
+      // instead of showing their real value. Service's single value per
+      // month is a peso amount, so it always gets a "\u20b1" prefix.
       const fmt = function (v, kind) {
         if (v === null || v === undefined || v === '') return '<span class="text-slate-300">\u2014</span>';
         const n = Number(v);
         if (isNaN(n)) return String(v);
         if (kind === 'repo') {
           const pct = Math.abs(n) < 1 ? n * 100 : n;
-          return pct.toFixed(2) + '%';
+          // Whole-number percent (e.g. "78%") to match how Efficiency is
+          // shown everywhere else on this dashboard (see effMarParsed/
+          // effAprParsed/effLatestParsed above, all Math.round()'d).
+          return Math.round(pct) + '%';
         }
         if (kind === 'peso') return '\u20b1' + OVERALL_DATA_NUM_FMT.format(n);
         return OVERALL_DATA_NUM_FMT.format(n);
@@ -15627,17 +15624,19 @@ html.page-fade-ready body {
       // A sticky <thead> combined with rowspan cells spanning two rows is
       // what was making the scroll feel laggy (some browsers recompute
       // the sticky offsets on every scroll tick when rowspans are
-      // involved) — a flat single sticky row avoids that entirely. Every
-      // header cell (Branch + each data column) is now a sort trigger.
+      // involved) — a flat single sticky row avoids that entirely.
+      // Data columns (Repo Rate, No. of Repo, Efficiency, Accounts, etc.)
+      // are no longer sort triggers — only the Branch column (see the
+      // header markup further below) still sorts, so this is now a
+      // static label instead of a clickable header.
       const headHtml = months.map(function (m, mi) {
         const borderCls = mi === 0 ? '' : ' border-l border-coolBorder';
         if (isService) {
           const key = m;
-          return `<th class="p-2 bg-gray-50 text-center whitespace-nowrap cursor-pointer select-none hover:text-accentIndigo transition-colors${borderCls}" onclick="setOverallDataSort('${key}')" title="Sort by ${m}">${m} ${sortArrow(key)}</th>`;
+          return `<th class="p-2 bg-gray-50 text-center whitespace-nowrap${borderCls}">${m}</th>`;
         }
         return subCols.map(function (label, ci) {
-          const key = `${m}||${label}`;
-          return `<th class="p-2 bg-gray-50 text-center whitespace-nowrap cursor-pointer select-none hover:text-accentIndigo transition-colors${ci === 0 ? borderCls : ''}" onclick="setOverallDataSort('${key}')" title="Sort by ${m} \u00b7 ${label}">${m}<br><span class="normal-case font-semibold text-slate-400">${label} ${sortArrow(key)}</span></th>`;
+          return `<th class="p-2 bg-gray-50 text-center whitespace-nowrap${ci === 0 ? borderCls : ''}">${m}<br><span class="normal-case font-semibold text-slate-400">${label}</span></th>`;
         }).join('');
       }).join('');
 
@@ -15647,11 +15646,12 @@ html.page-fade-ready body {
           if (state.tab === 'collection') {
             const rec = (b.collection && b.collection[m]) || {};
             return subCols.map(function (label, ci) {
-              // Only the "Repo Rate" sub-column is a percentage — "No. of
-              // Repo" is a plain count and must stay a plain number, so
-              // this specifically requires "repo" AND "rate" in the
-              // label instead of matching on "repo" alone.
-              const kind = (/repo/i.test(label) && /rate/i.test(label)) ? 'repo' : null;
+              // "Repo Rate" and "Efficiency" sub-columns are both
+              // percentages — "No. of Repo" is a plain count and must
+              // stay a plain number, so this specifically requires
+              // "repo" AND "rate" together (not "repo" alone) or an
+              // "Efficiency" label before treating a column as a percent.
+              const kind = ((/repo/i.test(label) && /rate/i.test(label)) || /effic/i.test(label)) ? 'repo' : null;
               return `<td class="p-2 text-center whitespace-nowrap${ci === 0 ? borderCls : ''}">${fmt(rec[label], kind)}</td>`;
             }).join('');
           } else if (state.tab === 'sales') {
