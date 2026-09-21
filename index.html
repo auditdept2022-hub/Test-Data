@@ -6068,36 +6068,33 @@ html.page-fade-ready body {
       </div>
 
       <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-md hover:shadow-lg transition-all overflow-hidden">
-        <div onclick="openModal('All Branches Overview', 'all', null)" class="p-4 sm:p-5 pb-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+        <div onclick="openModal('All Branches Overview', 'all', null)" class="relative p-4 sm:p-5 pb-4 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+          <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentBlue/70 group-hover:bg-accentBlue transition-colors"></span>
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2 min-w-0">
               <span class="p-1.5 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin w-4 h-4"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
-              <span class="text-xs font-semibold tracking-wider text-slate-500 truncate">BRANCHES</span>
+              <span class="text-xs font-bold tracking-wider text-slate-500 truncate">BRANCHES</span>
             </div>
             <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 shrink-0" id="stat-total-branches">—</h3>
           </div>
-          <p class="text-xs text-slate-500 mt-1.5" id="stat-branches-sub">—</p>
-          <p class="text-[11px] font-semibold" id="stat-total-branches-trend"></p>
+          <div class="mt-3 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden flex gap-px" id="stat-branches-bar"></div>
+          <div class="mt-2.5 flex items-center gap-3 flex-wrap" id="stat-branches-sub"></div>
+          <p class="text-[11px] font-semibold mt-1.5" id="stat-total-branches-trend"></p>
         </div>
         <div class="border-t border-slate-100"></div>
-        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="p-4 sm:p-5 pt-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="relative p-4 sm:p-5 pt-4 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+          <span class="absolute top-0 left-0 right-0 h-[3px] bg-accentEmerald/70 group-hover:bg-accentEmerald transition-colors"></span>
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2 min-w-0">
-              <span class="p-1.5 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-4 h-4"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
-              <span class="text-xs font-semibold tracking-wider text-slate-500 truncate">ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
+              <span class="p-1.5 bg-accentEmerald/10 text-accentEmerald rounded-lg group-hover:bg-accentEmerald group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-4 h-4"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
+              <span class="text-xs font-bold tracking-wider text-slate-500 truncate">ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
             </div>
             <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 shrink-0" id="stat-total-accounts">—</h3>
           </div>
           <p class="text-[11px] font-semibold text-accentAmber mt-1.5 hidden" id="stat-total-accounts-fallback-warning">Latest month unavailable — showing previous</p>
-          <div class="mt-2 pt-2 border-t border-slate-100 space-y-1">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Accounts</span>
-              <span class="text-[11px] font-semibold text-slate-600 truncate" id="stat-accounts-compare">—</span>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Repo</span>
-              <span class="text-[11px] font-semibold text-slate-600 truncate" id="stat-repo-compare">—</span>
-            </div>
+          <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-3">
+            <div id="stat-accounts-compare">—</div>
+            <div id="stat-repo-compare">—</div>
           </div>
         </div>
       </div>
@@ -17271,8 +17268,28 @@ html.page-fade-ready body {
       try { prevSnapshot = JSON.parse(localStorage.getItem(STAT_SNAPSHOT_KEY) || '{}') || {}; } catch (e) { prevSnapshot = {}; }
 
       animateCountUp(document.getElementById('stat-total-branches'), sum.totalBranches || 0);
-      document.getElementById('stat-branches-sub').innerText = `${sum.doneCount || 0} done · ${sum.forAuditCount || 0} audit · ${sum.pendingCount || 0} pending`;
       renderTrendBadge('stat-total-branches-trend', sum.totalBranches || 0, prevSnapshot.totalBranches, 'neutral');
+      {
+        const done = sum.doneCount || 0, audit = sum.forAuditCount || 0, pending = sum.pendingCount || 0;
+        const branchTotal = Math.max(1, done + audit + pending);
+        const segs = [
+          { n: done, color: 'bg-accentEmerald', label: 'done' },
+          { n: audit, color: 'bg-accentAmber', label: 'audit' },
+          { n: pending, color: 'bg-accentRose', label: 'pending' }
+        ];
+        const barEl = document.getElementById('stat-branches-bar');
+        if (barEl) {
+          barEl.innerHTML = segs.filter(s => s.n > 0).map(s =>
+            `<span class="${s.color} h-full" style="width:${(s.n / branchTotal * 100).toFixed(1)}%"></span>`
+          ).join('');
+        }
+        const subEl = document.getElementById('stat-branches-sub');
+        if (subEl) {
+          subEl.innerHTML = segs.map(s =>
+            `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><span class="w-1.5 h-1.5 rounded-full ${s.color} shrink-0"></span>${s.n} ${s.label}</span>`
+          ).join('');
+        }
+      }
 
       // AUDIT RISK & SCHEDULE ANALYSIS overview card — same risk/scheduling
       // engine the modal uses (computeAuditScheduleAnalysis), just read for
@@ -17343,20 +17360,27 @@ html.page-fade-ready body {
       // One compact "PrevMonth N → LatestMonth N  ▲/▼diff" line per metric,
       // so both Accounts and Repo show the same two-month comparison
       // instead of just a bare current-month figure.
-      const renderCompare = (elId, prev, latest, goodDirection) => {
+      const renderCompare = (elId, prev, latest, goodDirection, label) => {
           const el = document.getElementById(elId);
           if (!el) return;
           const diff = latest - prev;
           const isGood = goodDirection === 'down' ? diff < 0 : diff > 0;
           const color = diff === 0 ? 'text-slate-400' : (isGood ? 'text-accentEmerald' : 'text-accentRose');
+          const badgeBg = diff === 0 ? 'bg-slate-100' : (isGood ? 'bg-accentEmerald/10' : 'bg-accentRose/10');
           const icon = diff > 0 ? '▲' : (diff < 0 ? '▼' : '→');
           const diffLabel = diff > 0 ? `+${diff.toLocaleString()}` : (diff < 0 ? `\u2212${Math.abs(diff).toLocaleString()}` : '0');
-          el.innerHTML = `${prevMonthShort} ${prev.toLocaleString()} <span class="text-slate-300">→</span> ${latestMonthShort} ${latest.toLocaleString()} <span class="${color}">${icon} ${diffLabel}</span>`;
+          el.innerHTML = `
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">${label}</p>
+            <div class="mt-1 flex items-baseline gap-1.5 flex-wrap">
+              <span class="text-sm font-extrabold text-slate-800">${latest.toLocaleString()}</span>
+              <span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeBg} ${color}">${icon} ${diffLabel}</span>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">${prevMonthShort} ${prev.toLocaleString()} → ${latestMonthShort} ${latest.toLocaleString()}</p>`;
       };
       // Accounts growing is good; Repo (repossessions) growing is bad — same
       // pattern the old single-metric indicators used, just applied to both.
-      renderCompare('stat-accounts-compare', sum.totalAccountsPrevRaw || 0, sum.totalAccountsLatestRaw || 0, 'up');
-      renderCompare('stat-repo-compare', sum.totalRepoPrevRaw || 0, sum.totalRepoLatest || 0, 'down');
+      renderCompare('stat-accounts-compare', sum.totalAccountsPrevRaw || 0, sum.totalAccountsLatestRaw || 0, 'up', 'Accounts');
+      renderCompare('stat-repo-compare', sum.totalRepoPrevRaw || 0, sum.totalRepoLatest || 0, 'down', 'Repo');
 
       // Auditor Next Assignment card
       const queueCountEl = document.getElementById('stat-next-assignment-count');
