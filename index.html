@@ -5964,29 +5964,30 @@ html.page-fade-ready body {
 
     <div id="section-overview" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 reveal-up" style="margin-top:0.6rem">
       <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-md hover:shadow-lg transition-all overflow-hidden flex flex-col">
-        <div onclick="openModal('All Branches Overview', 'all', null)" class="p-4 sm:p-5 pb-4 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group border-b border-coolBorder">
+        <div onclick="openModal('All Branches Overview', 'all', null)" class="p-3 sm:p-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold tracking-wider text-slate-500">TOTAL BRANCHES</span>
-            <span class="p-1.5 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin w-4 h-4"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
+            <span class="text-[11px] font-semibold tracking-wider text-slate-500">TOTAL BRANCHES</span>
+            <span class="p-1 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin w-3.5 h-3.5"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
           </div>
-          <div class="mt-3">
-            <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900" id="stat-total-branches">—</h3>
-            <p class="text-xs text-slate-500 mt-1" id="stat-branches-sub">—</p>
-            <p class="text-[11px] font-semibold mt-1" id="stat-total-branches-trend"></p>
+          <div class="mt-1.5 flex items-baseline gap-2">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-total-branches">—</h3>
+            <p class="text-[11px] text-slate-500" id="stat-branches-sub">—</p>
           </div>
+          <p class="text-[11px] font-semibold" id="stat-total-branches-trend"></p>
         </div>
-        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="p-4 sm:p-5 pt-4 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+        <div class="mx-3 sm:mx-3.5 border-t border-slate-100"></div>
+        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="p-3 sm:p-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold tracking-wider text-slate-500">TOTAL ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
-            <span class="p-1.5 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-4 h-4"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
+            <span class="text-[11px] font-semibold tracking-wider text-slate-500">TOTAL ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
+            <span class="p-1 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-3.5 h-3.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
           </div>
-          <div class="mt-3">
-            <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900" id="stat-total-accounts">—</h3>
-            <p class="text-xs font-semibold text-accentAmber mt-1 hidden" id="stat-total-accounts-fallback-warning">Latest month data unavailable — showing previous month instead</p>
-            <p class="text-xs text-slate-400 mt-1" id="stat-total-accounts-prev">— total accounts (<span id="span-accounts-prev-month">PREV</span>)</p>
-            <p class="text-xs text-slate-400 mt-2" id="stat-total-repo-latest">— total repo (<span id="span-repo-month">LATEST</span>)</p>
-            <p class="text-xs text-slate-400" id="stat-total-repo-prev">— total repo (<span id="span-repo-prev-month">PREV</span>)</p>
+          <div class="mt-1.5 flex items-baseline gap-2">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-total-accounts">—</h3>
+            <p class="text-[11px] text-slate-400" id="stat-total-repo-latest">— total repo</p>
           </div>
+          <p class="text-[11px] font-semibold text-accentAmber hidden" id="stat-total-accounts-fallback-warning">Latest month unavailable — showing previous</p>
+          <p class="text-[11px] text-slate-400" id="stat-total-accounts-prev">— total accounts (<span id="span-accounts-prev-month">PREV</span>)</p>
+          <p class="hidden" id="stat-total-repo-prev"></p>
         </div>
       </div>
 
@@ -6078,10 +6079,21 @@ html.page-fade-ready body {
           <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT RISK &amp; SCHEDULE ANALYSIS</span>
           <span class="p-1.5 bg-accentIndigo/10 text-accentIndigo rounded-lg group-hover:bg-accentIndigo group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg></span>
         </div>
-        <div class="mt-4">
-          <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentIndigo">Portfolio Risk</h3>
-          <p class="text-xs text-slate-500 mt-1">Whole-portfolio audit risk &amp; scheduling analysis</p>
+        <div class="mt-4 grid grid-cols-3 divide-x divide-coolBorder text-center">
+          <div class="py-1.5">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentRose" id="stat-audit-risk-attention">—</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">Needs Attention</p>
+          </div>
+          <div class="py-1.5">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentIndigo" id="stat-audit-risk-avg">—</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">Avg. Risk Score</p>
+          </div>
+          <div class="py-1.5">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentEmerald" id="stat-audit-risk-ontrack">—</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">On Track</p>
+          </div>
         </div>
+        <p class="text-xs text-slate-400 mt-3 text-center" id="stat-audit-risk-sub">Tap for the full risk &amp; scheduling breakdown</p>
       </div>
     </div>
 
@@ -17255,6 +17267,24 @@ html.page-fade-ready body {
       animateCountUp(document.getElementById('stat-total-branches'), sum.totalBranches || 0);
       document.getElementById('stat-branches-sub').innerText = `${sum.doneCount || 0} done · ${sum.forAuditCount || 0} for audit · ${sum.pendingCount || 0} pending`;
       renderTrendBadge('stat-total-branches-trend', sum.totalBranches || 0, prevSnapshot.totalBranches, 'neutral');
+
+      // AUDIT RISK & SCHEDULE ANALYSIS overview card — same risk/scheduling
+      // engine the modal uses (computeAuditScheduleAnalysis), just read for
+      // three headline numbers instead of the full breakdown.
+      try {
+        const riskAttentionEl = document.getElementById('stat-audit-risk-attention');
+        if (riskAttentionEl) {
+          const ra = computeAuditScheduleAnalysis();
+          const attention = (ra.neverAudited.length + ra.riskFlagged.length + ra.overdueUnscheduled.length + ra.scheduledPastDue.length);
+          const onTrackCount = (ra.onTrack.length + ra.scheduledUpcoming.length);
+          animateCountUp(riskAttentionEl, attention);
+          const avgEl = document.getElementById('stat-audit-risk-avg');
+          if (avgEl) avgEl.innerText = (ra.avgRiskScore !== null && ra.avgRiskScore !== undefined) ? ra.avgRiskScore : '—';
+          animateCountUp(document.getElementById('stat-audit-risk-ontrack'), onTrackCount);
+          const subEl = document.getElementById('stat-audit-risk-sub');
+          if (subEl) subEl.innerText = attention > 0 ? `${attention} branch${attention === 1 ? '' : 'es'} need scheduling` : 'Everything is on schedule';
+        }
+      } catch (e) { /* non-fatal — card just keeps its placeholders */ }
       
       animateCountUp(document.getElementById('stat-collection-improving'), sum.improvingCollection || 0, { suffixHTML: ' <span class="text-sm font-medium text-slate-500">improving</span>' });
       document.getElementById('stat-collection-sub').innerText = `${sum.decliningCollection || 0} declining · ${sum.stableCollection || 0} stable · ${sum.recoveringCollection || 0} recovering`;
