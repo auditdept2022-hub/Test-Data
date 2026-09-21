@@ -5982,7 +5982,6 @@ html.page-fade-ready body {
             <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">On Track</p>
           </div>
         </div>
-        <p class="text-xs text-slate-400 mt-3 text-center" id="stat-audit-risk-sub">Tap for the full risk &amp; scheduling breakdown</p>
       </div>
 
       <div onclick="openModal('Collection Status Overview', 'collection', 'ALL')" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentEmerald/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
@@ -6068,26 +6067,26 @@ html.page-fade-ready body {
         </div>
       </div>
 
-      <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-md hover:shadow-lg transition-all overflow-hidden flex">
-        <div onclick="openModal('All Branches Overview', 'all', null)" class="flex-1 min-w-0 p-3 sm:p-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+      <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-md hover:shadow-lg transition-all overflow-hidden flex items-stretch">
+        <div onclick="openModal('All Branches Overview', 'all', null)" class="flex-1 min-w-0 p-3.5 sm:p-4 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
           <div class="flex items-center justify-between gap-1">
-            <span class="text-[10px] font-semibold tracking-wider text-slate-500 truncate">BRANCHES</span>
+            <span class="text-[10px] font-semibold tracking-wider text-slate-500">BRANCHES</span>
             <span class="p-1 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin w-3.5 h-3.5"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
           </div>
           <h3 class="mt-1.5 text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-total-branches">—</h3>
-          <p class="text-[10px] text-slate-500 truncate" id="stat-branches-sub">—</p>
+          <p class="text-[10px] leading-snug text-slate-500 mt-1" id="stat-branches-sub">—</p>
           <p class="text-[10px] font-semibold" id="stat-total-branches-trend"></p>
         </div>
         <div class="w-px my-3 bg-slate-100 shrink-0"></div>
-        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="flex-1 min-w-0 p-3 sm:p-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="flex-1 min-w-0 p-3.5 sm:p-4 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
           <div class="flex items-center justify-between gap-1">
-            <span class="text-[10px] font-semibold tracking-wider text-slate-500 truncate">ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
+            <span class="text-[10px] font-semibold tracking-wider text-slate-500">ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
             <span class="p-1 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-3.5 h-3.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
           </div>
           <h3 class="mt-1.5 text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-total-accounts">—</h3>
-          <p class="text-[10px] text-slate-400 truncate" id="stat-total-repo-latest">— total repo</p>
+          <p class="text-[10px] leading-snug text-slate-400 mt-1" id="stat-total-repo-latest">— repo</p>
           <p class="text-[10px] font-semibold text-accentAmber hidden" id="stat-total-accounts-fallback-warning">Data unavailable</p>
-          <p class="text-[10px] text-slate-400 truncate" id="stat-total-accounts-prev">— accts (<span id="span-accounts-prev-month">PREV</span>)</p>
+          <p class="text-[10px] leading-snug text-slate-400" id="stat-total-accounts-prev">— prior</p>
           <p class="hidden" id="stat-total-repo-prev"></p>
         </div>
       </div>
@@ -17261,7 +17260,7 @@ html.page-fade-ready body {
       try { prevSnapshot = JSON.parse(localStorage.getItem(STAT_SNAPSHOT_KEY) || '{}') || {}; } catch (e) { prevSnapshot = {}; }
 
       animateCountUp(document.getElementById('stat-total-branches'), sum.totalBranches || 0);
-      document.getElementById('stat-branches-sub').innerText = `${sum.doneCount || 0} done · ${sum.forAuditCount || 0} for audit · ${sum.pendingCount || 0} pending`;
+      document.getElementById('stat-branches-sub').innerText = `${sum.doneCount || 0} done · ${sum.forAuditCount || 0} audit · ${sum.pendingCount || 0} pending`;
       renderTrendBadge('stat-total-branches-trend', sum.totalBranches || 0, prevSnapshot.totalBranches, 'neutral');
 
       // AUDIT RISK & SCHEDULE ANALYSIS overview card — same risk/scheduling
@@ -17277,8 +17276,6 @@ html.page-fade-ready body {
           const avgEl = document.getElementById('stat-audit-risk-avg');
           if (avgEl) avgEl.innerText = (ra.avgRiskScore !== null && ra.avgRiskScore !== undefined) ? ra.avgRiskScore : '—';
           animateCountUp(document.getElementById('stat-audit-risk-ontrack'), onTrackCount);
-          const subEl = document.getElementById('stat-audit-risk-sub');
-          if (subEl) subEl.innerText = attention > 0 ? `${attention} branch${attention === 1 ? '' : 'es'} need scheduling` : 'Everything is on schedule';
         }
       } catch (e) { /* non-fatal — card just keeps its placeholders */ }
       
@@ -17331,7 +17328,7 @@ html.page-fade-ready body {
       const repoPrevEl = document.getElementById('stat-total-repo-prev');
       const repoLatest = sum.totalRepoLatest || 0;
       const repoPrev = sum.totalRepoPrevRaw || 0;
-      if (repoLatestEl) repoLatestEl.innerHTML = `${repoLatest.toLocaleString()} total repo (<span id="span-repo-month">${repoMonthLabel}</span>)`;
+      if (repoLatestEl) repoLatestEl.innerHTML = `${repoLatest.toLocaleString()} repo (<span id="span-repo-month">${repoMonthLabel}</span>)`;
       if (repoPrevEl) {
           const repoDiff = repoLatest - repoPrev;
           // A repo *increase* is the bad direction (more repossessions), so
@@ -17354,7 +17351,7 @@ html.page-fade-ready body {
           const trendColor = diff > 0 ? 'text-accentEmerald' : (diff < 0 ? 'text-accentRose' : 'text-slate-400');
           const trendIcon = diff > 0 ? '▲' : (diff < 0 ? '▼' : '→');
           const trendDiffLabel = diff > 0 ? `+${diff.toLocaleString()}` : (diff < 0 ? `\u2212${Math.abs(diff).toLocaleString()}` : '0');
-          prevAccountsEl.innerHTML = `${prev.toLocaleString()} total accounts (<span id="span-accounts-prev-month">${prevAccountsMonthLabel}</span>) <span class="${trendColor} font-semibold">${trendIcon} <span class="text-[10px]">${trendDiffLabel}</span></span>`;
+          prevAccountsEl.innerHTML = `${prev.toLocaleString()} prior (<span id="span-accounts-prev-month">${prevAccountsMonthLabel}</span>) <span class="${trendColor} font-semibold">${trendIcon} <span class="text-[10px]">${trendDiffLabel}</span></span>`;
       }
 
       // Auditor Next Assignment card
