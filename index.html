@@ -5963,32 +5963,26 @@ html.page-fade-ready body {
     </div>
 
     <div id="section-overview" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 reveal-up" style="margin-top:0.6rem">
-      <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-md hover:shadow-lg transition-all overflow-hidden flex flex-col">
-        <div onclick="openModal('All Branches Overview', 'all', null)" class="p-3 sm:p-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold tracking-wider text-slate-500">TOTAL BRANCHES</span>
-            <span class="p-1 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin w-3.5 h-3.5"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
-          </div>
-          <div class="mt-1.5 flex items-baseline gap-2">
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-total-branches">—</h3>
-            <p class="text-[11px] text-slate-500" id="stat-branches-sub">—</p>
-          </div>
-          <p class="text-[11px] font-semibold" id="stat-total-branches-trend"></p>
+      <div onclick="openAssignmentAnalysis()" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentIndigo/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT RISK &amp; SCHEDULE ANALYSIS</span>
+          <span class="p-1.5 bg-accentIndigo/10 text-accentIndigo rounded-lg group-hover:bg-accentIndigo group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg></span>
         </div>
-        <div class="mx-3 sm:mx-3.5 border-t border-slate-100"></div>
-        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="p-3 sm:p-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold tracking-wider text-slate-500">TOTAL ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
-            <span class="p-1 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-3.5 h-3.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
+        <div class="mt-4 grid grid-cols-3 divide-x divide-coolBorder text-center">
+          <div class="py-1.5">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentRose" id="stat-audit-risk-attention">—</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">Needs Attention</p>
           </div>
-          <div class="mt-1.5 flex items-baseline gap-2">
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-total-accounts">—</h3>
-            <p class="text-[11px] text-slate-400" id="stat-total-repo-latest">— total repo</p>
+          <div class="py-1.5">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentIndigo" id="stat-audit-risk-avg">—</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">Avg. Risk Score</p>
           </div>
-          <p class="text-[11px] font-semibold text-accentAmber hidden" id="stat-total-accounts-fallback-warning">Latest month unavailable — showing previous</p>
-          <p class="text-[11px] text-slate-400" id="stat-total-accounts-prev">— total accounts (<span id="span-accounts-prev-month">PREV</span>)</p>
-          <p class="hidden" id="stat-total-repo-prev"></p>
+          <div class="py-1.5">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentEmerald" id="stat-audit-risk-ontrack">—</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">On Track</p>
+          </div>
         </div>
+        <p class="text-xs text-slate-400 mt-3 text-center" id="stat-audit-risk-sub">Tap for the full risk &amp; scheduling breakdown</p>
       </div>
 
       <div onclick="openModal('Collection Status Overview', 'collection', 'ALL')" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentEmerald/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
@@ -6074,26 +6068,28 @@ html.page-fade-ready body {
         </div>
       </div>
 
-      <div onclick="openAssignmentAnalysis()" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentIndigo/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT RISK &amp; SCHEDULE ANALYSIS</span>
-          <span class="p-1.5 bg-accentIndigo/10 text-accentIndigo rounded-lg group-hover:bg-accentIndigo group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg></span>
+      <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-md hover:shadow-lg transition-all overflow-hidden flex">
+        <div onclick="openModal('All Branches Overview', 'all', null)" class="flex-1 min-w-0 p-3 sm:p-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[10px] font-semibold tracking-wider text-slate-500 truncate">BRANCHES</span>
+            <span class="p-1 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin w-3.5 h-3.5"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
+          </div>
+          <h3 class="mt-1.5 text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-total-branches">—</h3>
+          <p class="text-[10px] text-slate-500 truncate" id="stat-branches-sub">—</p>
+          <p class="text-[10px] font-semibold" id="stat-total-branches-trend"></p>
         </div>
-        <div class="mt-4 grid grid-cols-3 divide-x divide-coolBorder text-center">
-          <div class="py-1.5">
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentRose" id="stat-audit-risk-attention">—</h3>
-            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">Needs Attention</p>
+        <div class="w-px my-3 bg-slate-100 shrink-0"></div>
+        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="flex-1 min-w-0 p-3 sm:p-3.5 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[10px] font-semibold tracking-wider text-slate-500 truncate">ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
+            <span class="p-1 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-3.5 h-3.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
           </div>
-          <div class="py-1.5">
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentIndigo" id="stat-audit-risk-avg">—</h3>
-            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">Avg. Risk Score</p>
-          </div>
-          <div class="py-1.5">
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentEmerald" id="stat-audit-risk-ontrack">—</h3>
-            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">On Track</p>
-          </div>
+          <h3 class="mt-1.5 text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900" id="stat-total-accounts">—</h3>
+          <p class="text-[10px] text-slate-400 truncate" id="stat-total-repo-latest">— total repo</p>
+          <p class="text-[10px] font-semibold text-accentAmber hidden" id="stat-total-accounts-fallback-warning">Data unavailable</p>
+          <p class="text-[10px] text-slate-400 truncate" id="stat-total-accounts-prev">— accts (<span id="span-accounts-prev-month">PREV</span>)</p>
+          <p class="hidden" id="stat-total-repo-prev"></p>
         </div>
-        <p class="text-xs text-slate-400 mt-3 text-center" id="stat-audit-risk-sub">Tap for the full risk &amp; scheduling breakdown</p>
       </div>
     </div>
 
