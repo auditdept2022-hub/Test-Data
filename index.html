@@ -6069,28 +6069,26 @@ html.page-fade-ready body {
 
       <div class="bg-coolCard border border-coolBorder rounded-2xl shadow-md hover:shadow-lg transition-all overflow-hidden">
         <div onclick="openModal('All Branches Overview', 'all', null)" class="p-3.5 sm:p-4 pb-3 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
-          <div class="flex items-center gap-2.5">
-            <span class="p-1.5 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin w-4 h-4"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
+          <div class="flex items-center justify-between gap-2.5">
             <div class="min-w-0 flex-1 flex items-baseline gap-1.5">
               <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 shrink-0" id="stat-total-branches">—</h3>
               <span class="text-xs font-bold tracking-wider text-slate-500 truncate min-w-0">TOTAL BRANCHES</span>
             </div>
+            <span class="p-1.5 bg-accentBlue/10 text-accentBlue rounded-lg group-hover:bg-accentBlue group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin w-4 h-4"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
           </div>
-          <div class="mt-2.5 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden flex gap-px" id="stat-branches-bar"></div>
-          <div class="mt-2 flex items-center gap-2.5 flex-wrap" id="stat-branches-sub"></div>
+          <div class="mt-2.5 flex items-center gap-2.5 flex-wrap" id="stat-branches-sub"></div>
           <p class="text-[11px] font-semibold mt-1" id="stat-total-branches-trend"></p>
         </div>
-        <div class="border-t border-slate-100"></div>
-        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="p-3.5 sm:p-4 pt-3 hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
-          <div class="flex items-center gap-2.5">
-            <span class="p-1.5 bg-accentEmerald/10 text-accentEmerald rounded-lg group-hover:bg-accentEmerald group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-4 h-4"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
+        <div onclick="openModal('Total Active Accounts Breakdown', 'accounts', 'accountsMay')" class="p-3.5 sm:p-4 pt-3 border-t border-coolBorder hover:bg-accentBlue/5 active:scale-[0.98] transition-all cursor-pointer group">
+          <div class="flex items-center justify-between gap-2.5">
             <div class="min-w-0 flex-1 flex items-baseline gap-1.5">
               <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 shrink-0" id="stat-total-accounts">—</h3>
               <span class="text-xs font-bold tracking-wider text-slate-500 truncate min-w-0">TOTAL ACCOUNTS (<span id="span-accounts-month">LATEST</span>)</span>
             </div>
+            <span class="p-1.5 bg-accentEmerald/10 text-accentEmerald rounded-lg group-hover:bg-accentEmerald group-hover:text-white transition-colors shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users w-4 h-4"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span>
           </div>
           <p class="text-[11px] font-semibold text-accentAmber mt-1 hidden" id="stat-total-accounts-fallback-warning">Latest month unavailable — showing previous</p>
-          <div class="mt-2 pt-2 border-t border-slate-100 grid grid-cols-2 gap-3">
+          <div class="mt-2 grid grid-cols-2 gap-3">
             <div id="stat-accounts-compare">—</div>
             <div id="stat-repo-compare">—</div>
           </div>
@@ -11709,26 +11707,50 @@ html.page-fade-ready body {
       };
     }
 
-    // One plain-English sentence answering "why is this branch on (or not
-    // on) the schedule?" — shown in the row's breakdown and in the export.
+    // One plain-English explanation answering "why is this branch on (or
+    // not on) the schedule?" — shown in the row's breakdown and in the
+    // export. Written DATA-FIRST on purpose: it leads with the actual
+    // factors driving the branch's risk score (findings, trends,
+    // efficiency, repo rate, portfolio size — see row.risk.drivers, from
+    // computeAuditRiskScores) and only mentions "days since last audit" as
+    // supporting/backstop context at the end, never as the headline reason.
+    // The two purely date-based coverage rules (never audited; an expected
+    // date that slipped) still exist as a safety net — no branch can be
+    // skipped forever just because its other numbers look fine — but they
+    // are labeled as such rather than presented as the primary rationale.
     function auditRiskWhyText(row) {
       const cfg = window.auditAnalysisState;
       const days = row.info.intervalDays;
+      const driverPhrase = (function () {
+        const d = (row.risk.drivers || []).filter(function (x) { return x.key !== 'recency'; });
+        if (!d.length) return null;
+        return d.map(function (x) { return x.label.toLowerCase() + ' (' + x.detail + ')'; }).join(', ');
+      })();
+      const lastAuditedNote = '(Last audited ' + (days !== null && days !== undefined ? days + ' days ago' : 'never') + ' — shown for reference only.)';
+
       switch (row.reason) {
         case 'Never audited':
-          return 'Included because every branch must be audited at least once. This is a coverage rule and applies regardless of the risk score.';
+          return 'Included because every branch must be audited at least once — a coverage rule that applies regardless of the risk score.';
         case 'Expected date already passed':
-          return 'Included because its scheduled audit date has passed and the branch was not marked Done. This is a coverage rule.';
-        case 'Overdue, not yet scheduled':
-          return 'Included because it has gone ' + days + ' days without an audit (limit: ' + cfg.overdueDays + ' days) and nothing is scheduled. This is a coverage backstop; its risk score is ' + row.risk.score.toFixed(0) + '.';
+          return 'Included because its scheduled audit date has passed without the branch being marked Done — a coverage rule, not a data-driven pick.'
+            + (driverPhrase ? ' Its own numbers also support a visit: ' + driverPhrase + '.' : '');
         case 'High risk, not yet scheduled':
-          return 'Included because its risk score (' + row.risk.score.toFixed(0) + ') is at or above the minimum of ' + cfg.minScore + ', it has no audit scheduled, and it was last audited ' + days + ' days ago (minimum gap: ' + cfg.minGapDays + ' days).';
+          return (driverPhrase
+              ? 'Its own numbers make the case for a visit: ' + driverPhrase + '. That puts its risk score at ' + row.risk.score.toFixed(0) + ', at or above the ' + cfg.minScore + ' threshold, with nothing currently scheduled.'
+              : 'Its risk score (' + row.risk.score.toFixed(0) + ') is at or above the minimum of ' + cfg.minScore + ' and nothing is currently scheduled.')
+            + ' ' + lastAuditedNote;
+        case 'Overdue, not yet scheduled':
+          return 'Included as a coverage safety net, not because of its numbers: it has gone ' + days + ' days without an audit (limit: ' + cfg.overdueDays + ' days) and nothing is scheduled. Its risk score is ' + row.risk.score.toFixed(0)
+            + (driverPhrase ? ', with ' + driverPhrase + ' contributing' : ' — no single data factor is currently elevated for this branch') + '.';
         case 'Scheduled — upcoming':
-          return 'Already has an upcoming audit date, so no action is needed. Its risk score is shown for reference.';
+          return 'Already has an upcoming audit date, so no action is needed. Its risk score (' + row.risk.score.toFixed(0) + ') is shown for reference.';
         case 'Monitor — recently audited':
-          return 'Risk score (' + row.risk.score.toFixed(0) + ') is at or above ' + cfg.minScore + ', but it was audited within the last ' + cfg.minGapDays + ' days, so it is not re-scheduled yet. Worth watching.';
+          return (driverPhrase
+              ? 'Worth watching: ' + driverPhrase + ', putting its risk score at ' + row.risk.score.toFixed(0) + ' (at or above ' + cfg.minScore + ').'
+              : 'Risk score (' + row.risk.score.toFixed(0) + ') is at or above ' + cfg.minScore + '.')
+            + ' It was audited within the last ' + cfg.minGapDays + ' days, so it is not re-scheduled yet.';
         default:
-          return 'Not scheduled: risk score (' + row.risk.score.toFixed(0) + ') is below the minimum of ' + cfg.minScore + ' and the branch is within the ' + cfg.overdueDays + '-day audit limit.';
+          return 'Not scheduled: its own numbers are healthy (risk score ' + row.risk.score.toFixed(0) + ', below the ' + cfg.minScore + ' minimum) and it is within the ' + cfg.overdueDays + '-day coverage limit.';
       }
     }
 
@@ -12057,10 +12079,10 @@ html.page-fade-ready body {
 
       const methodologyRows = AUDIT_RISK_FACTORS.map(f => `
           <tr class="border-t border-accentIndigo/15 align-top">
-            <td class="py-1.5 pr-3 font-bold text-slate-700 whitespace-nowrap">${escapeHTML(f.label)}</td>
-            <td class="py-1.5 pr-3 text-center font-bold text-accentIndigo">${Math.round(((Number(cfg.weights[f.key]) || 0) / weightSum) * 100)}%</td>
-            <td class="py-1.5 pr-3 text-slate-600">${escapeHTML(f.how)}</td>
-            <td class="py-1.5 text-slate-500">${escapeHTML(f.why)}</td>
+            <td class="py-2.5 pr-4 font-bold text-slate-700 whitespace-nowrap">${escapeHTML(f.label)}</td>
+            <td class="py-2.5 pr-4 text-center font-bold text-accentIndigo">${Math.round(((Number(cfg.weights[f.key]) || 0) / weightSum) * 100)}%</td>
+            <td class="py-2.5 pr-4 text-slate-600 leading-relaxed">${escapeHTML(f.how)}</td>
+            <td class="py-2.5 text-slate-600 leading-relaxed">${escapeHTML(f.why)}</td>
           </tr>`).join('');
 
       const sortTh = (field, label) => {
@@ -12214,20 +12236,20 @@ html.page-fade-ready body {
           </div>` : `<div class="p-5 text-center text-sm text-slate-500 font-semibold bg-gray-50 rounded-xl border border-coolBorder">${emptyMsg}</div>`}
         </div>
 
-        <div class="mx-2 sm:mx-3 p-3.5 bg-accentIndigo/5 border border-accentIndigo/20 rounded-xl">
-          <h3 class="text-xs font-bold text-accentIndigo uppercase tracking-wide mb-1.5">How the ranking is decided</h3>
-          <p class="text-[11px] text-slate-600 mb-2">Branches are not ranked on audit interval alone. Each one gets a 0–100 risk score built from everything the dashboard tracks — audit history, findings, collections, efficiency, repo, sales, service and portfolio size — and the suggested schedule is ordered by that score, highest first.</p>
+        <div class="mx-2 sm:mx-3 p-3.5 sm:p-4 bg-accentIndigo/5 border border-accentIndigo/20 rounded-xl">
+          <h3 class="text-sm font-bold text-accentIndigo uppercase tracking-wide mb-1.5">How the ranking is decided</h3>
+          <p class="text-xs sm:text-[13px] text-slate-700 leading-relaxed mb-3">Branches are not ranked on audit interval alone. Each one gets a 0–100 risk score built from everything the dashboard tracks — audit history, findings, collections, efficiency, repo, sales, service and portfolio size — and the suggested schedule is ordered by that score, highest first.</p>
           <div class="overflow-x-auto">
-            <table class="w-full text-[10px] text-left">
-              <thead class="text-slate-500 uppercase tracking-wider font-semibold">
-                <tr><th class="pb-1 pr-3">Factor</th><th class="pb-1 pr-3 text-center">Share</th><th class="pb-1 pr-3">How it is scored</th><th class="pb-1">Why it matters</th></tr>
+            <table class="w-full text-xs text-left">
+              <thead class="text-slate-600 uppercase tracking-wider font-bold text-[11px]">
+                <tr><th class="pb-2 pr-4">Factor</th><th class="pb-2 pr-4 text-center">Share</th><th class="pb-2 pr-4">How it is scored</th><th class="pb-2">Why it matters</th></tr>
               </thead>
               <tbody>${methodologyRows}</tbody>
             </table>
           </div>
-          <ul class="mt-2.5 text-[11px] text-slate-600 space-y-1 list-disc pl-4">
+          <ul class="mt-3 text-xs sm:text-[13px] text-slate-700 leading-relaxed space-y-1.5 list-disc pl-4">
             <li><strong>Tiers.</strong> Critical 70+, High 55–69, Medium 40–54, Low below 40.</li>
-            <li><strong>Who gets scheduled.</strong> Always: branches never audited, branches whose scheduled date passed without being marked Done, and branches with no audit for ${cfg.overdueDays}+ days (coverage rules — no branch can be skipped because its other numbers look fine). Also: any unscheduled branch with a risk score of ${cfg.minScore}+ that was last audited at least ${cfg.minGapDays} days ago (risk rule).</li>
+            <li><strong>Who gets scheduled, and why.</strong> The primary driver is the risk rule: any unscheduled branch whose own numbers put its risk score at ${cfg.minScore}+ (last audited at least ${cfg.minGapDays} days ago) is scheduled because of what its data says — findings, trends, efficiency, repo rate or portfolio size — not because of the calendar. On top of that sit three coverage rules that exist purely as a safety net, not as an evaluation of the branch: branches never audited, branches whose scheduled date passed without being marked Done, and branches with no audit for ${cfg.overdueDays}+ days. These guarantee no branch is skipped forever just because its other numbers look fine, but they are the exception, not the basis, for the ranking.</li>
             <li><strong>Missing data.</strong> If a branch has no data for a factor, that factor is left out and the others are rescaled to 100% — a branch is never marked up or down for a number that isn't there.</li>
             <li><strong>Consistent with the dashboard.</strong> Efficiency and repo scoring use the same red/amber/green cut-offs already shown on the branch cards (efficiency 70% / 50%, repo 4% / 7%).</li>
             <li><strong>Findings for 2026</strong> are year-to-date, which is why recent years are weighted more heavily rather than compared like-for-like.</li>
@@ -12542,6 +12564,92 @@ html.page-fade-ready body {
       return { score, level, accent };
     }
 
+    // Runs the SAME multi-factor, weight-tunable risk methodology used by
+    // the Audit Risk & Schedule Analysis (computeAuditRiskScores) for a
+    // single branch, so a branch's profile and the portfolio-wide
+    // scheduling list always agree on why a branch scored the way it did.
+    function computeBranchFullRisk(b) {
+      const cfg = window.auditAnalysisState;
+      const info = getBranchAuditRoundInfo(b);
+      const rows = [{ b: b, info: info }];
+      computeAuditRiskScores(rows, cfg);
+      return rows[0].risk;
+    }
+
+    // Comprehensive, DATA-FIRST writeup of why a branch does (or doesn't)
+    // warrant a visit right now. Management asked for this explicitly: the
+    // case for visiting a branch should read like a case built on what the
+    // branch's own numbers say — findings history, collection/sales/service
+    // trends, efficiency, repossession rate, portfolio size — not "it has
+    // been X days since the last audit". Audit recency is still one of the
+    // eight scored factors (so a branch nobody has checked in a long time
+    // still surfaces), but it is deliberately presented here as background
+    // context in its own box at the end, never as the headline reason.
+    function buildOverallEvaluationHTML(b) {
+      const risk = computeBranchFullRisk(b);
+      const factorsByKey = {};
+      risk.factors.forEach(function (f) { factorsByKey[f.key] = f; });
+      const recency = factorsByKey.recency;
+
+      // Every available data factor OTHER than recency, ranked by how much
+      // it is actually contributing to the score — i.e. by what the data
+      // itself says matters most for this branch, worst first.
+      const dataFactors = risk.factors
+        .filter(function (f) { return f.key !== 'recency' && f.available; })
+        .sort(function (x, y) { return y.contribution - x.contribution; });
+
+      const tierColor = { CRITICAL: 'accentRose', HIGH: 'accentAmber', MEDIUM: 'accentBlue', LOW: 'accentEmerald' }[risk.tier.key] || 'accentBlue';
+      const tierWord = risk.tier.label.toLowerCase();
+
+      const topDrivers = dataFactors.filter(function (f) { return f.points >= 40; }).slice(0, 3);
+      const headline = topDrivers.length
+        ? 'Driven mainly by ' + topDrivers.map(function (f) { return f.label.toLowerCase() + ' (' + f.detail + ')'; }).join(', ') + '.'
+        : 'No single signal stands out — every measured factor is currently within a normal range.';
+
+      const dotColor = function (pts) { return pts >= 60 ? 'bg-accentRose' : (pts >= 35 ? 'bg-accentAmber' : 'bg-accentEmerald'); };
+
+      const rowsHTML = dataFactors.map(function (f) {
+        return `
+        <div class="flex items-start justify-between gap-3 py-2 border-b border-coolBorder last:border-0">
+          <div class="flex items-start gap-2 min-w-0">
+            <span class="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${dotColor(f.points)}"></span>
+            <div class="min-w-0">
+              <p class="text-xs font-bold text-slate-700">${escapeFindingHTML(f.label)}</p>
+              <p class="text-[11px] text-slate-500">${escapeFindingHTML(f.detail)}</p>
+            </div>
+          </div>
+          <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap flex-shrink-0">${f.contribution.toFixed(1)} pts</span>
+        </div>`;
+      }).join('');
+
+      return `
+      <div class="bg-white rounded-xl border border-coolBorder shadow-sm overflow-hidden">
+        <div class="p-3.5 border-b border-coolBorder bg-gradient-to-r from-slate-50 to-white">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+              <svg class="w-4 h-4 text-accentIndigo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+              Overall Evaluation
+            </h4>
+            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-${tierColor}/10 text-${tierColor} border border-${tierColor}/20 whitespace-nowrap">
+              ${escapeFindingHTML(risk.tier.label)} risk · ${risk.score.toFixed(0)}/100
+            </span>
+          </div>
+          <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+            This branch is rated <strong>${tierWord} risk</strong> based on what its own numbers show — findings history, collection and sales trends, service performance, efficiency, repossession rate and portfolio size. ${headline}
+          </p>
+        </div>
+        <div class="p-3.5">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">What the data shows, ranked by how much it counts toward the score</p>
+          ${rowsHTML || '<p class="text-xs text-slate-400 italic py-2">Not enough data recorded for this branch yet to break the score down further.</p>'}
+        </div>
+        <div class="px-3.5 pb-3.5">
+          <p class="text-[11px] text-slate-500 bg-slate-50 border border-coolBorder rounded-lg p-2.5">
+            <strong class="text-slate-600">For reference — audit recency:</strong> ${escapeFindingHTML(recency ? recency.detail : 'No audit history on record')}. This is tracked as a coverage safety net (every branch is still audited eventually, whatever its score) and it contributes ${recency ? recency.contribution.toFixed(1) : '0'} of the ${risk.score.toFixed(0)} points above — it is background context here, not the reason this branch is or isn't being prioritized.
+          </p>
+        </div>
+      </div>`;
+    }
+
     function renderBranchDetail(b, container) {
       
       const riskProfile = computeRiskProfile(b);
@@ -12653,6 +12761,8 @@ html.page-fade-ready body {
                       <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-royalBlue shadow-sm">${escapeHTML((b.auditStatus || 'PENDING').toUpperCase())}</span>
                   </div>
               </div>
+
+              ${buildOverallEvaluationHTML(b)}
 
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div class="bg-white rounded-xl border border-coolBorder p-3 shadow-sm text-center">
@@ -17269,18 +17379,11 @@ html.page-fade-ready body {
       renderTrendBadge('stat-total-branches-trend', sum.totalBranches || 0, prevSnapshot.totalBranches, 'neutral');
       {
         const done = sum.doneCount || 0, audit = sum.forAuditCount || 0, pending = sum.pendingCount || 0;
-        const branchTotal = Math.max(1, done + audit + pending);
         const segs = [
           { n: done, color: 'bg-accentEmerald', label: 'done' },
           { n: audit, color: 'bg-accentAmber', label: 'audit' },
           { n: pending, color: 'bg-accentRose', label: 'pending' }
         ];
-        const barEl = document.getElementById('stat-branches-bar');
-        if (barEl) {
-          barEl.innerHTML = segs.filter(s => s.n > 0).map(s =>
-            `<span class="${s.color} h-full" style="width:${(s.n / branchTotal * 100).toFixed(1)}%"></span>`
-          ).join('');
-        }
         const subEl = document.getElementById('stat-branches-sub');
         if (subEl) {
           subEl.innerHTML = segs.map(s =>
