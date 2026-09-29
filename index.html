@@ -11566,13 +11566,14 @@ html.page-fade-ready body {
     // at 45% efficiency can still average out as "Low" if everything else is
     // fine), so any single red flag qualifies a branch for scheduling and lifts
     // it to at least the High tier, whatever its overall score.
+    function auditFlagLimit(k, d) { const c = window.auditAnalysisState; const v = c ? c[k] : null; return (v === null || v === undefined || isNaN(v)) ? d : Number(v); }
     const AUDIT_RED_FLAGS = [
-      { key: 'eff', label: 'Efficiency below 50%',
-        test: c => c.effNow > 0 && c.effNow < 50, detail: c => c.effNow + '% collection efficiency' },
-      { key: 'repo', label: 'Repo rate 7% or higher',
-        test: c => c.hasAcct && c.repo >= 7, detail: c => c.repo.toFixed(1) + '% repo rate' },
-      { key: 'findings', label: '5+ findings in the latest year',
-        test: c => (c.b.findings2026 || 0) >= 5, detail: c => (c.b.findings2026 || 0) + ' findings in ' + window.FINDING_YEARS[2] },
+      { key: 'eff', get label() { return 'Efficiency below ' + auditFlagLimit('flagEff', 50) + '%'; },
+        test: c => { const t = auditFlagLimit('flagEff', 50); return t > 0 && c.effNow > 0 && c.effNow < t; }, detail: c => c.effNow + '% collection efficiency' },
+      { key: 'repo', get label() { return 'Repo rate ' + auditFlagLimit('flagRepo', 7) + '% or higher'; },
+        test: c => { const t = auditFlagLimit('flagRepo', 7); return t > 0 && c.hasAcct && c.repo >= t; }, detail: c => c.repo.toFixed(1) + '% repo rate' },
+      { key: 'findings', get label() { return auditFlagLimit('flagFindings', 5) + '+ findings in the latest year'; },
+        test: c => { const t = auditFlagLimit('flagFindings', 5); return t > 0 && (c.b.findings2026 || 0) >= t; }, detail: c => (c.b.findings2026 || 0) + ' findings in ' + window.FINDING_YEARS[2] },
       { key: 'sliding', label: 'Efficiency and repo both deteriorating sharply',
         test: c => c.effDelta !== null && c.effDelta <= -10 && c.repoDelta !== null && c.repoDelta >= 2,
         detail: c => 'efficiency ' + c.effDelta + ' pts, repo +' + c.repoDelta.toFixed(1) + ' pts since the earliest month' },
@@ -11591,6 +11592,7 @@ html.page-fade-ready body {
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
     function auditIsHoliday(d) {
+      const hc = window.auditAnalysisState; if (hc && hc.skipHolidays === 0) return false;
       const mmdd = auditDayKey(d).slice(5);
       if (AUDIT_SCHEDULE_HOLIDAYS_FIXED.indexOf(mmdd) !== -1) return true;
       if (AUDIT_SCHEDULE_HOLIDAYS_EXTRA.indexOf(auditDayKey(d)) !== -1) return true;
@@ -11605,10 +11607,11 @@ html.page-fade-ready body {
     // What each rating MEANS and how soon it should be audited. The cycle is the
     // longest a branch of that rating should go between audits; Low uses the
     // "Longest allowed gap" setting, and no tier may exceed it.
+    function auditAboutTime(d) { return d < 56 ? Math.max(1, Math.round(d / 7)) + ' week' + (Math.round(d / 7) === 1 ? '' : 's') : Math.round(d / 30) + ' months'; }
     const AUDIT_TIER_GUIDE = {
       CRITICAL: { meaning: 'Serious warning signs in the data.', action: 'Audit as soon as possible', cycle: 30 },
-      HIGH:     { meaning: 'Clear warning signs, or a red-flag tripwire.', action: 'Audit within about 6 weeks', cycle: 45 },
-      MEDIUM:   { meaning: 'Some weak signals worth watching.', action: 'Audit within about 2 months', cycle: 60 },
+      HIGH:     { meaning: 'Clear warning signs, or a red-flag tripwire.', get action() { return 'Audit within about ' + auditAboutTime(this.cycle); }, cycle: 45 },
+      MEDIUM:   { meaning: 'Some weak signals worth watching.', get action() { return 'Audit within about ' + auditAboutTime(this.cycle); }, cycle: 60 },
       LOW:      { meaning: 'Healthy numbers.', action: 'Routine cycle', cycle: null }
     };
     function auditTierCycleDays(tierKey, cfg) {
@@ -11675,6 +11678,10 @@ html.page-fade-ready body {
       spacingDays: 3,       // business days between suggested audit dates
       minScore: 55,         // risk score at/above which an un-scheduled branch gets scheduled
       minGapDays: 30,       // don't re-audit a branch audited more recently than this
+      critScore: 70, highScore: 55, medScore: 40,   // score where each rating starts
+      critDays: 30, highDays: 45, medDays: 60,      // longest wait for each rating
+      flagEff: 50, flagRepo: 7, flagFindings: 5,    // red-flag limits (0 = that check is off)
+      avoidLastAuditor: 1, skipHolidays: 1,         // 1 = yes, 0 = no
       findingsCap: null,    // weighted-findings value that scores 100 on the findings factor; frozen the
                              // first time it's computed (see computeAuditRiskScores) so scores stay
                              // comparable over time instead of drifting with the portfolio; editable below
@@ -11812,7 +11819,7 @@ html.page-fade-ready body {
     //    position.
     const AUDIT_SYNC_POLL_MS = 8 * 1000;
     const AUDIT_SYNC_PUSH_DEBOUNCE_MS = 1200;
-    const AUDIT_SYNC_NUM_RULES = { overdueDays: [1, 3650], spacingDays: [1, 3650], minScore: [1, 100], minGapDays: [0, 3650], findingsCap: [1, 1000], sizeCap: [1, 10000000], repoCap: [1, 100000], shortfallCap: [1, 10000000] };
+    const AUDIT_SYNC_NUM_RULES = { critScore: [2, 100], highScore: [1, 99], medScore: [1, 98], critDays: [1, 3650], highDays: [1, 3650], medDays: [1, 3650], flagEff: [0, 100], flagRepo: [0, 100], flagFindings: [0, 1000], avoidLastAuditor: [0, 1], skipHolidays: [0, 1], overdueDays: [1, 3650], spacingDays: [1, 3650], minScore: [1, 100], minGapDays: [0, 3650], findingsCap: [1, 1000], sizeCap: [1, 10000000], repoCap: [1, 100000], shortfallCap: [1, 10000000] };
     const AUDIT_SYNC_STR_KEYS = ['filterBucket', 'tierFilter', 'auditorFilter', 'queueFilter', 'search', 'reasonFilter', 'distFilter', 'driverFilter'];
     const auditSync = {
       version: 0,          // server version of the last state this device pushed/applied (0 = none yet)
@@ -12051,6 +12058,7 @@ html.page-fade-ready body {
       const cfg = window.auditAnalysisState;
       if (cfg) {
         cfg.overdueDays = 90; cfg.spacingDays = 3; cfg.minScore = 55; cfg.minGapDays = 30;
+        cfg.critScore = 70; cfg.highScore = 55; cfg.medScore = 40; cfg.critDays = 30; cfg.highDays = 45; cfg.medDays = 60; cfg.flagEff = 50; cfg.flagRepo = 7; cfg.flagFindings = 5; cfg.avoidLastAuditor = 1; cfg.skipHolidays = 1;
         cfg.findingsCap = null; cfg.sizeCap = null; cfg.repoCap = null; cfg.shortfallCap = null;
         cfg.filterBucket = 'ALL';
         resetAuditTableFilterState(cfg);
@@ -12064,6 +12072,7 @@ html.page-fade-ready body {
     // pressed (or Enter is hit in the box), so a half-typed number never
     // reshuffles the whole analysis.
     const AUDIT_CFG_LABELS = {
+      critScore: 'Critical starts at score', highScore: 'High starts at score', medScore: 'Medium starts at score', critDays: 'Critical audit cycle', highDays: 'High audit cycle', medDays: 'Medium audit cycle', flagEff: 'Red flag: low efficiency', flagRepo: 'Red flag: repossession rate', flagFindings: 'Red flag: findings', avoidLastAuditor: 'Different auditor', skipHolidays: 'Skip holidays',
       minScore: 'Risk-score threshold', minGapDays: 'Minimum gap since last audit',
       overdueDays: 'Always-schedule limit', spacingDays: 'Spacing between suggestions',
       findingsCap: 'Findings cap', sizeCap: 'Portfolio-size cap', repoCap: 'Repossession-count cap', shortfallCap: 'Not-collecting accounts cap'
@@ -12071,6 +12080,7 @@ html.page-fade-ready body {
     // Shared with AUDIT_SYNC_NUM_RULES's ranges so a value valid here is also
     // valid to sync to other devices.
     const AUDIT_CFG_BOUNDS = {
+      critScore: [2, 100], highScore: [1, 99], medScore: [1, 98], critDays: [1, 3650], highDays: [1, 3650], medDays: [1, 3650], flagEff: [0, 100], flagRepo: [0, 100], flagFindings: [0, 1000], avoidLastAuditor: [0, 1], skipHolidays: [0, 1],
       minScore: [1, 100], minGapDays: [0, 3650], overdueDays: [1, 3650], spacingDays: [1, 3650],
       findingsCap: [1, 1000], sizeCap: [1, 10000000], repoCap: [1, 100000], shortfallCap: [1, 10000000]
     };
@@ -12197,17 +12207,17 @@ html.page-fade-ready body {
       const med = pick(dy, 0.5);
       let o = [];
       if (key === 'minScore') {
-        [10, 20, 30, 40, 50].forEach(p => { const v = cl(Math.floor(pick(sc, p / 100)), 1, 100); o.push({ v, l: 'Riskiest ' + p + '% of branches (score ' + v + ' and up)' }); });
+        [10, 20, 30, 40, 50].forEach(p => { const v = cl(Math.floor(pick(sc, p / 100)), 1, 100); o.push({ v, l: 'The ' + p + '% with the highest risk (score ' + v + ' or more)' }); });
         const avg = sc.length ? sc.reduce((a, b) => a + b, 0) / sc.length : 50;
-        o.push({ v: cl(avg, 1, 100), l: 'Above the average score (' + Math.round(avg) + ')' });
+        o.push({ v: cl(avg, 1, 100), l: 'Every branch above the average score (' + Math.round(avg) + ')' });
       } else if (key === 'minGapDays') {
-        o.push({ v: 0, l: 'No rest period' });
-        [[0.25, 'A quarter'], [0.5, 'Half'], [0.75, 'Three quarters']].forEach(x => o.push({ v: cl(med * x[0], 0, 3650), l: x[1] + ' of the typical gap (' + cl(med * x[0], 0, 3650) + ' days)' }));
+        o.push({ v: 0, l: 'No rest time' });
+        [[0.25, 'Short', 'a quarter'], [0.5, 'Medium', 'half'], [0.75, 'Long', 'three quarters']].forEach(x => o.push({ v: cl(med * x[0], 0, 3650), l: x[1] + ' rest: ' + cl(med * x[0], 0, 3650) + ' days (' + x[2] + ' of the usual gap)' }));
       } else if (key === 'overdueDays') {
-        [[0.5, 'The typical gap'], [0.75, 'Longer than 3 in 4 branches'], [0.9, 'Longer than 9 in 10 branches']].forEach(x => { const v = cl(Math.max(1, pick(dy, x[0])), 1, 3650); o.push({ v, l: x[1] + ' (' + v + ' days)' }); });
+        [[0.5, 'The usual gap'], [0.75, 'Longer than most branches'], [0.9, 'Longer than nearly all branches']].forEach(x => { const v = cl(Math.max(1, pick(dy, x[0])), 1, 3650); o.push({ v, l: x[1] + ': ' + v + ' days' }); });
       } else if (key === 'spacingDays') {
         const per = Math.max(1, Math.ceil((window.__aaQueue || 0) / (window.__aaAuditors || 1)));
-        [4, 6, 8, 12].forEach(w => { const v = cl((w * 5) / per, 1, 20); o.push({ v, l: 'Clear the queue in ' + w + ' weeks (' + v + ' working day' + (v === 1 ? '' : 's') + ' per audit)' }); });
+        [4, 6, 8, 12].forEach(w => { const v = cl((w * 5) / per, 1, 20); o.push({ v, l: 'Finish the queue in ' + w + ' weeks (' + v + ' day' + (v === 1 ? '' : 's') + ' per audit)' }); });
       }
       const seen = {};
       return o.filter(x => (seen[x.v] ? false : (seen[x.v] = true)));
@@ -12224,7 +12234,7 @@ html.page-fade-ready body {
     function aaMarkUnsaved() { const h = document.getElementById('aa-w-hint'); if (h) h.classList.remove('hidden'); }
     function aaShowCaps() {
       const t = AA_CAP_KEYS.map(k => { const el = document.getElementById('aa-cfg-' + k); const n = Number(el ? el.value : 0); return '<b>' + AA_CAP_NAMES[k][0] + '</b> ' + n.toLocaleString() + (AA_CAP_NAMES[k][1] ? ' ' + AA_CAP_NAMES[k][1] : ''); });
-      const el = document.getElementById('aa-pv-caps'); if (el) el.innerHTML = 'That works out to: ' + t.join(' · ') + '.';
+      const el = document.getElementById('aa-pv-caps'); if (el) el.innerHTML = 'Full points at: ' + t.join(' · ') + '.';
     }
     function aaPickCaps(v) {
       if (v === 'custom') return;
@@ -12239,7 +12249,7 @@ html.page-fade-ready body {
         const bar = document.getElementById('aa-wb-' + f.key), tx = document.getElementById('aa-wt-' + f.key);
         if (bar) bar.style.width = n + '%'; if (tx) tx.textContent = n + '%';
       });
-      if (el && sel) el.textContent = ({ data: 'Factors that have lined up best with real audit findings count more.', equal: 'Every factor counts the same.', start: 'The original hand-picked starting weights.', custom: 'The weights currently saved.' })[sel.value] || '';
+      if (el && sel) el.textContent = ({ data: 'Things that matched real audit findings best count the most.', equal: 'Every factor counts the same.', start: 'The starting weights that came with the tool.', custom: 'The weights you saved before.' })[sel.value] || '';
     }
     function aaPickWeights(name) {
       const set = (window.__aaWeightSets || {})[name]; if (!set) return;
@@ -12252,7 +12262,7 @@ html.page-fade-ready body {
       if (sel) {
         const cur = AA_CAP_KEYS.map(k => Number((document.getElementById('aa-cfg-' + k) || {}).value)).join(',');
         let hit = null;
-        sel.innerHTML = [5, 10, 20, 30].map(p => { const set = aaCapSet(p); if (hit === null && AA_CAP_KEYS.map(k => set[k]).join(',') === cur) hit = String(p); return '<option value="' + p + '">' + ({ 5: 'Only the worst 5% of branches (very strict)', 10: 'The worst 10% of branches (recommended)', 20: 'The worst 20% of branches', 30: 'The worst 30% of branches (relaxed)' })[p] + '</option>'; }).join('') + '<option value="custom">Current setting (your own numbers)</option>';
+        sel.innerHTML = [5, 10, 20, 30].map(p => { const set = aaCapSet(p); if (hit === null && AA_CAP_KEYS.map(k => set[k]).join(',') === cur) hit = String(p); return '<option value="' + p + '">' + ({ 5: 'The worst 5% of branches (very strict)', 10: 'The worst 10% of branches (recommended)', 20: 'The worst 20% of branches', 30: 'The worst 30% of branches (easy)' })[p] + '</option>'; }).join('') + '<option value="custom">Current setting (your own numbers)</option>';
         sel.value = hit || 'custom';
       }
       const ws = document.getElementById('aa-sel-weights');
@@ -12267,12 +12277,76 @@ html.page-fade-ready body {
       }
       aaShowCaps(); aaShowWeights();
     }
+    // Extra settings. Each dropdown fills a few hidden number boxes at once.
+    const AA_GROUPS = {
+      tiers: { keys: ['critScore', 'highScore', 'medScore'],
+        opts() {
+          const sc = (window.__aaPreviewRows || []).map(r => r.s).sort((a, b) => b - a);
+          const at = p => sc.length ? Math.floor(sc[Math.min(sc.length - 1, Math.max(0, Math.ceil(p * sc.length) - 1))]) : 0;
+          const mk = (id, name, ps) => { let m = Math.max(1, at(ps[2])), h = Math.max(m + 1, at(ps[1])), c = Math.max(h + 1, at(ps[0])); if (c > 100) { c = 100; h = Math.min(h, 99); m = Math.min(m, 98); } return { id, label: name + ' (scores ' + c + ' / ' + h + ' / ' + m + ')', vals: { critScore: c, highScore: h, medScore: m } }; };
+          const o = sc.length ? [mk('t5', 'Few Critical: top 5% Critical, next 15% High, next 30% Medium', [0.05, 0.2, 0.5]), mk('t10', 'Balanced: top 10% Critical, next 20% High, next 30% Medium', [0.1, 0.3, 0.6]), mk('t20', 'Many Critical: top 20% Critical, next 30% High, next 30% Medium', [0.2, 0.5, 0.8])] : [];
+          o.push({ id: 'fixed', label: 'Fixed scores that came with the tool (70 / 55 / 40)', vals: { critScore: 70, highScore: 55, medScore: 40 } });
+          return o;
+        },
+        line: v => 'Critical: <b>' + v.critScore + '</b> or more · High: <b>' + v.highScore + '</b> to ' + (v.critScore - 1) + ' · Medium: <b>' + v.medScore + '</b> to ' + (v.highScore - 1) + ' · Low: below ' + v.medScore + '.' },
+      cycles: { keys: ['critDays', 'highDays', 'medDays'],
+        opts() {
+          const dy = (window.__aaPreviewRows || []).filter(r => r.d !== null).map(r => r.d).sort((a, b) => a - b);
+          const med = dy.length ? dy[Math.floor(dy.length / 2)] : 0;
+          const mk = (id, name, f) => { const v = x => Math.max(1, Math.min(3650, Math.round(med * x))); const c = v(f[0]), h = Math.max(c, v(f[1])), m = Math.max(h, v(f[2])); return { id, label: name + ': ' + c + ' / ' + h + ' / ' + m + ' days', vals: { critDays: c, highDays: h, medDays: m } }; };
+          const o = [{ id: 'std', label: 'Standard: 30 / 45 / 60 days', vals: { critDays: 30, highDays: 45, medDays: 60 } }];
+          if (med > 0) { o.unshift(mk('tight', 'Tight (based on your usual gap of ' + med + ' days)', [1 / 3, 1 / 2, 3 / 4])); o.push(mk('loose', 'Loose (based on your usual gap)', [3 / 4, 1, 1.5])); }
+          return o;
+        },
+        line: v => 'Audit <b>Critical</b> branches at least every <b>' + v.critDays + '</b> days, <b>High</b> every <b>' + v.highDays + '</b>, <b>Medium</b> every <b>' + v.medDays + '</b>. Low-risk branches use the longest wait set above.' },
+      flags: { keys: ['flagEff', 'flagRepo', 'flagFindings'],
+        opts() {
+          const rows = window.__aaPreviewRows || [];
+          const eff = rows.map(r => r.e).filter(x => x !== null).sort((a, b) => a - b);
+          const rp = rows.map(r => r.rp).filter(x => x !== null).sort((a, b) => b - a);
+          const fd = rows.map(r => r.fd).sort((a, b) => b - a);
+          const pk = (arr, p) => arr.length ? arr[Math.min(arr.length - 1, Math.max(0, Math.ceil(p * arr.length) - 1))] : 0;
+          const mk = (id, name, p) => { const a = Math.min(100, Math.floor(pk(eff, p)) + 1), b = Math.max(1, Math.min(100, Math.floor(pk(rp, p)))), c = Math.max(1, pk(fd, p)); return { id, label: name, vals: { flagEff: a, flagRepo: b, flagFindings: c } }; };
+          const o = rows.length ? [mk('f20', 'Sensitive: flag the worst 20% on each check', 0.2), mk('f10', 'Normal: flag the worst 10% on each check (recommended)', 0.1), mk('f5', 'Careful: flag only the worst 5% on each check', 0.05)] : [];
+          o.push({ id: 'orig', label: 'Fixed limits that came with the tool (50% / 7% / 5)', vals: { flagEff: 50, flagRepo: 7, flagFindings: 5 } });
+          o.push({ id: 'off', label: 'No red flags', vals: { flagEff: 0, flagRepo: 0, flagFindings: 0 } });
+          return o;
+        },
+        line: v => {
+          const rows = window.__aaPreviewRows || [];
+          const n = rows.filter(r => r.g || (v.flagEff > 0 && r.e !== null && r.e < v.flagEff) || (v.flagRepo > 0 && r.rp !== null && r.rp >= v.flagRepo) || (v.flagFindings > 0 && r.fd >= v.flagFindings)).length;
+          return 'A branch gets a red flag when collection efficiency is under <b>' + (v.flagEff || 'off') + (v.flagEff ? '%' : '') + '</b>, repossession rate is <b>' + (v.flagRepo || 'off') + (v.flagRepo ? '%' : '') + '</b> or more, or it has <b>' + (v.flagFindings || 'off') + '</b> or more findings this year. <b>' + n + '</b> of ' + rows.length + ' branches would be flagged. A flagged branch is always treated as High risk or worse.';
+        } },
+      rota: { keys: ['avoidLastAuditor'], opts: () => [{ id: 'y', label: 'A different auditor than last time (recommended)', vals: { avoidLastAuditor: 1 } }, { id: 'n', label: 'Any auditor, even the same one', vals: { avoidLastAuditor: 0 } }] },
+      holidays: { keys: ['skipHolidays'], opts: () => [{ id: 'y', label: 'Skip public holidays (recommended)', vals: { skipHolidays: 1 } }, { id: 'n', label: 'Count public holidays as working days', vals: { skipHolidays: 0 } }] }
+    };
+    function aaGroupValues(g) { const v = {}; AA_GROUPS[g].keys.forEach(k => { v[k] = Number((document.getElementById('aa-cfg-' + k) || {}).value); }); return v; }
+    function aaGroupLine(g) { const G = AA_GROUPS[g], el = document.getElementById('aa-gpv-' + g); if (el && G.line) el.innerHTML = G.line(aaGroupValues(g)); }
+    function aaGroupInit() {
+      Object.keys(AA_GROUPS).forEach(g => {
+        const G = AA_GROUPS[g], sel = document.getElementById('aa-gsel-' + g); if (!sel) return;
+        G._o = G.opts();
+        const cv = aaGroupValues(g), cur = G.keys.map(k => cv[k]).join(',');
+        let hit = null;
+        G._o.forEach(x => { if (hit === null && G.keys.map(k => x.vals[k]).join(',') === cur) hit = x.id; });
+        sel.innerHTML = G._o.map(x => '<option value="' + x.id + '">' + x.label + '</option>').join('') + '<option value="custom">Current setting</option>';
+        sel.value = hit || 'custom';
+        aaGroupLine(g);
+      });
+    }
+    function aaGroupPick(g, id) {
+      if (id === 'custom') return;
+      const G = AA_GROUPS[g], x = (G._o || []).find(y => y.id === id); if (!x) return;
+      G.keys.forEach(k => { const el = document.getElementById('aa-cfg-' + k); if (el) el.value = x.vals[k]; });
+      aaGroupLine(g); aaMarkUnsaved();
+    }
     function aaInitSettings() {
       Object.keys(AA_UNITS).forEach(k => {
         const sel = document.getElementById('aa-sel-' + k);
         if (sel) sel.innerHTML = aaOptions(k).map(x => '<option value="' + x.v + '">' + x.l + '</option>').join('');
       });
       aaSyncCapsWeights();
+      aaGroupInit();
       updateAuditSettingsPreview();
     }
     function aaPick(k, v) { const el = document.getElementById('aa-cfg-' + k); if (el) el.value = v; updateAuditSettingsPreview(); aaMarkUnsaved(); }
@@ -12296,13 +12370,13 @@ html.page-fade-ready body {
         sel.value = String(x[1]);
       });
       const byScore = rows.filter(r => r.s >= ms).length, byFlag = rows.filter(r => r.s < ms && r.f).length;
-      put('minScore', '<b>' + byScore + '</b> of ' + T + ' branches score ' + ms + ' or more' + (byFlag ? ', plus <b>' + byFlag + '</b> with a data red flag' : '') + '.');
+      put('minScore', '<b>' + byScore + '</b> of ' + T + ' branches score ' + ms + ' or more' + (byFlag ? ', plus <b>' + byFlag + '</b> with a red flag' : '') + '.');
       const held = rows.filter(r => r.d !== null && r.d < mg).length;
-      put('minGapDays', '<b>' + held + '</b> branch' + (held === 1 ? '' : 'es') + ' audited within the last ' + mg + ' days will be left alone.');
+      put('minGapDays', '<b>' + held + '</b> branch' + (held === 1 ? '' : 'es') + ' audited in the last ' + mg + ' days will wait.');
       const over = rows.filter(r => r.d !== null && r.d >= od).length;
-      put('overdueDays', '<b>' + over + '</b> branch' + (over === 1 ? ' has' : 'es have') + ' gone ' + od + ' days or more without an audit.');
+      put('overdueDays', '<b>' + over + '</b> branch' + (over === 1 ? ' has' : 'es have') + ' waited ' + od + ' days or more.');
       const A = window.__aaAuditors || 1, Q = window.__aaQueue || 0, per = Math.ceil(Q / A), wk = Math.round((per * sp / 5) * 10) / 10;
-      put('spacingDays', '<b>' + Q + '</b> queued ÷ <b>' + A + '</b> auditor' + (A === 1 ? '' : 's') + ' = about ' + per + ' audits each, or <b>' + wk + '</b> weeks of work.');
+      put('spacingDays', '<b>' + Q + '</b> in the queue for <b>' + A + '</b> auditor' + (A === 1 ? '' : 's') + ' = about ' + per + ' audits each, or <b>' + wk + '</b> weeks of work.');
     }
     window.addEventListener('load', function () { try { updateAuditSettingsPreview(); } catch (e) {} });
 
@@ -12333,7 +12407,7 @@ html.page-fade-ready body {
       const cfg = window.auditAnalysisState;
       const problems = [];
 
-      const cfgKeys = ['minScore', 'minGapDays', 'overdueDays', 'spacingDays', 'findingsCap', 'sizeCap', 'repoCap', 'shortfallCap'];
+      const cfgKeys = ['minScore', 'minGapDays', 'overdueDays', 'spacingDays', 'findingsCap', 'sizeCap', 'repoCap', 'shortfallCap', 'critScore', 'highScore', 'medScore', 'critDays', 'highDays', 'medDays', 'flagEff', 'flagRepo', 'flagFindings', 'avoidLastAuditor', 'skipHolidays'];
       const newCfgVals = {};
       cfgKeys.forEach(key => {
         const el = document.getElementById('aa-cfg-' + key);
@@ -12348,6 +12422,9 @@ html.page-fade-ready body {
           newCfgVals[key] = n;
         }
       });
+
+      if (newCfgVals.critScore !== undefined && !(newCfgVals.critScore > newCfgVals.highScore && newCfgVals.highScore > newCfgVals.medScore)) problems.push('Rating scores must go down from Critical to High to Medium.');
+      if (newCfgVals.critDays !== undefined && !(newCfgVals.critDays <= newCfgVals.highDays && newCfgVals.highDays <= newCfgVals.medDays)) problems.push('Audit cycles must get longer from Critical to High to Medium.');
 
       const w = readAuditWeightInputs();
       const badWeights = AUDIT_RISK_FACTORS.filter(f => !isFinite(w[f.key]) || w[f.key] < 0 || w[f.key] > 100);
@@ -12865,7 +12942,14 @@ html.page-fade-ready body {
     // scales are percentiles of the rows passed in; scoring one branch on its
     // own would make it its own 90th percentile (any finding = 100 points).
     // For a single branch use scoreBranchAgainstPortfolio() below.
+    // Pushes the saved rating cutoffs and audit cycles into the shared tables.
+    function auditApplyRules(cfg) {
+      const n = (v, d) => (v === null || v === undefined || isNaN(v)) ? d : Number(v);
+      AUDIT_RISK_TIERS[0].min = n(cfg.critScore, 70); AUDIT_RISK_TIERS[1].min = n(cfg.highScore, 55); AUDIT_RISK_TIERS[2].min = n(cfg.medScore, 40);
+      AUDIT_TIER_GUIDE.CRITICAL.cycle = n(cfg.critDays, 30); AUDIT_TIER_GUIDE.HIGH.cycle = n(cfg.highDays, 45); AUDIT_TIER_GUIDE.MEDIUM.cycle = n(cfg.medDays, 60);
+    }
     function computeAuditRiskScores(rows, cfg) {
+      auditApplyRules(cfg);
       const weights = cfg.weights || defaultAuditRiskWeights();
       const findingsWeighted = b => (b.findings2026 || 0) * 3 + (b.findings2025 || 0) * 2 + (b.findings2024 || 0);
       const accountsOf = b => (b.accountsMay || 0) > 0 ? b.accountsMay : (b.accountsApr || 0);
@@ -13044,6 +13128,7 @@ html.page-fade-ready body {
           score: score,
           tier: escalated ? highTier : baseTier,
           baseTier: baseTier,
+          effNow: effNow, repoRate: repo, hasAcct: hasAcct,
           escalated: escalated,
           redFlags: redFlags,
           // Share of the total weight that had data for this branch (1 = complete).
@@ -13253,10 +13338,10 @@ html.page-fade-ready body {
         const recentNorm = norm(row.info.recentAuditor);
         const queued = lanes.find(n => norm(n) === norm(row.info.upNextAuditor));
         let auditor, alreadyCounted = false;
-        if (queued && norm(queued) !== recentNorm) {
+        if (queued && (cfg.avoidLastAuditor === 0 || norm(queued) !== recentNorm)) {
           auditor = queued; alreadyCounted = true;   // rotation already decided this one
         } else {
-          const pool = lanes.filter(n => norm(n) !== recentNorm);
+          const pool = cfg.avoidLastAuditor === 0 ? lanes : lanes.filter(n => norm(n) !== recentNorm);
           const candidates = pool.length ? pool : lanes;
           let best = null, bestDate = null;
           candidates.forEach(n => {
@@ -13652,7 +13737,7 @@ html.page-fade-ready body {
         return out;
       })();
       window.__aaQueue = a.suggestions.length; window.__aaAuditors = Math.max(1, a.auditorNames.length);
-      window.__aaPreviewRows = a.rows.map(r => ({ s: r.risk.score, d: (r.info.intervalDays === undefined ? null : r.info.intervalDays), f: !!(r.risk.redFlags && r.risk.redFlags.length), t: r.risk.tier.key, k: __kOf.get(r) || 'free' }));
+      window.__aaPreviewRows = a.rows.map(r => ({ s: r.risk.score, d: (r.info.intervalDays === undefined ? null : r.info.intervalDays), f: !!(r.risk.redFlags && r.risk.redFlags.length), t: r.risk.tier.key, k: __kOf.get(r) || 'free', e: r.risk.effNow > 0 ? r.risk.effNow : null, rp: r.risk.hasAcct ? r.risk.repoRate : null, fd: r.b.findings2026 || 0, g: !!(r.risk.redFlags && r.risk.redFlags.some(x => x.key === 'sliding' || x.key === 'alldown')) }));
 
       // Attribute string that makes an element click-through (mouse + keyboard).
       const drill = (kind, value, active, extraCls) =>
@@ -14054,43 +14139,43 @@ html.page-fade-ready body {
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 py-2.5 sticky top-0 bg-white rounded-t-2xl border-b border-coolBorder" style="z-index:1">
             <span class="p-0.5 rounded-md bg-accentIndigo/10 text-accentIndigo text-[11px] leading-none">⚙</span>
             <span class="text-[12px] font-bold text-slate-700">Rating rules &amp; settings</span>
-            <span class="text-[10px] font-medium text-slate-400 normal-case tracking-normal">Queue at ${cfg.minScore}+ points, at most ${cfg.overdueDays} days between audits</span>
+            <span class="text-[10px] font-medium text-slate-400 normal-case tracking-normal">Audit at ${cfg.minScore}+ points · longest wait ${cfg.overdueDays} days</span>
             <button type="button" onclick="toggleAuditSettings()" class="ml-auto px-2 py-0.5 text-[10px] font-bold text-slate-500 border border-coolBorder rounded-md hover:bg-gray-100 cursor-pointer">Close ✕</button>
           </div>
 
           <div class="px-3.5 pb-3.5 pt-2.5 border-t border-coolBorder space-y-3">
 
             <div class="rounded-lg border border-coolBorder bg-white">
-              <div class="px-3 py-1.5 bg-gray-50/70 border-b border-coolBorder rounded-t-lg text-[10.5px] text-slate-500">Each choice is worked out from all your branches. Pick one, or type your own number. Nothing changes until you press Save.</div>
+              <div class="px-3 py-1.5 bg-gray-50/70 border-b border-coolBorder rounded-t-lg text-[10.5px] text-slate-500">Every choice is worked out from your own branch data. Pick one, or type your own number. Nothing changes until you press Save.</div>
               <div class="divide-y divide-coolBorder">
                 <div class="px-3 py-3">
-                  <div class="text-[12px] font-bold text-slate-800">Audit the riskiest branches</div>
+                  <div class="text-[12px] font-bold text-slate-800">Which branches to audit</div>
                   <div class="flex items-center gap-2 mt-1.5">
-                    <select id="aa-sel-minScore" onchange="aaPick('minScore',this.value)" aria-label="Audit the riskiest branches" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                    <select id="aa-sel-minScore" onchange="aaPick('minScore',this.value)" aria-label="Which branches to audit" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
                     <span class="flex items-center gap-1 shrink-0">${cfgInput('minScore', 1, 100)}<span class="text-[10px] text-slate-400 w-9">points</span></span>
                   </div>
                   <div id="aa-pv-minScore" class="text-[11px] text-slate-500 mt-1.5"></div>
                 </div>
                 <div class="px-3 py-3">
-                  <div class="text-[12px] font-bold text-slate-800">Leave a branch alone after an audit for</div>
+                  <div class="text-[12px] font-bold text-slate-800">Rest time after an audit</div>
                   <div class="flex items-center gap-2 mt-1.5">
-                    <select id="aa-sel-minGapDays" onchange="aaPick('minGapDays',this.value)" aria-label="Leave a branch alone after an audit for" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                    <select id="aa-sel-minGapDays" onchange="aaPick('minGapDays',this.value)" aria-label="Rest time after an audit" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
                     <span class="flex items-center gap-1 shrink-0">${cfgInput('minGapDays', 0, 3650)}<span class="text-[10px] text-slate-400 w-9">days</span></span>
                   </div>
                   <div id="aa-pv-minGapDays" class="text-[11px] text-slate-500 mt-1.5"></div>
                 </div>
                 <div class="px-3 py-3">
-                  <div class="text-[12px] font-bold text-slate-800">Queue any branch not audited for</div>
+                  <div class="text-[12px] font-bold text-slate-800">Also audit any branch that waited more than</div>
                   <div class="flex items-center gap-2 mt-1.5">
-                    <select id="aa-sel-overdueDays" onchange="aaPick('overdueDays',this.value)" aria-label="Queue any branch not audited for" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                    <select id="aa-sel-overdueDays" onchange="aaPick('overdueDays',this.value)" aria-label="Audit any branch that waited more than" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
                     <span class="flex items-center gap-1 shrink-0">${cfgInput('overdueDays', 1, 3650)}<span class="text-[10px] text-slate-400 w-9">days</span></span>
                   </div>
                   <div id="aa-pv-overdueDays" class="text-[11px] text-slate-500 mt-1.5"></div>
                 </div>
                 <div class="px-3 py-3">
-                  <div class="text-[12px] font-bold text-slate-800">Spread audits so each auditor needs</div>
+                  <div class="text-[12px] font-bold text-slate-800">Days one audit takes</div>
                   <div class="flex items-center gap-2 mt-1.5">
-                    <select id="aa-sel-spacingDays" onchange="aaPick('spacingDays',this.value)" aria-label="Spread audits so each auditor needs" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                    <select id="aa-sel-spacingDays" onchange="aaPick('spacingDays',this.value)" aria-label="Days one audit takes" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
                     <span class="flex items-center gap-1 shrink-0">${cfgInput('spacingDays', 1, 3650)}<span class="text-[10px] text-slate-400 w-9">days</span></span>
                   </div>
                   <div id="aa-pv-spacingDays" class="text-[11px] text-slate-500 mt-1.5"></div>
@@ -14099,8 +14184,44 @@ html.page-fade-ready body {
             </div>
 
             <div class="rounded-lg border border-coolBorder bg-white">
+              <div class="px-3 py-1.5 bg-gray-50/70 border-b border-coolBorder rounded-t-lg text-[10.5px] text-slate-500">More options, also worked out from your data</div>
+              <div class="divide-y divide-coolBorder">
               <div class="px-3 py-3">
-                <div class="text-[12px] font-bold text-slate-800">Decide how much each factor counts by</div>
+                <div class="text-[12px] font-bold text-slate-800">How to sort branches into Critical, High, Medium and Low</div>
+                <select id="aa-gsel-tiers" onchange="aaGroupPick('tiers',this.value)" aria-label="How to sort branches into Critical, High, Medium and Low" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                <div id="aa-gpv-tiers" class="text-[11px] text-slate-500 mt-1.5"></div>
+                <span class="hidden">${cfgInput('critScore', 2, 100)}${cfgInput('highScore', 1, 99)}${cfgInput('medScore', 1, 98)}</span>
+              </div>
+              <div class="px-3 py-3">
+                <div class="text-[12px] font-bold text-slate-800">How often to audit each level</div>
+                <select id="aa-gsel-cycles" onchange="aaGroupPick('cycles',this.value)" aria-label="How often to audit each level" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                <div id="aa-gpv-cycles" class="text-[11px] text-slate-500 mt-1.5"></div>
+                <span class="hidden">${cfgInput('critDays', 1, 3650)}${cfgInput('highDays', 1, 3650)}${cfgInput('medDays', 1, 3650)}</span>
+              </div>
+              <div class="px-3 py-3">
+                <div class="text-[12px] font-bold text-slate-800">Red flags (warning signs that raise a branch to High)</div>
+                <select id="aa-gsel-flags" onchange="aaGroupPick('flags',this.value)" aria-label="Red flags (warning signs that raise a branch to High)" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                <div id="aa-gpv-flags" class="text-[11px] text-slate-500 mt-1.5"></div>
+                <span class="hidden">${cfgInput('flagEff', 0, 100)}${cfgInput('flagRepo', 0, 100)}${cfgInput('flagFindings', 0, 1000)}</span>
+              </div>
+              <div class="px-3 py-3">
+                <div class="text-[12px] font-bold text-slate-800">Who audits a branch next</div>
+                <select id="aa-gsel-rota" onchange="aaGroupPick('rota',this.value)" aria-label="Who audits a branch next" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                <div id="aa-gpv-rota" class="text-[11px] text-slate-500 mt-1.5"></div>
+                <span class="hidden">${cfgInput('avoidLastAuditor', 0, 1)}</span>
+              </div>
+              <div class="px-3 py-3">
+                <div class="text-[12px] font-bold text-slate-800">Suggested audit dates</div>
+                <select id="aa-gsel-holidays" onchange="aaGroupPick('holidays',this.value)" aria-label="Suggested audit dates" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                <div id="aa-gpv-holidays" class="text-[11px] text-slate-500 mt-1.5"></div>
+                <span class="hidden">${cfgInput('skipHolidays', 0, 1)}</span>
+              </div>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-coolBorder bg-white">
+              <div class="px-3 py-3">
+                <div class="text-[12px] font-bold text-slate-800">What matters most in the risk score</div>
                 <select id="aa-sel-weights" onchange="aaPickWeights(this.value)" aria-label="How much each factor counts" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
                 <div id="aa-pv-weights" class="text-[11px] text-slate-500 mt-1.5"></div>
               </div>
@@ -14108,7 +14229,7 @@ html.page-fade-ready body {
             </div>
 
             <div class="rounded-lg border border-coolBorder bg-white px-3 py-3">
-              <div class="text-[12px] font-bold text-slate-800">A branch scores the full 100 on a factor when it is in the worst</div>
+              <div class="text-[12px] font-bold text-slate-800">Give full points when a branch is among the worst</div>
               <select id="aa-sel-caps" onchange="aaPickCaps(this.value)" aria-label="Worst-case level for each factor" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
               <div id="aa-pv-caps" class="text-[11px] text-slate-500 mt-1.5"></div>
               <span class="hidden">${cfgInput('findingsCap', 1, 1000)}${cfgInput('sizeCap', 1, 10000000)}${cfgInput('repoCap', 1, 100000)}${cfgInput('shortfallCap', 1, 10000000)}</span>
