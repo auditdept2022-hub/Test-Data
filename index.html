@@ -12185,11 +12185,97 @@ html.page-fade-ready body {
       });
       return n;
     }
-    function aaSl(k, v) { const el = document.getElementById('aa-cfg-' + k); if (el) el.value = v; updateAuditSettingsPreview(); }
-    function aaPreset(ms, mg, od, sp) {
-      [['minScore', ms], ['minGapDays', mg], ['overdueDays', od], ['spacingDays', sp]].forEach(x => { const el = document.getElementById('aa-cfg-' + x[0]); if (el) el.value = x[1]; });
+    // Settings are chosen from the overall data (percentiles of every branch);
+    // the number boxes still hold the final value that Save reads.
+    const AA_UNITS = { minScore: 'points', minGapDays: 'days', overdueDays: 'days', spacingDays: 'days' };
+    function aaOptions(key) {
+      const rows = window.__aaPreviewRows || [];
+      const sc = rows.map(r => r.s).sort((a, b) => b - a);
+      const dy = rows.filter(r => r.d !== null).map(r => r.d).sort((a, b) => a - b);
+      const pick = (arr, p) => arr.length ? arr[Math.min(arr.length - 1, Math.max(0, Math.ceil(p * arr.length) - 1))] : 0;
+      const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(v)));
+      const med = pick(dy, 0.5);
+      let o = [];
+      if (key === 'minScore') {
+        [10, 20, 30, 40, 50].forEach(p => { const v = cl(Math.floor(pick(sc, p / 100)), 1, 100); o.push({ v, l: 'Riskiest ' + p + '% of branches (score ' + v + ' and up)' }); });
+        const avg = sc.length ? sc.reduce((a, b) => a + b, 0) / sc.length : 50;
+        o.push({ v: cl(avg, 1, 100), l: 'Above the average score (' + Math.round(avg) + ')' });
+      } else if (key === 'minGapDays') {
+        o.push({ v: 0, l: 'No rest period' });
+        [[0.25, 'A quarter'], [0.5, 'Half'], [0.75, 'Three quarters']].forEach(x => o.push({ v: cl(med * x[0], 0, 3650), l: x[1] + ' of the typical gap (' + cl(med * x[0], 0, 3650) + ' days)' }));
+      } else if (key === 'overdueDays') {
+        [[0.5, 'The typical gap'], [0.75, 'Longer than 3 in 4 branches'], [0.9, 'Longer than 9 in 10 branches']].forEach(x => { const v = cl(Math.max(1, pick(dy, x[0])), 1, 3650); o.push({ v, l: x[1] + ' (' + v + ' days)' }); });
+      } else if (key === 'spacingDays') {
+        const per = Math.max(1, Math.ceil((window.__aaQueue || 0) / (window.__aaAuditors || 1)));
+        [4, 6, 8, 12].forEach(w => { const v = cl((w * 5) / per, 1, 20); o.push({ v, l: 'Clear the queue in ' + w + ' weeks (' + v + ' working day' + (v === 1 ? '' : 's') + ' per audit)' }); });
+      }
+      const seen = {};
+      return o.filter(x => (seen[x.v] ? false : (seen[x.v] = true)));
+    }
+    const AA_CAP_KEYS = ['findingsCap', 'sizeCap', 'repoCap', 'shortfallCap'];
+    const AA_CAP_MIN = { findingsCap: AUDIT_FINDINGS_MIN_CAP, sizeCap: 1, repoCap: 3, shortfallCap: 1 };
+    const AA_CAP_MAX = { findingsCap: 1000, sizeCap: 10000000, repoCap: 100000, shortfallCap: 10000000 };
+    const AA_CAP_NAMES = { findingsCap: ['Findings', 'points'], sizeCap: ['Branch size', 'accounts'], repoCap: ['Repossessions', ''], shortfallCap: ['Not collecting', 'accounts'] };
+    function aaCapSet(worstPct) {
+      const v = window.__aaCapVals || {}, o = {};
+      AA_CAP_KEYS.forEach(k => { const x = Math.round(auditRiskPercentile(v[k] || [], 1 - worstPct / 100)) || 0; o[k] = Math.max(AA_CAP_MIN[k], Math.min(AA_CAP_MAX[k], x)); });
+      return o;
+    }
+    function aaMarkUnsaved() { const h = document.getElementById('aa-w-hint'); if (h) h.classList.remove('hidden'); }
+    function aaShowCaps() {
+      const t = AA_CAP_KEYS.map(k => { const el = document.getElementById('aa-cfg-' + k); const n = Number(el ? el.value : 0); return '<b>' + AA_CAP_NAMES[k][0] + '</b> ' + n.toLocaleString() + (AA_CAP_NAMES[k][1] ? ' ' + AA_CAP_NAMES[k][1] : ''); });
+      const el = document.getElementById('aa-pv-caps'); if (el) el.innerHTML = 'That works out to: ' + t.join(' · ') + '.';
+    }
+    function aaPickCaps(v) {
+      if (v === 'custom') return;
+      const set = aaCapSet(Number(v));
+      AA_CAP_KEYS.forEach(k => { const el = document.getElementById('aa-cfg-' + k); if (el) el.value = set[k]; });
+      aaShowCaps(); aaMarkUnsaved();
+    }
+    function aaShowWeights() {
+      const el = document.getElementById('aa-pv-weights'); const sel = document.getElementById('aa-sel-weights');
+      AUDIT_RISK_FACTORS.forEach(f => {
+        const inp = document.getElementById('aa-w-' + f.key); const n = inp ? Number(inp.value) || 0 : 0;
+        const bar = document.getElementById('aa-wb-' + f.key), tx = document.getElementById('aa-wt-' + f.key);
+        if (bar) bar.style.width = n + '%'; if (tx) tx.textContent = n + '%';
+      });
+      if (el && sel) el.textContent = ({ data: 'Factors that have lined up best with real audit findings count more.', equal: 'Every factor counts the same.', start: 'The original hand-picked starting weights.', custom: 'The weights currently saved.' })[sel.value] || '';
+    }
+    function aaPickWeights(name) {
+      const set = (window.__aaWeightSets || {})[name]; if (!set) return;
+      AUDIT_RISK_FACTORS.forEach(f => { const inp = document.getElementById('aa-w-' + f.key); if (inp) inp.value = set[f.key]; });
+      aaShowWeights(); aaMarkUnsaved();
+    }
+    function aaSyncCapsWeights() {
+      // dropdowns start on whichever choice matches what is currently in the boxes
+      const sel = document.getElementById('aa-sel-caps');
+      if (sel) {
+        const cur = AA_CAP_KEYS.map(k => Number((document.getElementById('aa-cfg-' + k) || {}).value)).join(',');
+        let hit = null;
+        sel.innerHTML = [5, 10, 20, 30].map(p => { const set = aaCapSet(p); if (hit === null && AA_CAP_KEYS.map(k => set[k]).join(',') === cur) hit = String(p); return '<option value="' + p + '">' + ({ 5: 'Only the worst 5% of branches (very strict)', 10: 'The worst 10% of branches (recommended)', 20: 'The worst 20% of branches', 30: 'The worst 30% of branches (relaxed)' })[p] + '</option>'; }).join('') + '<option value="custom">Current setting (your own numbers)</option>';
+        sel.value = hit || 'custom';
+      }
+      const ws = document.getElementById('aa-sel-weights');
+      if (ws) {
+        const sets = window.__aaWeightSets || {};
+        const cur = AUDIT_RISK_FACTORS.map(f => Number((document.getElementById('aa-w-' + f.key) || {}).value)).join(',');
+        const names = [['data', 'Learn from past audit findings (recommended)'], ['equal', 'Equal for every factor'], ['start', 'Original starting weights']].filter(x => sets[x[0]]);
+        let hit = null;
+        names.forEach(x => { if (hit === null && AUDIT_RISK_FACTORS.map(f => sets[x[0]][f.key]).join(',') === cur) hit = x[0]; });
+        ws.innerHTML = names.map(x => '<option value="' + x[0] + '">' + x[1] + '</option>').join('') + '<option value="custom">Current setting</option>';
+        ws.value = hit || 'custom';
+      }
+      aaShowCaps(); aaShowWeights();
+    }
+    function aaInitSettings() {
+      Object.keys(AA_UNITS).forEach(k => {
+        const sel = document.getElementById('aa-sel-' + k);
+        if (sel) sel.innerHTML = aaOptions(k).map(x => '<option value="' + x.v + '">' + x.l + '</option>').join('');
+      });
+      aaSyncCapsWeights();
       updateAuditSettingsPreview();
     }
+    function aaPick(k, v) { const el = document.getElementById('aa-cfg-' + k); if (el) el.value = v; updateAuditSettingsPreview(); aaMarkUnsaved(); }
     function updateAuditSettingsPreview() {
       const rows = window.__aaPreviewRows || [];
       const cfg = window.auditAnalysisState;
@@ -12198,40 +12284,25 @@ html.page-fade-ready body {
       const ms = val('minScore'), mg = val('minGapDays'), od = val('overdueDays'), sp = val('spacingDays');
       if (ms === null || mg === null || od === null || sp === null || !cfg) return;
       const T = rows.length;
-      [['minScore', ms], ['minGapDays', mg], ['overdueDays', od]].forEach(x => { const sl = document.getElementById('aa-sl-' + x[0]); if (sl) sl.value = x[1]; });
-
-      // Headline: what these rules would do vs what is saved
-      const now = aaEstimate(cfg.minScore, cfg.minGapDays, cfg.overdueDays), nw = aaEstimate(ms, mg, od), dl = nw - now;
-      put('result', '<span class="text-[28px] font-extrabold text-slate-800 leading-none">' + nw + '</span> <span class="text-[12px] font-semibold text-slate-700">of ' + T + ' branches would be in the audit queue</span> '
-        + (dl === 0 ? '<span class="text-[11px] text-slate-400">— same as the saved rules</span>' : '<span class="text-[11px] font-bold ' + (dl > 0 ? 'text-accentAmber' : 'text-accentEmerald') + '">' + (dl > 0 ? '+' : '') + dl + ' compared with the saved rules (' + now + ')</span>'));
-
-      // Presets, each with the queue size it would give
-      put('presets', [['Strict', 45, 20, 60], ['Balanced', 55, 30, 90], ['Relaxed', 65, 45, 120]].map(p => {
-        const on = ms === p[1] && mg === p[2] && od === p[3];
-        return '<button type="button" onclick="aaPreset(' + p[1] + ',' + p[2] + ',' + p[3] + ',' + sp + ')" class="px-2.5 py-1 rounded-lg border text-[11px] cursor-pointer active:scale-95 transition-all ' + (on ? 'border-accentIndigo bg-accentIndigo/10 text-accentIndigo' : 'border-coolBorder bg-white text-slate-600 hover:bg-gray-50') + '"><b>' + p[0] + '</b> <span class="text-slate-400">· ' + aaEstimate(p[1], p[2], p[3]) + ' branches</span></button>';
-      }).join(''));
-
-      const bars = (counts, color) => {
-        const mx = Math.max(1, ...counts);
-        return counts.map((c, i) => '<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%"><span style="font-size:9px;line-height:1;color:#64748b">' + (c || '') + '</span><div style="width:100%;height:' + (c / mx * 78) + '%;min-height:' + (c ? 2 : 0) + 'px;background:' + color(i) + ';border-radius:2px 2px 0 0"></div></div>').join('');
-      };
-      const line = (pct, col) => '<div style="position:absolute;top:0;bottom:0;left:' + Math.max(0, Math.min(100, pct)) + '%;width:2px;margin-left:-1px;background:' + col + '"></div>';
-
-      // Chart 1: risk score of every branch
-      const c1 = new Array(20).fill(0);
-      rows.forEach(r => { c1[Math.min(19, Math.floor(r.s / 5))]++; });
-      put('hist1', bars(c1, i => (i * 5 >= ms ? '#6366f1' : '#cbd5e1')) + line(ms, '#4338ca'));
+      // keep each dropdown in step with its number box
+      [['minScore', ms], ['minGapDays', mg], ['overdueDays', od], ['spacingDays', sp]].forEach(x => {
+        const sel = document.getElementById('aa-sel-' + x[0]); if (!sel) return;
+        Array.from(sel.querySelectorAll('[data-custom]')).forEach(o => o.remove());
+        if (!Array.from(sel.options).some(o => o.value === String(x[1]))) {
+          const o = document.createElement('option'); o.value = String(x[1]); o.setAttribute('data-custom', '1');
+          o.textContent = (x[1] === cfg[x[0]] ? 'Current setting' : 'Custom') + ' (' + x[1] + ' ' + AA_UNITS[x[0]] + ')';
+          sel.appendChild(o);
+        }
+        sel.value = String(x[1]);
+      });
       const byScore = rows.filter(r => r.s >= ms).length, byFlag = rows.filter(r => r.s < ms && r.f).length;
-      put('minScore', '<b>' + byScore + '</b> of ' + T + ' branches score ' + ms + ' or more' + (byFlag ? ', plus <b>' + byFlag + '</b> with a data red flag' : '') + '. Lower the line to queue more.');
-
-      // Chart 2: days since each branch was last audited
-      const c2 = new Array(13).fill(0);
-      rows.forEach(r => { if (r.d !== null) c2[Math.min(12, Math.floor(r.d / 15))]++; });
-      put('hist2', bars(c2, i => { const lo = i * 15; return lo >= od ? '#fb7185' : (lo < mg ? '#34d399' : '#cbd5e1'); }) + line(mg / 195 * 100, '#059669') + line(od / 195 * 100, '#e11d48'));
-      const held = rows.filter(r => r.d !== null && r.d < mg).length, over = rows.filter(r => r.d !== null && r.d >= od).length, nev = rows.filter(r => r.d === null).length;
-      put('gaps', '<span style="color:#059669"><b>' + held + '</b> audited within ' + mg + ' days (left alone)</span> · <span style="color:#e11d48"><b>' + over + '</b> at ' + od + '+ days (overdue)</span>' + (nev ? ' · <span class="text-slate-500"><b>' + nev + '</b> never audited (always queued)</span>' : ''));
-
-      put('spacingDays', 'One auditor can start about <b>' + (Math.round((5 / sp) * 10) / 10) + '</b> branch audit' + (sp === 5 ? '' : 's') + ' a week.');
+      put('minScore', '<b>' + byScore + '</b> of ' + T + ' branches score ' + ms + ' or more' + (byFlag ? ', plus <b>' + byFlag + '</b> with a data red flag' : '') + '.');
+      const held = rows.filter(r => r.d !== null && r.d < mg).length;
+      put('minGapDays', '<b>' + held + '</b> branch' + (held === 1 ? '' : 'es') + ' audited within the last ' + mg + ' days will be left alone.');
+      const over = rows.filter(r => r.d !== null && r.d >= od).length;
+      put('overdueDays', '<b>' + over + '</b> branch' + (over === 1 ? ' has' : 'es have') + ' gone ' + od + ' days or more without an audit.');
+      const A = window.__aaAuditors || 1, Q = window.__aaQueue || 0, per = Math.ceil(Q / A), wk = Math.round((per * sp / 5) * 10) / 10;
+      put('spacingDays', '<b>' + Q + '</b> queued ÷ <b>' + A + '</b> auditor' + (A === 1 ? '' : 's') + ' = about ' + per + ' audits each, or <b>' + wk + '</b> weeks of work.');
     }
     window.addEventListener('load', function () { try { updateAuditSettingsPreview(); } catch (e) {} });
 
@@ -13572,6 +13643,15 @@ html.page-fade-ready body {
       const notice = cfg.notice; cfg.notice = null;
       const __kOf = new Map();
       a.neverAudited.forEach(r => __kOf.set(r, 'never')); a.scheduledPastDue.forEach(r => __kOf.set(r, 'past')); a.scheduledUpcoming.forEach(r => __kOf.set(r, 'up'));
+      window.__aaCapVals = { findingsCap: a.rows.map(r => auditFindingsWeighted(r.b)), sizeCap: a.rows.map(r => auditAccountsOf(r.b)), repoCap: a.rows.map(r => auditRepoCountOf(r.b)), shortfallCap: a.rows.map(r => auditShortfallOf(r.b)) };
+      window.__aaWeightSets = (() => {
+        const out = {}; const eq = {}, st = {};
+        AUDIT_RISK_FACTORS.forEach(f => { eq[f.key] = 1; st[f.key] = f.defaultWeight; });
+        try { if (a.rows.length >= AUDIT_WEIGHTS_MIN_ROWS) { const r = computeDataDrivenAuditRiskWeights(a.rows, cfg); if (r.usableFactors >= 2) out.data = auditNormalizeWeights100(r.weights); } } catch (e) {}
+        out.equal = auditNormalizeWeights100(eq); out.start = auditNormalizeWeights100(st);
+        return out;
+      })();
+      window.__aaQueue = a.suggestions.length; window.__aaAuditors = Math.max(1, a.auditorNames.length);
       window.__aaPreviewRows = a.rows.map(r => ({ s: r.risk.score, d: (r.info.intervalDays === undefined ? null : r.info.intervalDays), f: !!(r.risk.redFlags && r.risk.redFlags.length), t: r.risk.tier.key, k: __kOf.get(r) || 'free' }));
 
       // Attribute string that makes an element click-through (mouse + keyboard).
@@ -13854,16 +13934,11 @@ html.page-fade-ready body {
           ? 'Not shown for Audit findings itself — comparing findings to findings would always show a perfect link, which is not meaningful.'
           : (info.text.match(/title="([^"]*)"/) || [])[1] || '';
         return `
-          <div class="flex items-center gap-3 px-3 py-1.5" title="${escapeHTML(f.why)}">
-            <button type="button" onclick="showAuditFactorInfo('${f.key}', this)" data-evidence="${escapeHTML(evidenceTip)}" title="Tap to see how this is scored" class="text-[11px] font-semibold text-slate-700 w-28 sm:w-40 leading-tight text-left cursor-pointer hover:text-accentIndigo underline decoration-dotted decoration-slate-300 underline-offset-2 bg-transparent border-0 p-0">${escapeHTML(f.label)} <span class="text-accentIndigo/70 no-underline">ⓘ</span></button>
-            <input id="aa-ws-${f.key}" type="range" min="0" max="100" step="1" value="${val}"
-              oninput="document.getElementById('aa-w-${f.key}').value=this.value; previewAuditRiskWeights();"
-              title="Drag to change how much this factor counts" class="flex-1 h-1.5 accent-accentIndigo cursor-pointer">
-            <input id="aa-w-${f.key}" type="number" inputmode="numeric" min="0" max="100" step="1" value="${val}"
-              oninput="document.getElementById('aa-ws-${f.key}').value=this.value; previewAuditRiskWeights();"
-              onkeydown="if(event.key==='Enter'){applyAllAuditAnalysisSettings()}"
-              title="Percent of the score this factor counts for. All factors must add up to 100." class="w-12 px-1 py-1 border border-coolBorder rounded-md text-[11px] text-center focus:outline-none focus:ring-1 focus:ring-accentCyan">
-            <span class="w-5 text-left text-[11px] font-extrabold text-accentIndigo">%</span>
+          <div class="flex items-center gap-3 px-3 py-2" title="${escapeHTML(f.why)}">
+            <button type="button" onclick="showAuditFactorInfo('${f.key}', this)" data-evidence="${escapeHTML(evidenceTip)}" title="Tap to see how this is scored" class="text-[11px] font-semibold text-slate-700 w-32 sm:w-44 leading-tight text-left cursor-pointer hover:text-accentIndigo bg-transparent border-0 p-0">${escapeHTML(f.label)} <span class="text-accentIndigo/70">ⓘ</span></button>
+            <div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div id="aa-wb-${f.key}" class="h-full bg-accentIndigo" style="width:${val}%"></div></div>
+            <span id="aa-wt-${f.key}" class="w-10 text-right text-[11px] font-extrabold text-accentIndigo">${val}%</span>
+            <input type="hidden" id="aa-w-${f.key}" value="${val}">
           </div>`;
       }).join('');
 
@@ -13985,85 +14060,63 @@ html.page-fade-ready body {
 
           <div class="px-3.5 pb-3.5 pt-2.5 border-t border-coolBorder space-y-3">
 
-            <!-- Dashboard: real data with the rules drawn on top -->
-            <div class="rounded-lg border border-coolBorder bg-white p-3">
-              <div id="aa-pv-result"></div>
-              <div class="flex flex-wrap items-center gap-1.5 mt-2"><span class="text-[10.5px] text-slate-500 mr-1">Quick start:</span><span id="aa-pv-presets" class="flex flex-wrap gap-1.5"></span></div>
-              <div class="text-[10px] text-slate-400 mt-1.5">Drag the sliders or type a number. Charts and counts update as you go. Nothing changes until you press Save.</div>
+            <div class="rounded-lg border border-coolBorder bg-white">
+              <div class="px-3 py-1.5 bg-gray-50/70 border-b border-coolBorder rounded-t-lg text-[10.5px] text-slate-500">Each choice is worked out from all your branches. Pick one, or type your own number. Nothing changes until you press Save.</div>
+              <div class="divide-y divide-coolBorder">
+                <div class="px-3 py-3">
+                  <div class="text-[12px] font-bold text-slate-800">Audit the riskiest branches</div>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <select id="aa-sel-minScore" onchange="aaPick('minScore',this.value)" aria-label="Audit the riskiest branches" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                    <span class="flex items-center gap-1 shrink-0">${cfgInput('minScore', 1, 100)}<span class="text-[10px] text-slate-400 w-9">points</span></span>
+                  </div>
+                  <div id="aa-pv-minScore" class="text-[11px] text-slate-500 mt-1.5"></div>
+                </div>
+                <div class="px-3 py-3">
+                  <div class="text-[12px] font-bold text-slate-800">Leave a branch alone after an audit for</div>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <select id="aa-sel-minGapDays" onchange="aaPick('minGapDays',this.value)" aria-label="Leave a branch alone after an audit for" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                    <span class="flex items-center gap-1 shrink-0">${cfgInput('minGapDays', 0, 3650)}<span class="text-[10px] text-slate-400 w-9">days</span></span>
+                  </div>
+                  <div id="aa-pv-minGapDays" class="text-[11px] text-slate-500 mt-1.5"></div>
+                </div>
+                <div class="px-3 py-3">
+                  <div class="text-[12px] font-bold text-slate-800">Queue any branch not audited for</div>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <select id="aa-sel-overdueDays" onchange="aaPick('overdueDays',this.value)" aria-label="Queue any branch not audited for" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                    <span class="flex items-center gap-1 shrink-0">${cfgInput('overdueDays', 1, 3650)}<span class="text-[10px] text-slate-400 w-9">days</span></span>
+                  </div>
+                  <div id="aa-pv-overdueDays" class="text-[11px] text-slate-500 mt-1.5"></div>
+                </div>
+                <div class="px-3 py-3">
+                  <div class="text-[12px] font-bold text-slate-800">Spread audits so each auditor needs</div>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <select id="aa-sel-spacingDays" onchange="aaPick('spacingDays',this.value)" aria-label="Spread audits so each auditor needs" class="min-w-0 flex-1 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                    <span class="flex items-center gap-1 shrink-0">${cfgInput('spacingDays', 1, 3650)}<span class="text-[10px] text-slate-400 w-9">days</span></span>
+                  </div>
+                  <div id="aa-pv-spacingDays" class="text-[11px] text-slate-500 mt-1.5"></div>
+                </div>
+              </div>
             </div>
 
-            <div class="rounded-lg border border-coolBorder bg-white p-3">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0"><div class="text-[12px] font-bold text-slate-800">1. Which branches are risky enough to audit?</div><div class="text-[10.5px] text-slate-500 leading-snug">Each bar is a group of branches with a similar risk score. Branches to the right of the line get queued.</div></div>
-                <span class="flex items-center gap-1 shrink-0">${cfgInput('minScore', 1, 100)}<span class="text-[10px] text-slate-400">points</span></span>
+            <div class="rounded-lg border border-coolBorder bg-white">
+              <div class="px-3 py-3">
+                <div class="text-[12px] font-bold text-slate-800">Decide how much each factor counts by</div>
+                <select id="aa-sel-weights" onchange="aaPickWeights(this.value)" aria-label="How much each factor counts" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+                <div id="aa-pv-weights" class="text-[11px] text-slate-500 mt-1.5"></div>
               </div>
-              <div class="mt-2 relative flex gap-0.5" style="height:88px" id="aa-pv-hist1"></div>
-              <input id="aa-sl-minScore" type="range" min="1" max="100" step="1" value="${cfg.minScore}" oninput="aaSl('minScore',this.value)" aria-label="Risk score to queue" class="w-full h-1.5 mt-1 accent-accentIndigo cursor-pointer">
-              <div class="flex justify-between text-[9px] text-slate-400 mt-0.5"><span>0</span><span>25</span><span>50</span><span>75</span><span>100 risk score</span></div>
-              <div id="aa-pv-minScore" class="text-[11px] text-slate-600 mt-1.5"></div>
+              <div class="divide-y divide-coolBorder border-t border-coolBorder">${weightInputs}</div>
             </div>
 
-            <div class="rounded-lg border border-coolBorder bg-white p-3">
-              <div class="text-[12px] font-bold text-slate-800">2. How long between audits?</div>
-              <div class="text-[10.5px] text-slate-500 leading-snug">Each bar is a group of branches by days since their last audit. Green = too recent to audit again. Red = overdue.</div>
-              <div class="mt-2 relative flex gap-0.5" style="height:88px" id="aa-pv-hist2"></div>
-              <div class="flex justify-between text-[9px] text-slate-400 mt-0.5"><span>0</span><span>30</span><span>60</span><span>90</span><span>120</span><span>150</span><span>180+ days</span></div>
-              <div id="aa-pv-gaps" class="text-[11px] mt-1 mb-2"></div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><div class="flex items-center justify-between gap-2"><span class="text-[11px] font-bold text-slate-700">Leave alone after an audit for</span><span class="flex items-center gap-1 shrink-0">${cfgInput('minGapDays', 0, 3650)}<span class="text-[10px] text-slate-400">days</span></span></div>
-                  <input id="aa-sl-minGapDays" type="range" min="0" max="195" step="1" value="${cfg.minGapDays}" oninput="aaSl('minGapDays',this.value)" aria-label="Days to leave a branch alone after an audit" class="w-full h-1.5 mt-1 accent-accentEmerald cursor-pointer"></div>
-                <div><div class="flex items-center justify-between gap-2"><span class="text-[11px] font-bold text-slate-700">Healthy branch queued after</span><span class="flex items-center gap-1 shrink-0">${cfgInput('overdueDays', 1, 3650)}<span class="text-[10px] text-slate-400">days</span></span></div>
-                  <input id="aa-sl-overdueDays" type="range" min="1" max="195" step="1" value="${cfg.overdueDays}" oninput="aaSl('overdueDays',this.value)" aria-label="Days before even a healthy branch is queued" class="w-full h-1.5 mt-1 accent-accentRose cursor-pointer"></div>
-              </div>
-              <div class="text-[10px] text-slate-400 mt-1.5">Riskier ratings get shorter limits: Critical ${auditTierCycleDays('CRITICAL', cfg)} days, High ${auditTierCycleDays('HIGH', cfg)}, Medium ${auditTierCycleDays('MEDIUM', cfg)}, Low ${cfg.overdueDays}.</div>
+            <div class="rounded-lg border border-coolBorder bg-white px-3 py-3">
+              <div class="text-[12px] font-bold text-slate-800">A branch scores the full 100 on a factor when it is in the worst</div>
+              <select id="aa-sel-caps" onchange="aaPickCaps(this.value)" aria-label="Worst-case level for each factor" class="w-full mt-1.5 px-2 py-1.5 border border-coolBorder rounded-md text-[11.5px] bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan"></select>
+              <div id="aa-pv-caps" class="text-[11px] text-slate-500 mt-1.5"></div>
+              <span class="hidden">${cfgInput('findingsCap', 1, 1000)}${cfgInput('sizeCap', 1, 10000000)}${cfgInput('repoCap', 1, 100000)}${cfgInput('shortfallCap', 1, 10000000)}</span>
             </div>
 
-            <div class="rounded-lg border border-coolBorder bg-white p-3 flex items-start justify-between gap-3">
-              <div class="min-w-0"><div class="text-[12px] font-bold text-slate-800">3. How many working days does one audit take?</div><div class="text-[10.5px] text-slate-500 leading-snug">Used to space out each auditor's suggested dates.</div><div id="aa-pv-spacingDays" class="text-[11px] text-slate-600 mt-1"></div></div>
-              <span class="flex items-center gap-1 shrink-0">${cfgInput('spacingDays', 1, 3650)}<span class="text-[10px] text-slate-400">days</span></span>
-            </div>
-
-            <details class="border border-coolBorder rounded-lg bg-white">
-              <summary class="px-3 py-2 cursor-pointer select-none text-[11px] font-bold text-slate-700">4. Advanced: what counts as "worst case" for each risk factor <span class="font-medium text-slate-400">(set from your data, rarely needs changing)</span></summary>
-              <div class="px-3 pb-3 pt-2 space-y-2.5 border-t border-coolBorder">
-                <p class="text-[10.5px] text-slate-500 leading-snug">Each factor is scored 0 to 100. A branch that reaches the number below gets the full 100 for that factor. The starting numbers are set so roughly the worst 10% of branches score 100.</p>
-                <label class="flex items-start justify-between gap-3" title="Weighted findings: ${window.FINDING_YEARS[2]} ×3, ${window.FINDING_YEARS[1]} ×2, ${window.FINDING_YEARS[0]} ×1.">
-                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-slate-800">Audit findings</b>Recent findings count more (${window.FINDING_YEARS[2]} ×3, ${window.FINDING_YEARS[1]} ×2, ${window.FINDING_YEARS[0]} ×1). ${cfg.findingsCap ? 'This number is about ' + Math.round(cfg.findingsCap / 3) + ' findings in ' + window.FINDING_YEARS[2] + '.' : ''}${findingsSanity ? ' <span class="text-accentIndigo">' + findingsSanity.maxedCount + ' of ' + findingsSanity.total + ' branches are at 100 today.</span>' : ''}</span>
-                  <span class="flex items-center gap-1 shrink-0">${cfgInput('findingsCap', 1, 1000)}<span class="text-[10px] text-slate-400 w-8">points</span></span>
-                </label>
-                <label class="flex items-start justify-between gap-3" title="Branches with this many loan accounts or more score 100 on loan-book size.">
-                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-slate-800">Branch size (loan accounts)</b>A bigger loan book means more money at stake.${sizeSanity ? ' <span class="text-accentIndigo">' + sizeSanity.maxedCount + ' of ' + sizeSanity.total + ' branches are at 100 today.</span>' : ''}</span>
-                  <span class="flex items-center gap-1 shrink-0">${cfgInput('sizeCap', 1, 10000000)}<span class="text-[10px] text-slate-400 w-8">accts</span></span>
-                </label>
-                <label class="flex items-start justify-between gap-3" title="Branches with this many repossessions or more score 100 on the repo-count part of the Repossessions factor.">
-                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-slate-800">Repossessions in the latest month</b>Number of repossessions that earns the full 100 on the count part of this factor.</span>
-                  <span class="flex items-center gap-1 shrink-0">${cfgInput('repoCap', 1, 100000)}<span class="text-[10px] text-slate-400 w-8">repos</span></span>
-                </label>
-                <label class="flex items-start justify-between gap-3" title="Accounts not collecting = accounts × (100 − collection efficiency %).">
-                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-slate-800">Accounts not being collected</b>Accounts × (100 − collection efficiency %), so the same efficiency matters more at a bigger branch.</span>
-                  <span class="flex items-center gap-1 shrink-0">${cfgInput('shortfallCap', 1, 10000000)}<span class="text-[10px] text-slate-400 w-8">accts</span></span>
-                </label>
-                <button type="button" onclick="resetAuditRiskCaps()" title="Recompute all four numbers from the current portfolio's 90th percentile" class="px-2 py-1 text-[10px] font-bold bg-white border border-coolBorder rounded-md hover:bg-gray-100 active:scale-95 transition-all cursor-pointer">Reset these four from current data</button>
-              </div>
-            </details>
-
-            <!-- Weights: shown inline, no second click needed -->
-            <div>
-              <div class="flex items-center gap-1.5 mb-1">
-                <h4 class="text-[11px] font-bold text-slate-700">How much each factor counts toward the risk score</h4>
-                <span class="text-[10px] text-slate-400">Give each factor a share. The total must be 100%.</span>
-              </div>
-              <div class="divide-y divide-coolBorder border border-coolBorder rounded-lg bg-white overflow-hidden">${weightInputs}</div>
-              
-              <div class="flex flex-wrap items-center gap-2 pt-1.5">
-                <span id="aa-w-total" class="inline-flex items-center px-2 py-1 rounded-md border text-[10px] font-extrabold whitespace-nowrap bg-accentEmerald/10 text-accentEmerald border-accentEmerald/30">✓ Total ${weightsTotalNow}% — ready to save</span>
-                <span id="aa-w-hint" class="hidden text-[9.5px] font-bold text-accentAmber">Not saved yet — press Save.</span>
-                <span class="ml-auto flex items-center gap-2">
-                  <button type="button" onclick="suggestAuditRiskWeightsFromData()" title="Set weights proportional to each factor's correlation with actual findings" class="px-2 py-1 text-[9.5px] font-bold bg-accentIndigo/10 text-accentIndigo border border-accentIndigo/20 rounded-md hover:brightness-95 active:scale-95 transition-all cursor-pointer whitespace-nowrap">Suggest from data</button>
-                  <button type="button" onclick="resetAuditRiskWeights()" title="Re-derive weights from findings correlation; falls back to the original starting numbers only if there isn't enough audit history yet" class="px-2 py-1 text-[9.5px] font-bold bg-white border border-coolBorder rounded-md hover:bg-gray-100 active:scale-95 transition-all cursor-pointer whitespace-nowrap">Reset</button>
-                  <button type="button" onclick="applyAllAuditAnalysisSettings()" aria-label="Apply all settings (thresholds and weights)" class="px-2.5 py-1 text-[10px] font-extrabold bg-accentCyan text-white rounded-lg hover:brightness-95 active:scale-95 transition-all cursor-pointer whitespace-nowrap">Save</button>
-                </span>
-              </div>
+            <div class="flex items-center justify-end gap-3">
+              <span id="aa-w-hint" class="hidden text-[10px] font-bold text-accentAmber">Not saved yet. Press Save.</span>
+              <button type="button" onclick="applyAllAuditAnalysisSettings()" aria-label="Save all settings" class="px-4 py-1.5 text-[11px] font-extrabold bg-accentCyan text-white rounded-lg hover:brightness-95 active:scale-95 transition-all cursor-pointer whitespace-nowrap">Save</button>
             </div>
           </div>
 
@@ -14212,7 +14265,7 @@ html.page-fade-ready body {
           </div>
         </details>
       </div>`;
-      try { updateAuditSettingsPreview(); } catch (e) {}
+      try { aaInitSettings(); } catch (e) {}
     }
 
     // Popup opened from the AUDITOR NEXT ASSIGNMENT stock card. Reuses the
