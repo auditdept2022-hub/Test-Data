@@ -31,6 +31,12 @@
        confirm entirely. overscroll-behavior-x only affects the
        horizontal axis, so vertical scroll/bounce elsewhere is unchanged. */
     html, body { overscroll-behavior-x: none; }
+    /* No sideways page scroll, ever. `clip` (unlike `hidden`) does not create a
+       scroll container, so the sticky top header keeps working. Wide tables still
+       scroll inside their own overflow-x:auto boxes. */
+    html, body { overflow-x: clip; max-width: 100%; }
+    /* Page behind the Priority Audit Queue popup must not scroll while it's open */
+    body:has(.aaq-overlay[style*="display:flex"]) { overflow: hidden; }
     body { padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
     @supports (height: 100dvh) { html, body { min-height: 100dvh; } }
   </style>
@@ -5181,6 +5187,9 @@ html.page-fade-ready body {
             <button id="modalAddFindingBtn" onclick="openAddFindingModal()" title="Add a finding (raw data entry)" aria-label="Add a finding (raw data entry)" class="hidden p-2 modal-header-icon-btn active:scale-95 rounded-xl transition-all cursor-pointer">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>
             </button>
+            <button id="modalAnalysisSettingsBtn" onclick="toggleAuditSettings()" title="Rating rules &amp; manual settings" aria-label="Rating rules and manual settings" class="hidden p-2 modal-header-icon-btn active:scale-95 rounded-xl transition-all cursor-pointer">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
             <button onclick="openExportPicker('current')" title="Download this data" aria-label="Download this data" class="p-2 modal-header-icon-btn active:scale-95 rounded-xl transition-all cursor-pointer">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
             </button>
@@ -5998,19 +6007,25 @@ html.page-fade-ready body {
           <span class="text-xs font-semibold tracking-wider text-slate-500">AUDIT RISK &amp; SCHEDULE ANALYSIS</span>
           <span class="p-1.5 bg-accentIndigo/10 text-accentIndigo rounded-lg group-hover:bg-accentIndigo group-hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg></span>
         </div>
-        <div class="mt-4 grid grid-cols-3 divide-x divide-coolBorder text-center">
+        <div class="mt-4 grid grid-cols-3 divide-x divide-coolBorder text-center" style="margin-top:.5rem;margin-bottom:.5rem">
           <div class="py-1.5">
             <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentRose" id="stat-audit-risk-attention">—</h3>
-            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">Needs Attention</p>
-          </div>
-          <div class="py-1.5">
-            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentIndigo" id="stat-audit-risk-avg">—</h3>
-            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">Avg. Risk Score</p>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide" title="Branches rated Critical or High on the overall risk score">Critical + High</p>
           </div>
           <div class="py-1.5">
             <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentEmerald" id="stat-audit-risk-ontrack">—</h3>
-            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide">On Track</p>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide" title="Branches rated Medium or Low on the overall risk score">Medium + Low</p>
           </div>
+          <div class="py-1.5">
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-accentIndigo" id="stat-audit-risk-avg">—</h3>
+            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 uppercase tracking-wide" title="Average overall risk score (0–100) across all branches">Avg. Risk Score</p>
+          </div>
+        </div>
+        <!-- Tier counts sit in the card's own bottom padding (absolute), so they
+             take NO layout height and the card keeps its original size — the
+             neighbouring stack cards can't be pushed around by it. -->
+        <div style="position:absolute;left:1rem;right:1rem;bottom:11px;container-type:inline-size;pointer-events:none">
+          <div id="stat-audit-risk-sub" class="flex justify-center items-center font-semibold text-slate-500" style="white-space:nowrap;line-height:1;gap:.9em;font-size:9px;font-size:clamp(7px,3.5cqw,9px)" title="Overall risk rating of all branches"></div>
         </div>
       </div>
 
@@ -7008,6 +7023,409 @@ html.page-fade-ready body {
         </div>`;
     }
 
+    // Monthly performance block shown inside the branch popup: the four
+    // trend cards (Efficiency, Repo Rate, No. of Repo, Total Accounts),
+    // Sales Details (INS / COD / CA) and Service Metrics — same numbers and
+    // colour rules as the branch's Detailed Profile.
+    function buildBranchMetricsHtml(b) {
+      if (!b) return '';
+      const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const labels = (activeData.summary && activeData.summary.trendLabels) || ['MARCH', 'APRIL', 'LATEST'];
+      const salesLabels = (activeData.summary && activeData.summary.salesTrendLabels) || labels;
+      const num = v => Number(v) || 0;
+      const sm = b.salesMar || {}, sa = b.salesApr || {}, sy = b.salesMay || {};
+      const g = (o, k) => num(o[k]);
+      const totalIns = g(sm,'ins') + g(sa,'ins') + g(sy,'ins');
+      const totalCod = g(sm,'cod') + g(sa,'cod') + g(sy,'cod');
+      const totalCa  = g(sm,'ca')  + g(sa,'ca')  + g(sy,'ca');
+      const avgSales = totalIns - totalCa;
+      const target = num(b.serviceTarget);
+      const serviceVals = [b.serviceMar, b.serviceApr, b.serviceMay];
+      const effAccent = b.effLatest < 50 ? 'text-accentRose' : (b.effLatest < 70 ? 'text-accentAmber' : 'text-accentEmerald');
+      const repoAccent = b.repoRate > 7 ? 'text-accentRose' : (b.repoRate > 4 ? 'text-accentAmber' : 'text-accentEmerald');
+
+      const card = (label, values, suffix, accent, invert) => {
+        const numeric = values.map(v => parseFloat(v));
+        const delta = Math.round((numeric[numeric.length - 1] - numeric[numeric.length - 2]) * 100) / 100;
+        const good = invert ? delta < 0 : delta > 0;
+        const bad = invert ? delta > 0 : delta < 0;
+        const sfx = suffix || '';
+        const deltaHtml = (good || bad)
+          ? `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold ${good ? 'text-accentEmerald' : 'text-accentRose'}">${delta > 0 ? '▲ +' : '▼ '}${delta}${sfx}</span>`
+          : `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-400">— 0${sfx}</span>`;
+        return `
+          <div class="bg-white rounded-xl border border-coolBorder p-2.5 shadow-sm">
+            <div class="flex items-center justify-between mb-1.5">
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${label}</p>${deltaHtml}
+            </div>
+            <div class="flex items-stretch divide-x divide-coolBorder">
+              ${values.map((v, i) => { const last = i === values.length - 1; return `
+                <div class="flex flex-col items-center flex-1 ${last ? 'bg-slate-50 rounded-lg -my-1 py-1' : ''}">
+                  <span class="text-sm font-bold leading-tight ${last ? accent : 'text-slate-500'}">${esc(v)}${sfx}</span>
+                  <span class="text-[8px] text-slate-400 font-semibold uppercase mt-0.5 tracking-wide truncate max-w-full px-1">${esc(labels[i])}</span>
+                </div>`; }).join('')}
+            </div>
+          </div>`;
+      };
+
+      const salesRow = (name, k, tot) => `
+        <tr>
+          <td class="p-2 text-left font-semibold text-slate-600">${name}</td>
+          <td class="p-2 font-bold text-slate-800">${g(sm,k)}</td>
+          <td class="p-2 font-bold text-slate-800">${g(sa,k)}</td>
+          <td class="p-2 font-bold text-slate-800">${g(sy,k)}</td>
+          <td class="p-2 font-bold text-accentIndigo bg-accentIndigo/5">${tot}</td>
+        </tr>`;
+
+      const serviceRows = serviceVals.map((v, i) => {
+        const pct = target > 0 ? Math.round((num(v) / target) * 100) : 0;
+        const bar = pct >= 100 ? 'bg-accentEmerald' : (pct >= 70 ? 'bg-accentAmber' : 'bg-accentRose');
+        const col = pct >= 100 ? 'text-accentEmerald' : (pct >= 70 ? 'text-accentAmber' : 'text-accentRose');
+        return `
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">${esc(labels[i])}</span>
+              <span class="text-sm text-slate-800">₱${num(v).toLocaleString()} <span class="font-bold ${col}">(${pct}% of target)</span></span>
+            </div>
+            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div class="${bar} h-full rounded-full" style="width:${Math.min(100, pct)}%"></div></div>
+          </div>`;
+      }).join('');
+
+      const head = (color, icon, title, right) => `
+        <h4 class="text-xs font-bold text-slate-500 uppercase mb-2.5 tracking-wider flex items-center justify-between flex-wrap gap-2">
+          <span class="flex items-center gap-2"><svg class="w-4 h-4 ${color}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>${title}</span>${right}
+        </h4>`;
+
+      return `
+        <div class="space-y-3 mt-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            ${card('Efficiency Rate', [b.effMar, b.effApr, b.effLatest], '%', effAccent)}
+            ${card('Repo Rate', [num(b.repoRateMar ?? b.repoRate).toFixed(2), num(b.repoRateApr ?? b.repoRate).toFixed(2), num(b.repoRateLatest ?? b.repoRate).toFixed(2)], '%', repoAccent, true)}
+            ${card('No. of Repo', [b.noOfRepoMar ?? b.noOfRepo, b.noOfRepoApr ?? b.noOfRepo, b.noOfRepoLatest ?? b.noOfRepo], '', 'text-slate-800', true)}
+            ${card('Total Accounts', [b.accountsMar, b.accountsApr, b.accountsMay], '', 'text-accentBlue')}
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-3.5 border border-coolBorder shadow-sm">
+            ${head('text-accentIndigo', '<rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line>', 'Sales Details (INS, COD, CA)',
+              `<span class="flex flex-wrap items-center gap-2">
+                <span class="bg-accentAmber/10 text-accentAmber px-2.5 py-1 rounded-lg border border-accentAmber/20 normal-case tracking-normal font-semibold">Expected Sales (INS/COD): <strong class="ml-1">${b.expectedIns || 0} / ${b.expectedCod || 0}</strong></span>
+                <span class="bg-accentIndigo/10 text-accentIndigo px-2.5 py-1 rounded-lg border border-accentIndigo/20 normal-case tracking-normal font-semibold">3-Month Avg Sales (INS − CA): <strong class="ml-1">${avgSales}</strong></span>
+              </span>`)}
+            <div class="overflow-x-auto rounded-xl border border-coolBorder">
+              <table class="w-full min-w-[480px] text-sm text-center border-collapse">
+                <thead class="bg-white text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                  <tr><th class="p-2 text-left bg-white">Metric</th><th class="p-2 bg-white">${esc(salesLabels[0])}</th><th class="p-2 bg-white">${esc(salesLabels[1])}</th><th class="p-2 bg-white">${esc(salesLabels[2])}</th><th class="p-2 bg-accentIndigo/5 text-accentIndigo">3-Mo Total</th></tr>
+                </thead>
+                <tbody class="divide-y divide-coolBorder bg-white">
+                  ${salesRow('Installment (INS)', 'ins', totalIns)}
+                  ${salesRow('Cash on Delivery (COD)', 'cod', totalCod)}
+                  ${salesRow('Closed Account (CA)', 'ca', totalCa)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-3.5 border border-coolBorder shadow-sm">
+            ${head('text-accentCyan', '<circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>', 'Service Metrics (3-Month Trend)',
+              `<span class="bg-accentCyan/10 text-accentCyan px-2.5 py-1 rounded-lg border border-accentCyan/20 normal-case tracking-normal font-semibold">Monthly Target: <strong class="ml-1">₱${target.toLocaleString()}</strong></span>`)}
+            <div class="bg-white rounded-xl border border-coolBorder p-3 space-y-2.5">${serviceRows}</div>
+          </div>
+        </div>`;
+    }
+
+    // Styles + phone "card" layout for the branch tables used inside the
+    // Audit Risk & Schedule Analysis modal. The tables keep their normal
+    // desktop layout; below 640px each branch row becomes a stacked card.
+    // The tables are rendered as HTML strings, so this tags their cells once
+    // they appear (MutationObserver) instead of changing every template.
+    (function () {
+      function addStyles() {
+        if (document.getElementById('aaResponsiveStyle')) return;
+        var st = document.createElement('style');
+        st.id = 'aaResponsiveStyle';
+        st.textContent = `
+      /* Priority Audit Queue popup */
+      .aaq-overlay{padding:12px}
+      .aaq-card{display:flex;flex-direction:column;width:100%;max-width:1200px;max-height:92vh;background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,.35);overflow:hidden}
+      .aaq-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #e2e8f0;background:linear-gradient(90deg,#f8fafc,#fff)}
+      .aaq-title{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+      .aaq-h{font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#1e293b;white-space:nowrap}
+      .aaq-sub{font-size:11px;font-weight:500;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+      .aaq-count{padding:2px 9px;border-radius:999px;background:#4f46e5;color:#fff;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+      .aaq-close{width:30px;height:30px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#64748b;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+      .aaq-close:hover{background:#f1f5f9}
+      .aaq-toolbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0}
+      .aaq-search{position:relative;flex:1 1 220px;min-width:0}
+      .aaq-search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#94a3b8;pointer-events:none}
+      .aaq-search input{box-sizing:border-box;width:100%;padding:6px 10px 6px 28px;border:1px solid #e2e8f0;border-radius:10px;font-size:12px;background:#fff;outline:none;color:#334155}
+      .aaq-toolbar select{box-sizing:border-box;padding:6px 8px;border:1px solid #e2e8f0;border-radius:10px;font-size:12px;background:#fff;color:#334155;min-width:0;max-width:170px;outline:none}
+      .aaq-search input:focus,.aaq-toolbar select:focus{border-color:#0ea5c7;box-shadow:0 0 0 2px rgba(14,165,199,.2)}
+      .aaq-btn{padding:6px 12px;border-radius:10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;border:1px solid transparent;flex:0 0 auto}
+      .aaq-btn:active{transform:scale(.97)}
+      .aaq-btn-p{background:#0ea5c7;color:#fff}
+      .aaq-btn-s{background:#fff;border-color:#e2e8f0;color:#475569}
+      .aaq-chips{display:flex;align-items:center;gap:8px;padding:9px 14px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+      .aaq-chips::-webkit-scrollbar{display:none}
+      .aaq-hint{padding:6px 14px 0;font-size:10px;color:#94a3b8}
+      .aaq-body{flex:1;min-height:0;overflow:auto;padding:0 14px 16px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+      /* Top spacing lives INSIDE the scrolled content (margin), never as scroller
+         padding: a sticky header pins to the scrollport edge and ignores padding,
+         so padding left a strip where rows scrolled visibly ABOVE the header. */
+      .aaq-body>*:first-child{margin-top:12px}
+      .aaq-card,.aaq-overlay{overscroll-behavior:contain}
+      /* Freeze the header on the cells (more reliable than sticky <thead>, esp. iOS Safari) */
+      .aa-rtable thead{position:static !important;box-shadow:none !important}
+      .aa-rtable thead th{position:sticky;top:0;z-index:11;background:#f9fafb !important;box-shadow:0 1px 0 #e5e7eb,0 3px 5px -3px rgba(15,23,42,.18)}
+      @media (max-width:639px){
+        .aaq-overlay{padding:0}
+        .aaq-card{max-height:100vh;height:100vh;height:100dvh;border-radius:0}
+        .aaq-head{padding:8px 12px}
+        .aaq-sub,.aaq-hint{display:none}
+        .aaq-toolbar{flex-wrap:wrap;padding:8px 12px;gap:6px}
+        .aaq-search{flex:1 1 100%}
+        .aaq-toolbar select{flex:1 1 0;max-width:none}
+        .aaq-chips{padding:8px 12px}
+        .aaq-body{padding:0 8px 14px}
+        .aaq-body>*:first-child{margin-top:10px}
+      }
+      /* Branch tables (Priority queue + Total Branches lists).
+         Wide screens: normal table. Below 1100px the 9 columns get
+         squeezed, so each branch becomes a card instead. */
+      @media (min-width:1100px){
+        .aa-rtable td.aa-c-risk>div{max-width:260px !important}
+      }
+      @media (max-width:1099px){
+        .aa-rtable{min-width:0 !important;width:100%}
+        .aa-rtable thead{display:none}
+        .aa-rtable,.aa-rtable tbody{display:block}
+        .aa-rtable tr.aa-main{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-areas:"branch branch status status" "risk risk last days" "aud date act act";gap:10px 14px;align-items:start;padding:12px 14px}
+        .aa-rtable tr.aa-main>td{display:block;padding:0 !important;text-align:left !important;min-width:0;white-space:normal !important}
+        .aa-rtable td.aa-c-prio{display:none !important}
+        .aa-rtable td.aa-c-branch{grid-area:branch;font-size:14px !important}
+        .aa-rtable td.aa-c-branch::before{content:"#" attr(data-prio);font-size:10px;font-weight:800;color:#94a3b8;margin-right:6px}
+        .aa-rtable td.aa-c-status{grid-area:status}
+        .aa-rtable td.aa-c-risk{grid-area:risk}
+        .aa-rtable td.aa-c-last{grid-area:last}
+        .aa-rtable td.aa-c-days{grid-area:days}
+        .aa-rtable td.aa-c-aud{grid-area:aud}
+        .aa-rtable td.aa-c-date{grid-area:date}
+        .aa-rtable td.aa-c-act{grid-area:act;align-self:end}
+        .aa-rtable td.aa-c-risk>div{max-width:none !important;margin:4px 0 0 !important;text-align:left;font-size:10px !important}
+        .aa-rtable td[data-label]::before{content:attr(data-label);display:block;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;margin-bottom:3px}
+        .aa-rtable td.aa-c-act button{width:100%;padding:8px 0 !important;font-size:12px !important}
+        .aa-rtable tr.aa-detail{display:block}
+        .aa-rtable tr.aa-detail.hidden{display:none}
+        .aa-rtable tr.aa-detail>td{display:block;padding:10px !important}
+      }
+      @media (max-width:639px){
+        .aa-rtable tr.aa-main{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"branch branch" "status status" "risk risk" "last days" "aud date" "act act"}
+      }
+`;
+        document.head.appendChild(st);
+      }
+      var LABELS = [null, null, 'Status', 'Risk score', 'Last audited', 'Days since', 'Auditor', 'Suggested date', null];
+      var CLS = ['aa-c-prio', 'aa-c-branch', 'aa-c-status', 'aa-c-risk', 'aa-c-last', 'aa-c-days', 'aa-c-aud', 'aa-c-date', 'aa-c-act'];
+      function decorate(root) {
+        root.querySelectorAll('table.aa-rtable:not([data-aa-dec])').forEach(function (t) {
+          t.setAttribute('data-aa-dec', '1');
+          t.querySelectorAll('tbody > tr').forEach(function (tr) {
+            if (tr.id && tr.id.indexOf('audit-risk-detail') === 0) { tr.classList.add('aa-detail'); return; }
+            var td = tr.children;
+            if (td.length !== 9) return;
+            tr.classList.add('aa-main');
+            for (var i = 0; i < 9; i++) {
+              td[i].classList.add(CLS[i]);
+              if (LABELS[i]) td[i].setAttribute('data-label', LABELS[i]);
+            }
+            td[1].setAttribute('data-prio', td[0].textContent.trim());
+          });
+        });
+      }
+      function start() {
+        addStyles();
+        var body = document.getElementById('modalBody');
+        if (!body) return;
+        decorate(body);
+        new MutationObserver(function () { decorate(body); }).observe(body, { childList: true, subtree: true });
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+    })();
+
+    // ---- Branch risk popup (opened by clicking a branch name in the KPI /
+    // Total Branches table). Shows the branch's row summary plus the full
+    // "Why this branch needs attention" score breakdown in its own popup on
+    // top of the list, with an Expand / Restore button and a link through to
+    // the full branch profile. It re-uses the hidden breakdown row that is
+    // already rendered in the table, so the numbers can never disagree.
+    (function () {
+      var STYLE_ID = 'branchRiskPopupStyle';
+      function ensureStyle() {
+        if (document.getElementById(STYLE_ID)) return;
+        var st = document.createElement('style');
+        st.id = STYLE_ID;
+        st.textContent =
+          '#branchRiskPopup{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.55);opacity:0;transition:opacity .2s ease}' +
+          '#branchRiskPopup.brp-show{opacity:1}' +
+          '#branchRiskPopup .brp-dialog{display:flex;flex-direction:column;width:100%;max-width:860px;max-height:88vh;background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,.35);overflow:hidden;transform:scale(.96);transition:transform .2s ease,max-width .25s ease,max-height .25s ease,border-radius .25s ease}' +
+          '#branchRiskPopup.brp-show .brp-dialog{transform:scale(1)}' +
+          '#branchRiskPopup.brp-expanded{padding:0}' +
+          '@media (max-width:639px){#branchRiskPopup{padding:0}#branchRiskPopup .brp-dialog{max-width:100vw;height:100vh;height:100dvh;max-height:100vh;border-radius:0}#branchRiskPopup .brp-body{padding:10px 10px 16px}#branchRiskPopup .brp-meta > div{min-width:45%}#branchRiskPopup .brp-title{font-size:16px}#branchRiskPopup [data-brp="expand"]{display:none}}' +
+          '#branchRiskPopup.brp-expanded .brp-dialog{max-width:100vw;max-height:100vh;height:100vh;border-radius:0}' +
+          '#branchRiskPopup .brp-head{display:flex;align-items:center;gap:10px;padding:12px 16px;color:#fff;background:linear-gradient(90deg,#0b1a44,#16307a)}' +
+          '#branchRiskPopup .brp-title{font-size:18px;font-weight:800;line-height:1.1;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+          '#branchRiskPopup .brp-ibtn{display:inline-flex;align-items:center;justify-content:center;padding:6px 8px;border-radius:10px;color:#fff;background:transparent;border:0;cursor:pointer;font-size:11px;font-weight:700}' +
+          '#branchRiskPopup .brp-ibtn:hover{background:rgba(255,255,255,.15)}' +
+          '#branchRiskPopup .brp-body{overflow:auto;flex:1;padding:14px 16px;background:#fff}' +
+          '#branchRiskPopup .brp-meta{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 12px;margin-bottom:12px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}' +
+          '#branchRiskPopup .brp-meta > div{display:flex;flex-direction:column;gap:2px;min-width:110px}' +
+          '#branchRiskPopup .brp-meta .k{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#64748b}' +
+          '#branchRiskPopup .brp-meta .v{font-size:12px;font-weight:700;color:#1e293b}' +
+          '#branchRiskPopup .brp-detail{border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:12px}' +
+          '#branchRiskPopup .brp-detail td{font-size:12px}' +
+          '#branchRiskPopup.brp-expanded .brp-body{padding:20px 28px}' +
+          '#branchRiskPopup.brp-expanded .brp-detail{padding:18px}' +
+          '#branchRiskPopup.brp-expanded .brp-detail table{font-size:13px}' +
+          '#branchRiskPopup.brp-expanded .brp-detail table th,#branchRiskPopup.brp-expanded .brp-detail table td{padding-top:8px;padding-bottom:8px}';
+        document.head.appendChild(st);
+      }
+      function esc(t) {
+        return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+      var ICON_EXPAND = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+      var ICON_COLLAPSE = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>';
+
+      window.openBranchRiskPopup = function (key) {
+        var detailTr = document.getElementById('audit-risk-detail-' + key);
+        if (!detailTr) return;
+        openBranchRiskPopupFromRows(detailTr.previousElementSibling, detailTr);
+      };
+
+      // Opens the same popup from just a branch name (used by the "Audit
+      // these first" cards). It builds the branch's row exactly the way the
+      // Total Branches table does — same rows, same scoring — in a detached
+      // element, then hands it to the popup.
+      window.openBranchRiskPopupByName = function (name) {
+        try {
+          var a = computeAuditScheduleAnalysis();
+          var t = getAuditAnalysisTableRows(a, 'ALL');
+          var row = t.rows.find(function (r) { return r.b.name === name; });
+          if (!row) { if (typeof openModalDetail === 'function') openModalDetail(name); return; }
+          var holder = document.createElement('div');
+          holder.innerHTML = buildAuditKpiQueueTableHtml([row]);
+          var detailTr = holder.querySelector('tr[id^="audit-risk-detail-kpi-"]');
+          if (!detailTr) return;
+          openBranchRiskPopupFromRows(detailTr.previousElementSibling, detailTr);
+        } catch (err) { console.error('Branch popup failed:', err); }
+      };
+
+      function openBranchRiskPopupFromRows(mainTr, detailTr) {
+        if (!mainTr || !detailTr) return;
+        var cells = mainTr.children;
+        var nameBtn = cells[1] && cells[1].querySelector('button');
+        var branchName = nameBtn ? (nameBtn.getAttribute('data-branch-name') || nameBtn.textContent.trim()) : 'Branch';
+        var txt = function (i) { return cells[i] ? cells[i].textContent.replace(/\s+/g, ' ').trim() : '—'; };
+
+        ensureStyle();
+        closeBranchRiskPopup(true);
+
+        // Score badge (copy of the table's badge, made non-interactive).
+        var badgeHtml = '';
+        var badge = cells[3] && cells[3].querySelector('button');
+        if (badge) {
+          var bc = badge.cloneNode(true);
+          bc.removeAttribute('onclick'); bc.removeAttribute('title'); bc.style.cursor = 'default';
+          var caret = bc.querySelector('span:last-child');
+          if (caret && caret.textContent.trim() === '▾') caret.remove();
+          badgeHtml = bc.outerHTML;
+        }
+        var reasonHtml = cells[2] ? cells[2].innerHTML : '';
+        var actionBtn = cells[8] && cells[8].querySelector('button');
+        var actionHtml = '';
+        if (actionBtn) {
+          var ac = actionBtn.cloneNode(true);
+          ac.setAttribute('onclick', 'closeBranchRiskPopup(true);' + (actionBtn.getAttribute('onclick') || ''));
+          actionHtml = ac.outerHTML;
+        }
+
+        // The breakdown itself — the same markup as the table's expandable row.
+        var detailHtml = detailTr.firstElementChild ? detailTr.firstElementChild.innerHTML : '';
+
+        var metricsHtml = '';
+        try {
+          var bObj = activeData.branches.find(function (x) { return x.name === branchName; });
+          metricsHtml = buildBranchMetricsHtml(bObj);
+        } catch (err) { console.error('Branch metrics failed:', err); }
+
+        var overlay = document.createElement('div');
+        overlay.id = 'branchRiskPopup';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-label', branchName + ' risk breakdown');
+        overlay.innerHTML =
+          '<div class="brp-dialog">' +
+            '<div class="brp-head">' +
+              '<div class="brp-title">' + esc(branchName) + '</div>' +
+              '<button type="button" class="brp-ibtn" data-brp="profile" title="Open full branch profile">Full profile</button>' +
+              '<button type="button" class="brp-ibtn" data-brp="expand" title="Expand" aria-label="Expand">' + ICON_EXPAND + '</button>' +
+              '<button type="button" class="brp-ibtn" data-brp="close" title="Close" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>' +
+            '</div>' +
+            '<div class="brp-body custom-scrollbar">' +
+              '<div class="brp-meta">' +
+                '<div><span class="k">Risk score</span><span class="v">' + badgeHtml + '</span></div>' +
+                '<div><span class="k">Schedule status</span><span class="v">' + reasonHtml + '</span></div>' +
+                '<div><span class="k">Last audited</span><span class="v">' + esc(txt(4)) + '</span></div>' +
+                '<div><span class="k">Days since</span><span class="v">' + esc(txt(5)) + '</span></div>' +
+                '<div><span class="k">Assigned auditor</span><span class="v">' + esc(txt(6)) + '</span></div>' +
+                '<div><span class="k">Suggested date</span><span class="v">' + esc(txt(7)) + '</span></div>' +
+                (actionHtml ? '<div style="justify-content:flex-end;margin-left:auto">' + actionHtml + '</div>' : '') +
+              '</div>' +
+              '<div class="brp-detail">' + detailHtml + '</div>' +
+              metricsHtml +
+            '</div>' +
+          '</div>';
+
+        overlay.addEventListener('click', function (e) {
+          if (e.target === overlay) { closeBranchRiskPopup(); return; }
+          var b = e.target.closest ? e.target.closest('[data-brp]') : null;
+          if (!b) return;
+          var act = b.getAttribute('data-brp');
+          if (act === 'close') closeBranchRiskPopup();
+          else if (act === 'expand') toggleBranchRiskPopupExpand();
+          else if (act === 'profile') {
+            closeBranchRiskPopup(true);
+            if (typeof openModalDetail === 'function') openModalDetail(branchName);
+          }
+        });
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function () { overlay.classList.add('brp-show'); });
+      }
+
+      window.toggleBranchRiskPopupExpand = function () {
+        var o = document.getElementById('branchRiskPopup');
+        if (!o) return;
+        var on = o.classList.toggle('brp-expanded');
+        var b = o.querySelector('[data-brp="expand"]');
+        if (b) { b.innerHTML = on ? ICON_COLLAPSE : ICON_EXPAND; b.title = on ? 'Restore' : 'Expand'; b.setAttribute('aria-label', b.title); }
+      };
+
+      window.closeBranchRiskPopup = function (instant) {
+        var o = document.getElementById('branchRiskPopup');
+        if (!o) return;
+        if (instant === true) { o.remove(); return; }
+        o.classList.remove('brp-show');
+        setTimeout(function () { if (o.parentNode) o.remove(); }, 200);
+      };
+
+      // Escape closes just this popup (capture phase, so the underlying
+      // Total Branches modal stays open).
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        if (!document.getElementById('branchRiskPopup')) return;
+        e.stopImmediatePropagation();
+        closeBranchRiskPopup();
+      }, true);
+    })();
+
     // Executive Summary KPI tiles (Total Branches, Critical/High Risk, etc.)
     // — instead of filtering the Priority Audit Queue table further down the
     // page, each tile pops up its own copy of that same table (same columns,
@@ -7071,15 +7489,14 @@ html.page-fade-ready body {
           }).join('');
 
           return `
-          <tr class="${idx % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-accentCyan/10 transition-colors">
+          <tr onclick="openBranchRiskPopup('kpi-${idx}')" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openBranchRiskPopup('kpi-${idx}')}" tabindex="0" title="Click to see why this branch needs attention" class="${idx % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-accentCyan/10 transition-colors cursor-pointer">
             <td class="p-1.5 text-center"><span class="text-[10px] font-bold text-slate-400">${idx + 1}</span></td>
-            <td class="p-1.5 text-xs leading-tight"><button type="button" data-aa-kind="branch" data-aa-value="${escapeHTML(row.b.name)}" title="Open ${escapeHTML(row.b.name)}'s detailed profile" class="font-bold text-slate-800 text-left break-words hover:text-accentCyan hover:underline underline-offset-2 cursor-pointer">${escapeHTML(row.b.name)}</button></td>
+            <td class="p-1.5 text-xs leading-tight"><button type="button" onclick="event.stopPropagation(); openBranchRiskPopup('kpi-${idx}')" title="See why ${escapeHTML(row.b.name)} needs attention" class="font-bold text-slate-800 text-left break-words hover:text-accentCyan hover:underline underline-offset-2 cursor-pointer" data-branch-name="${escapeHTML(row.b.name)}">${escapeHTML(row.b.name)}</button></td>
             <td class="p-1.5 text-center"><span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-${tint}/10 text-${tint} rounded-md border border-${tint}/20 leading-tight whitespace-nowrap">${escapeHTML(row.reason)}</span></td>
             <td class="p-1.5 text-center">
-              <button type="button" onclick="toggleAuditRiskDetail('kpi-${idx}')" title="Click to see exactly how this score was calculated" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-${tierTint}/10 border border-${tierTint}/20 text-${tierTint} hover:brightness-95 active:scale-95 transition-all cursor-pointer">
+              <button type="button" onclick="event.stopPropagation(); openBranchRiskPopup('kpi-${idx}')" title="Click to see exactly how this score was calculated" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-${tierTint}/10 border border-${tierTint}/20 text-${tierTint} hover:brightness-95 active:scale-95 transition-all cursor-pointer">
                 <span class="text-xs font-extrabold leading-none">${risk.score.toFixed(0)}</span>
                 <span class="text-[9px] font-bold uppercase tracking-wider leading-none">${escapeHTML(risk.tier.label)}</span>
-                <span class="text-[9px] leading-none">▾</span>
               </button>
               <div class="mt-0.5 text-[9px] text-slate-500 leading-tight max-w-[190px] mx-auto">${driversText}</div>
             </td>
@@ -7118,7 +7535,7 @@ html.page-fade-ready body {
       }).join('');
 
       return `
-      <table class="w-full min-w-[980px] text-left border-collapse bg-white">
+      <table class="aa-rtable w-full min-w-[980px] text-left border-collapse bg-white">
         <thead class="bg-gray-50 border-b border-coolBorder text-[10px] text-slate-500 tracking-wider font-semibold uppercase sticky top-0 z-10 shadow-sm">
           <tr>
             <th class="p-1.5 bg-gray-50 text-center w-9 whitespace-nowrap">Priority</th>
@@ -7134,6 +7551,42 @@ html.page-fade-ready body {
         </thead>
         <tbody class="divide-y divide-coolBorder text-xs">${rowsHtml}</tbody>
       </table>`;
+    }
+
+    // Live branch search for the Total Branches / KPI list popup. Hides
+    // non-matching rows (and their expandable breakdown row) in place, so
+    // the original priority numbers stay and the search box keeps focus.
+    function filterKpiBranchRows(query) {
+      const q = String(query || '').trim().toLowerCase();
+      const body = document.getElementById('modalBody') || document;
+      const rows = body.querySelectorAll('tr[id^="audit-risk-detail-kpi-"]');
+      let shown = 0, total = 0;
+      rows.forEach(detailTr => {
+        const mainTr = detailTr.previousElementSibling;
+        if (!mainTr) return;
+        total++;
+        const nameBtn = mainTr.querySelector('[data-branch-name]');
+        const name = (nameBtn ? nameBtn.getAttribute('data-branch-name') : mainTr.children[1].textContent).toLowerCase();
+        const match = !q || name.indexOf(q) !== -1;
+        mainTr.style.display = match ? '' : 'none';
+        detailTr.style.display = match ? '' : 'none';
+        if (match) shown++;
+      });
+      const cnt = document.getElementById('kpiBranchSearchCount');
+      if (cnt) cnt.textContent = q ? shown + ' of ' + total : '';
+      const table = rows.length ? rows[0].closest('table') : null;
+      let empty = document.getElementById('kpiBranchSearchEmpty');
+      if (table && q && shown === 0) {
+        if (!empty) {
+          empty = document.createElement('div');
+          empty.id = 'kpiBranchSearchEmpty';
+          empty.className = 'p-5 text-center text-sm text-slate-500 font-semibold bg-gray-50 border-t border-coolBorder';
+          table.parentNode.appendChild(empty);
+        }
+        empty.textContent = 'No branch matches "' + String(query).trim() + '".';
+      } else if (empty) {
+        empty.remove();
+      }
     }
 
     function renderAuditKpiListModal(bucket, modalBody) {
@@ -7153,6 +7606,11 @@ html.page-fade-ready body {
             <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Showing</span>
             <button type="button" onclick="modalGoBack()" title="Back to Executive Summary" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-accentIndigo/10 text-accentIndigo border border-accentIndigo/20 rounded-full hover:brightness-95 active:scale-95 cursor-pointer whitespace-nowrap">${escapeHTML(chipLabel)} <span aria-hidden="true">✕</span></button>
             <button type="button" onclick="modalGoBack()" class="px-2 py-0.5 text-[10px] font-bold bg-white border border-coolBorder rounded-full hover:bg-gray-100 active:scale-95 cursor-pointer whitespace-nowrap">Clear all</button>
+            <div class="relative ml-auto w-full sm:w-64">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input id="kpiBranchSearch" type="search" autocomplete="off" placeholder="Search branch…" aria-label="Search branch" oninput="filterKpiBranchRows(this.value)" class="w-full pl-8 pr-2 py-1 text-xs font-semibold text-slate-700 bg-white border border-coolBorder rounded-full focus:outline-none focus:ring-2 focus:ring-accentCyan/40 focus:border-accentCyan" />
+            </div>
+            <span id="kpiBranchSearchCount" class="text-[10px] font-semibold text-slate-500 whitespace-nowrap"></span>
           </div>`;
 
       const tableHtml = table.rows.length
@@ -7166,6 +7624,7 @@ html.page-fade-ready body {
           ${tableHtml}
         </div>`;
       bindAuditAnalysisClicks(modalBody);
+      filterKpiBranchRows('');
     }
 
     function openModal(title, type, filterValue, navOpts) {
@@ -7213,6 +7672,8 @@ html.page-fade-ready body {
       // the 'assignment' branch just below.
       const analysisBtn = document.getElementById('modalAnalysisBtn');
       if (analysisBtn) analysisBtn.classList.add('hidden');
+      const analysisSettingsBtn = document.getElementById('modalAnalysisSettingsBtn');
+      if (analysisSettingsBtn) analysisSettingsBtn.classList.add('hidden');
 
       let branchesToDisplay = [];
 
@@ -7230,6 +7691,8 @@ html.page-fade-ready body {
           if (analysisBtn) analysisBtn.classList.remove('hidden');
       } else if (type === 'assignmentAnalysis') {
           renderAssignmentAnalysisModal(modalBody);
+          const aSetBtn = document.getElementById('modalAnalysisSettingsBtn');
+          if (aSetBtn) aSetBtn.classList.remove('hidden');
           if (typeof auditSyncEnsurePolling === 'function') auditSyncEnsurePolling();
       } else if (type === 'editAssignment') {
           renderEditAssignmentModal(filterValue, modalBody);
@@ -9157,6 +9620,7 @@ html.page-fade-ready body {
     }
 
     function closeModal() {
+      if (typeof closeBranchRiskPopup === 'function') closeBranchRiskPopup(true);
       // Both floating overlays are parented to <body>, not to the modal,
       // so they'd otherwise linger on screen after the popup is dismissed.
       if (typeof closeAssignmentStatusDropdown === 'function') closeAssignmentStatusDropdown();
@@ -10163,8 +10627,13 @@ html.page-fade-ready body {
       // AUDIT DATA (FINAL) wins whenever it has at least one dated round;
       // AUDIT ROTATION (FINAL) is only used as a fallback for branches
       // that have never had a round saved through Edit Assignment yet.
-      const dated = ownDated.length > 0 ? ownDated : rotationDated;
       const today = Date.now();
+      // Completed audits only, oldest to newest BY DATE (not by round number). A round dated in
+      // the future is a plan, not an audit: counting it made a branch look "audited today"
+      // (0 recency risk) and pushed its real last audit out of view.
+      const isDoneDate = r => r.dateRaw <= today + 86400000;
+      const datedAll = ownDated.length > 0 ? ownDated : rotationDated;
+      const dated = datedAll.filter(isDoneDate).slice().sort((x, y) => x.dateRaw - y.dateRaw);
 
       // Who's queued for the branch's NEXT audit round — read ONLY from
       // assignedAuditorRaw (AUDIT DATA (FINAL) column AW, "Up Next Auditor"),
@@ -11071,26 +11540,26 @@ html.page-fade-ready body {
     // defaults still sum to 100 together with recency.
     const AUDIT_RISK_FACTORS = [
       { key: 'recency', label: 'Time since last audit', defaultWeight: 10,
-        how: '0 points if audited today, rising evenly to 100 points at the Overdue threshold. Never audited = 100.',
-        why: 'Control depends on branches actually being visited, not only on what their other numbers say, so recency carries a real (if deliberately smaller) share of the score. It is also, separately, what drives the never-audited/overdue coverage rules that guarantee no branch is skipped forever.' },
+        how: "CHANGED - now data-driven, not a fixed 90-day line. Step 1: the branch is scored on its other factors (its \"data score\", 0-100, using the weights above). Step 2: that score sets THIS branch's own due interval = Overdue setting x (1.75 - 1.25 x data score/100), so healthy data is due later (up to about 1.75x the Overdue setting) and risky data sooner (down to about 0.5x). Step 3: points = a smooth curve of days since last audit / due interval: about 50 points AT the due date, about 80 at twice the due interval, and never a sudden jump to 100. Step 4: a base of 25% of the data score, so a risky branch is not 0 just because it was audited yesterday, and a clean branch stays near 0. Never audited = 60 + 40% of its data score.",
+        why: "Old rule: 0 the day after an audit and a flat 100 once past the Overdue days, even for a branch with clean numbers. That was unfair to healthy branches (a good branch at 150 days scored as badly as a failing one) and blind to risky branches that were only just visited. Now the calendar counts in proportion to what the branch's own data says. The separate never-audited / overdue queue rules still make sure no branch is skipped forever." },
       { key: 'findings', label: 'Audit findings', defaultWeight: 26,
-        how: 'Findings are weighted 3x for the latest tracked year, 2x for the middle year and 1x for the earliest (years come from the sheet), then scaled against a FIXED cap (editable in Settings; starts at the portfolio\'s 90th percentile the first time it\'s computed, never below ' + AUDIT_FINDINGS_MIN_CAP + ' weighted points, then stays put). No findings = 0.',
-        why: 'Past findings are the strongest sign of where more will be found; recent years count more than old ones. The cap is fixed rather than recalculated on every view so the same findings history always produces the same score, instead of drifting as the portfolio changes.' },
+        how: "Findings are weighted 3x for the latest tracked year, 2x for the middle year and 1x for the earliest (years come from the sheet), then divided by a FIXED cap and multiplied by 100 (maximum 100). The cap is editable in Settings; it starts at the portfolio's 90th percentile the first time it is computed, never below " + AUDIT_FINDINGS_MIN_CAP + " weighted points, then stays put. No findings = 0. 5 or more findings in the latest year is also a red flag that lifts the branch to at least High.",
+        why: "Past findings are the strongest sign of where more will be found; recent years count more than old ones. The cap is fixed rather than recalculated on every view so the same findings history always produces the same score, instead of drifting as the portfolio changes." },
       { key: 'efficiency', label: 'Collection health', defaultWeight: 30,
-        how: 'One blended factor, no more double-counting: efficiency LEVEL (55%, same 70%/50% cut-offs as the branch cards) + efficiency TREND (20%, up to 100 pts for a 15+ point fall since the earliest month on record) + the separately reported collection STATUS (25%: Declining=100, Recovering=50, Stable=20, Improving=0). If there is no efficiency % on file yet, status alone carries the factor; if there is no status either (rare — it defaults to Stable), level+trend alone carries it.',
-        why: 'Collection efficiency (%) and the reported collection status used to be scored as two separate factors, but they both answer the same question — is collection getting better or worse — so weighting both at full strength paid for one signal twice. Blending them into a single factor removes that double-count at the source rather than just flagging it.' },
-      { key: 'repo', label: 'Repossession rate', defaultWeight: 16,
-        how: 'Level (70% of this factor) uses the same 4% / 7% cut-offs as the branch cards: 0% = 0 pts, 4% = 35 pts, 7% = 70 pts, 12% or more = 100 pts. Trend (30%) adds up to 100 pts if the repo rate has risen 3+ points since the earliest month on record; flat or improving adds 0. No account data = excluded.',
-        why: 'A high repossession rate points to weaker loan quality or recovery handling, and a rate that is actively rising is a stronger signal than one that is high but stable. Level and trend are blended into this ONE factor (not scored separately) so a worsening repo rate is never counted twice toward the total.' },
+        how: "One blended factor of up to four parts: (1) efficiency LEVEL, 40%: 0% efficiency = 100 pts, 50% = 70, 70% = 35, 100% = 0, in straight lines between; (2) efficiency TREND, 15%: 0 unless the % has fallen since the earliest month on record, reaching 100 pts at a 15+ point fall; (3) reported collection STATUS, 20%: Declining = 100, Recovering = 50, Stable = 20, Improving = 0 (a blank status is left out, not treated as Stable); (4) accounts NOT collecting, 25%: accounts x (100 - efficiency%), against a fixed cap, so the same % counts for more at a big branch. A blank efficiency month is not read as 0%. Any part with no data is dropped and the rest rescaled. Efficiency under 50% is also a red flag (at least High).",
+        why: "Efficiency % and the reported collection status answer the same question - is collection getting better or worse - so they are blended into one factor instead of being paid for twice. The accounts-not-collecting part keeps a tiny branch with a low % from looking as serious as a large branch with the same %." },
+      { key: 'repo', label: 'Repossessions', defaultWeight: 16,
+        how: "Three parts: repo RATE, 40%: 0% = 0 pts, 4% = 35, 7% = 70, 12%+ = 100, in straight lines between; NUMBER of repossessions, 30%: count against a fixed cap; repo-rate TREND, 30%: 0 unless the rate has risen since the earliest month, reaching 100 pts at a rise of 3+ points (left out and rescaled when there is no earlier month). No account data = factor excluded. A repo rate of 7% or higher is also a red flag (at least High).",
+        why: "A high repossession rate points to weaker loan quality or recovery handling, and a rate that is actively rising is a stronger signal than one that is high but stable. The count stops a tiny branch with one repo from looking as bad as a large branch with many. Level and trend sit in ONE factor so a worsening rate is not counted twice." },
       { key: 'sales', label: 'Sales trend', defaultWeight: 6,
-        how: 'Declining = 100, Recovering = 50, Stable = 20, Improving = 0.',
-        why: 'Sharp sales drops can signal pressure on the branch and unusual activity.' },
+        how: "Reported sales status: Declining = 100, Recovering = 50, Stable = 20, Improving = 0. A blank status cell is left out of the score (weights rescaled), not treated as Stable.",
+        why: "Sharp sales drops can signal pressure on the branch and unusual activity." },
       { key: 'service', label: 'Service vs target', defaultWeight: 6,
-        how: 'Declining (below target) = 100, on Target = 0.',
-        why: 'Missing service targets is a control and customer-experience signal.' },
-      { key: 'size', label: 'Loan book size', defaultWeight: 6,
-        how: 'Number of accounts scaled against a FIXED cap (editable in Settings; starts at the portfolio\'s 90th percentile the first time it\'s computed, then stays put). No data = excluded.',
-        why: 'A bigger loan book means more money is at stake if something is wrong (materiality). The cap is fixed rather than recalculated on every view so branch size is scored consistently over time, not relative to whichever branches happen to be loaded right now.' }
+        how: "Below target (Declining) = 100, on Target = 0. A blank status cell is left out of the score (weights rescaled).",
+        why: "Missing service targets is a control and customer-experience signal." },
+      { key: 'size', label: 'Accounts', defaultWeight: 6,
+        how: "Number of accounts (latest month that has a figure) divided by a FIXED cap, times 100 (maximum 100). The cap is editable in Settings; it starts at the portfolio's 90th percentile the first time it is computed, then stays put. No account data = factor excluded.",
+        why: "A bigger loan book means more money is at stake if something is wrong (materiality). The cap is fixed rather than recalculated on every view so branch size is scored consistently over time, not relative to whichever branches happen to be loaded right now." }
     ];
     // DATA RED FLAGS — hard tripwires that use the same red cut-offs as the
     // branch cards. A weighted average can dilute one severe signal (a branch
@@ -11115,8 +11584,9 @@ html.page-fade-ready body {
     // Fixed-date ones are listed as MM-DD; National Heroes Day (last Monday of
     // August) is worked out automatically. Movable holidays (Holy Week, Eid)
     // change every year: add them here as 'YYYY-MM-DD' strings.
-    const AUDIT_SCHEDULE_HOLIDAYS_FIXED = ['01-01', '04-09', '05-01', '06-12', '11-30', '12-25', '12-30'];
-    const AUDIT_SCHEDULE_HOLIDAYS_EXTRA = [];
+    const AUDIT_SCHEDULE_HOLIDAYS_FIXED = ['01-01', '02-25', '04-09', '05-01', '06-12', '08-21', '11-01', '11-30', '12-08', '12-24', '12-25', '12-30', '12-31'];
+    // Movable holidays: add each year from the official proclamation (verify these).
+    const AUDIT_SCHEDULE_HOLIDAYS_EXTRA = ['2027-03-25', '2027-03-26'];
     function auditDayKey(d) {
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
@@ -11151,6 +11621,23 @@ html.page-fade-ready body {
       service:    { Declining: 100, Target: 0 }
     };
 
+    // Weights are shown and edited as PERCENTAGES that must add up to 100.
+    // Turns any stored set (e.g. rounded data-derived numbers that add to 99 or 101)
+    // into whole percentages summing to exactly 100 (largest-remainder rounding).
+    // Scores only use the ratio between weights, so this never changes a score.
+    function auditNormalizeWeights100(w) {
+      const out = {};
+      const vals = AUDIT_RISK_FACTORS.map(f => Math.max(0, Number(w && w[f.key]) || 0));
+      const sum = vals.reduce((a, b) => a + b, 0);
+      if (sum <= 0) { AUDIT_RISK_FACTORS.forEach(f => { out[f.key] = f.defaultWeight; }); return out; }
+      const raw = vals.map(v => (v / sum) * 100);
+      const floors = raw.map(Math.floor);
+      let left = 100 - floors.reduce((a, b) => a + b, 0);
+      raw.map((v, i) => ({ i, r: v - floors[i] })).sort((a, b) => b.r - a.r).forEach(o => { if (left > 0) { floors[o.i]++; left--; } });
+      AUDIT_RISK_FACTORS.forEach((f, i) => { out[f.key] = floors[i]; });
+      return out;
+    }
+
     function defaultAuditRiskWeights() {
       const w = {};
       AUDIT_RISK_FACTORS.forEach(f => { w[f.key] = f.defaultWeight; });
@@ -11184,7 +11671,7 @@ html.page-fade-ready body {
     }
 
     window.auditAnalysisState = window.auditAnalysisState || {
-      overdueDays: 90,      // coverage backstop AND the day-count where recency risk reaches 100
+      overdueDays: 90,      // coverage backstop AND the base for each branch's data-driven due interval (0.5x-1.75x)
       spacingDays: 3,       // business days between suggested audit dates
       minScore: 55,         // risk score at/above which an un-scheduled branch gets scheduled
       minGapDays: 30,       // don't re-audit a branch audited more recently than this
@@ -11192,7 +11679,9 @@ html.page-fade-ready body {
                              // first time it's computed (see computeAuditRiskScores) so scores stay
                              // comparable over time instead of drifting with the portfolio; editable below
       sizeCap: null,        // accounts value that scores 100 on the portfolio-size factor; same freeze-once rule
-      filterBucket: 'ATTENTION',
+      repoCap: null,        // number of repossessions that scores 100 on the repo-count part; same freeze-once rule
+      shortfallCap: null,   // accounts NOT collecting (accounts x (100 - efficiency%)) that scores 100; same freeze-once rule
+      filterBucket: 'ALL',
       // Table filters. Every one of these can be set by typing in the filter
       // row + pressing OK, OR by clicking any bar/row/badge in the analysis
       // (see dispatchAuditClick).
@@ -11233,12 +11722,46 @@ html.page-fade-ready body {
     function openAssignmentAnalysis() {
       const cfg = window.auditAnalysisState;
       if (auditSync.version === 0 && auditSync.lastJson === null) {
-        cfg.filterBucket = 'ATTENTION';
+        cfg.filterBucket = 'ALL';
         resetAuditTableFilterState(cfg);
       }
       cfg.expandBranch = null;
+      cfg.queueOpen = false;
       cfg.notice = null;
       openModal('Audit Risk & Schedule Analysis', 'assignmentAnalysis', null);
+    }
+
+    // Headline numbers on the dashboard's Audit Risk & Schedule Analysis card. Lives in its own
+    // function so it can be re-run whenever a setting changes (weights, caps, thresholds, or a
+    // view synced from another device) instead of only when the data is (re)loaded.
+    function updateAuditRiskOverviewCard() {
+      try {
+        const riskAttentionEl = document.getElementById('stat-audit-risk-attention');
+        if (riskAttentionEl) {
+          // Everything here is read from the OVERALL risk rating (0-100 score
+          // -> Critical / High / Medium / Low) of ALL branches — the same
+          // figures as the Audit Risk popup's banner — so the three numbers
+          // and the bar always add up to the total branch count. (Before, the
+          // headline counts came from scheduling status while the popup used
+          // risk tiers, so 44 / 12 never matched 4 / 31 / 7 / 14.)
+          const ra = computeAuditScheduleAnalysis();
+          const tierN = k => ((ra.riskTiers.find(t => t.key === k) || {}).count) || 0;
+          const highCount = tierN('CRITICAL') + tierN('HIGH');
+          const lowCount = tierN('MEDIUM') + tierN('LOW');
+          animateCountUp(riskAttentionEl, highCount);
+          const avgEl = document.getElementById('stat-audit-risk-avg');
+          if (avgEl) avgEl.innerText = (ra.avgRiskScore !== null && ra.avgRiskScore !== undefined) ? ra.avgRiskScore : '—';
+          animateCountUp(document.getElementById('stat-audit-risk-ontrack'), lowCount);
+          const subEl = document.getElementById('stat-audit-risk-sub');
+          const TIER_HEX = { accentRose: '#e11d48', accentAmber: '#d97706', accentBlue: '#2563eb', accentEmerald: '#059669' };
+          if (subEl) {
+            subEl.innerHTML = ra.totalBranches
+              ? ra.riskTiers.map(t => `<span style="display:inline-flex;align-items:center;gap:.4em"><span style="width:.7em;height:.7em;border-radius:50%;flex:none;background:${TIER_HEX[t.tint] || '#64748b'}"></span>${t.count} ${t.label}</span>`).join('')
+              : '';
+            subEl.title = 'Overall risk rating of all ' + ra.totalBranches + ' branches';
+          }
+        }
+      } catch (e) { /* non-fatal — card just keeps its placeholders */ }
     }
 
     // Re-render in place; optionally scroll the results table into view so
@@ -11251,14 +11774,12 @@ html.page-fade-ready body {
       // shown as a toast, which stays visible even when the OK that was
       // pressed is far from the message on a small screen.
       const pending = window.auditAnalysisState.notice;
+      if (scrollToTable) window.auditAnalysisState.queueOpen = true;
       renderAssignmentAnalysisModal(body);
+      updateAuditRiskOverviewCard(); // keep the dashboard card in step with the new settings
       auditSyncSchedulePush(); // mirror the new view/settings to the person's other devices
       if (pending && typeof showToast === 'function' && document.getElementById('toast')) {
         try { showToast(pending.text, pending.type === 'error' ? 'error' : 'success'); } catch (e) {}
-      }
-      if (scrollToTable) {
-        const el = document.getElementById('aa-table-section');
-        if (el && typeof el.scrollIntoView === 'function') setTimeout(function () { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
       }
     }
 
@@ -11289,9 +11810,9 @@ html.page-fade-ready body {
     //    the analysis inputs (it is picked up on the next poll instead);
     //  - applying a remote view re-renders in place and keeps the scroll
     //    position.
-    const AUDIT_SYNC_POLL_MS = 30 * 1000;
+    const AUDIT_SYNC_POLL_MS = 8 * 1000;
     const AUDIT_SYNC_PUSH_DEBOUNCE_MS = 1200;
-    const AUDIT_SYNC_NUM_RULES = { overdueDays: [1, 3650], spacingDays: [1, 3650], minScore: [1, 100], minGapDays: [0, 3650], findingsCap: [1, 1000], sizeCap: [1, 10000000] };
+    const AUDIT_SYNC_NUM_RULES = { overdueDays: [1, 3650], spacingDays: [1, 3650], minScore: [1, 100], minGapDays: [0, 3650], findingsCap: [1, 1000], sizeCap: [1, 10000000], repoCap: [1, 100000], shortfallCap: [1, 10000000] };
     const AUDIT_SYNC_STR_KEYS = ['filterBucket', 'tierFilter', 'auditorFilter', 'queueFilter', 'search', 'reasonFilter', 'distFilter', 'driverFilter'];
     const auditSync = {
       version: 0,          // server version of the last state this device pushed/applied (0 = none yet)
@@ -11300,7 +11821,8 @@ html.page-fade-ready body {
       pushing: false, pulling: false,
       pushTimer: null, pollTimer: null,
       readOnly: false,     // server said this account may not write (team-wide mode, non-editor)
-      everPulled: false,   // has this session made at least one pull attempt yet? see auditSyncSchedulePush
+      everPulled: false,   // has this session made at least one SUCCESSFUL pull yet? see auditSyncSchedulePush
+      serverHasState: false, // the server already holds a saved view (local auto-derivation must never override it)
       deferredPush: false  // a push was requested before everPulled and is waiting to be retried
     };
 
@@ -11313,6 +11835,7 @@ html.page-fade-ready body {
       s.sortDir = cfg.sortDir === 'asc' ? 'asc' : 'desc';
       s.weights = {};
       AUDIT_RISK_FACTORS.forEach(f => { s.weights[f.key] = Number(cfg.weights && cfg.weights[f.key]) || 0; });
+      s.weightsSource = (cfg.weightsSource === 'data' || cfg.weightsSource === 'custom') ? cfg.weightsSource : 'default';
       return s;
     }
 
@@ -11322,8 +11845,8 @@ html.page-fade-ready body {
       if (!raw || typeof raw !== 'object') return null;
       const out = {};
       Object.keys(AUDIT_SYNC_NUM_RULES).forEach(k => {
-        const n = Number(raw[k]), r = AUDIT_SYNC_NUM_RULES[k];
-        if (Number.isInteger(n) && n >= r[0] && n <= r[1]) out[k] = n;
+        const n = Math.round(Number(raw[k])), r = AUDIT_SYNC_NUM_RULES[k];
+        if (Number.isFinite(n) && raw[k] !== null && raw[k] !== '' && n >= r[0] && n <= r[1]) out[k] = n;
       });
       AUDIT_SYNC_STR_KEYS.forEach(k => {
         if (typeof raw[k] === 'string') out[k] = raw[k].slice(0, 200);
@@ -11331,6 +11854,7 @@ html.page-fade-ready body {
       if (out.tierFilter !== undefined && out.tierFilter !== 'ALL' && !AUDIT_RISK_TIERS.some(t => t.key === out.tierFilter)) delete out.tierFilter;
       if (raw.sortField === null || typeof raw.sortField === 'string') out.sortField = raw.sortField ? raw.sortField.slice(0, 40) : null;
       if (raw.sortDir === 'asc' || raw.sortDir === 'desc') out.sortDir = raw.sortDir;
+      if (raw.weightsSource === 'data' || raw.weightsSource === 'custom' || raw.weightsSource === 'default') out.weightsSource = raw.weightsSource;
       if (raw.weights && typeof raw.weights === 'object') {
         const w = defaultAuditRiskWeights();
         let ok = true;
@@ -11352,6 +11876,7 @@ html.page-fade-ready body {
       if (clean.weights) {
         cfg.weights = clean.weights;
         try { localStorage.setItem(AUDIT_RISK_WEIGHTS_KEY, JSON.stringify(clean.weights)); } catch (e) {}
+        if (clean.weightsSource) { try { localStorage.setItem(AUDIT_RISK_WEIGHTS_SOURCE_KEY, clean.weightsSource); } catch (e) {} }
       }
       cfg.expandBranch = null;
       auditSync.lastJson = JSON.stringify(auditSyncSnapshot(cfg));
@@ -11379,6 +11904,7 @@ html.page-fade-ready body {
       const wrap = modal ? modal.querySelector(':scope > div.overflow-y-auto') : null;
       const y1 = body.scrollTop, y2 = wrap ? wrap.scrollTop : 0;
       renderAssignmentAnalysisModal(body);
+      updateAuditRiskOverviewCard();
       body.scrollTop = y1;
       if (wrap) wrap.scrollTop = y2;
     }
@@ -11394,13 +11920,18 @@ html.page-fade-ready body {
     async function auditSyncPull() {
       if (auditSync.pulling) return;
       auditSync.pulling = true;
+      let pullOk = false;
       try {
         const url = await auditSyncUrl('getAnalysisState', { sinceVersion: String(auditSync.version || 0) });
         if (!url) return;
         const json = await fetchSheetOnce(url);
-        if (!json || json.error || !json.success || json.unchanged) return; // silent: sync is best-effort
+        if (json && json.error && /unauthor/i.test(String(json.error))) { auditSync.readOnly = true; }
+        if (!json || json.error || !json.success) return; // failed: do NOT mark as pulled, so nothing local can overwrite the server
+        pullOk = true;
         const ver = Number(json.version) || 0;
-        if (!json.state) { auditSync.version = ver; return; } // nothing saved yet
+        if (json.unchanged) { auditSync.serverHasState = true; return; }
+        if (!json.state) { auditSync.version = ver; return; } // server has nothing saved yet -> this device may seed it
+        auditSync.serverHasState = true;
         // Local edits win and will be pushed momentarily; don't clobber a
         // half-typed filter either — try again on the next poll.
         if (auditSync.pendingPush || auditSync.pushing || auditSyncUserIsEditing()) return;
@@ -11410,6 +11941,7 @@ html.page-fade-ready body {
         const before = JSON.stringify(auditSyncSnapshot(cfg));
         if (!auditSyncApplyRemote(json.state)) return;
         auditSync.version = ver;
+        if (auditSync.lastJson !== before && !auditSyncIsAnalysisOpen()) { try { updateAuditRiskOverviewCard(); } catch (e) {} }
         if (auditSync.lastJson !== before && auditSyncIsAnalysisOpen()) {
           auditSyncRerender();
           if (!firstSync && typeof showToast === 'function' && document.getElementById('toast')) {
@@ -11434,10 +11966,13 @@ html.page-fade-ready body {
         // have. Fix: no push leaves this device until it has made at least
         // one genuine attempt to learn what the server already has, so a
         // real remote cap always gets first say.
-        if (!auditSync.everPulled) {
+        if (pullOk && !auditSync.everPulled) {
           auditSync.everPulled = true;
-          if (auditSync.deferredPush) { auditSync.deferredPush = false; auditSyncSchedulePush(); }
+          // First real answer from the server is in. If it holds a view, it already
+          // replaced this device's local values above, so nothing stale gets pushed.
+          if (auditSyncIsAnalysisOpen() && auditSync.serverHasState) auditSyncRerender();
         }
+        if (pullOk && auditSync.deferredPush) { auditSync.deferredPush = false; auditSyncSchedulePush(); }
       }
     }
 
@@ -11512,12 +12047,12 @@ html.page-fade-ready body {
       if (auditSync.pushTimer) { clearTimeout(auditSync.pushTimer); auditSync.pushTimer = null; }
       auditSync.version = 0; auditSync.lastJson = null;
       auditSync.pendingPush = false; auditSync.pushing = false; auditSync.pulling = false; auditSync.readOnly = false;
-      auditSync.everPulled = false; auditSync.deferredPush = false;
+      auditSync.everPulled = false; auditSync.deferredPush = false; auditSync.serverHasState = false;
       const cfg = window.auditAnalysisState;
       if (cfg) {
         cfg.overdueDays = 90; cfg.spacingDays = 3; cfg.minScore = 55; cfg.minGapDays = 30;
-        cfg.findingsCap = null; cfg.sizeCap = null;
-        cfg.filterBucket = 'ATTENTION';
+        cfg.findingsCap = null; cfg.sizeCap = null; cfg.repoCap = null; cfg.shortfallCap = null;
+        cfg.filterBucket = 'ALL';
         resetAuditTableFilterState(cfg);
         cfg.weights = loadSavedAuditRiskWeights();
       }
@@ -11531,13 +12066,13 @@ html.page-fade-ready body {
     const AUDIT_CFG_LABELS = {
       minScore: 'Risk-score threshold', minGapDays: 'Minimum gap since last audit',
       overdueDays: 'Always-schedule limit', spacingDays: 'Spacing between suggestions',
-      findingsCap: 'Findings cap', sizeCap: 'Portfolio-size cap'
+      findingsCap: 'Findings cap', sizeCap: 'Portfolio-size cap', repoCap: 'Repossession-count cap', shortfallCap: 'Not-collecting accounts cap'
     };
     // Shared with AUDIT_SYNC_NUM_RULES's ranges so a value valid here is also
     // valid to sync to other devices.
     const AUDIT_CFG_BOUNDS = {
       minScore: [1, 100], minGapDays: [0, 3650], overdueDays: [1, 3650], spacingDays: [1, 3650],
-      findingsCap: [1, 1000], sizeCap: [1, 10000000]
+      findingsCap: [1, 1000], sizeCap: [1, 10000000], repoCap: [1, 100000], shortfallCap: [1, 10000000]
     };
     function applyAuditAnalysisConfig(key) {
       const cfg = window.auditAnalysisState;
@@ -11556,6 +12091,55 @@ html.page-fade-ready body {
       refreshAuditAnalysis(false);
     }
 
+    // Small popup explaining how one risk factor is scored, opened by tapping its name in the
+    // weights list. Shows the live weight and the live scale in use right now.
+    function closeAuditFactorInfo() {
+      const old = document.getElementById('aa-factor-pop');
+      if (old) old.remove();
+      document.removeEventListener('keydown', auditFactorPopKey, true);
+    }
+    function auditFactorPopKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closeAuditFactorInfo(); } }
+    function showAuditFactorInfo(key, btn) {
+      const f = AUDIT_RISK_FACTORS.find(x => x.key === key);
+      if (!f) return;
+      const cfg = window.auditAnalysisState;
+      const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const w = auditNormalizeWeights100(cfg.weights)[key];
+      const nowLines = [];
+      nowLines.push('Currently counts for <b>' + w + '%</b> of the score.');
+      if (key === 'recency') nowLines.push('Due interval for each branch runs from about <b>' + Math.round(cfg.overdueDays * 0.5) + '</b> days (very risky data) to <b>' + Math.round(cfg.overdueDays * 1.75) + '</b> days (very healthy data), based on the Overdue setting of ' + cfg.overdueDays + ' days. About 50 points at the due date; at most <b>' + (Math.round(w * 10) / 10) + '</b> points added to a branch\u2019s total.');
+      else nowLines.push('A branch at 100 points here adds up to <b>' + w + '</b> points to its total score; the rest is scaled the same way.');
+      if (key === 'findings' && cfg.findingsCap) nowLines.push('<b>' + cfg.findingsCap + '</b> weighted findings score the full 100.');
+      if (key === 'repo' && cfg.repoCap) nowLines.push('<b>' + cfg.repoCap + '</b> repossessions score the full 100 on the count part.');
+      if (key === 'efficiency' && cfg.shortfallCap) nowLines.push('<b>' + Number(cfg.shortfallCap).toLocaleString() + '</b> accounts not collecting score the full 100 on that part.');
+      if (key === 'size' && cfg.sizeCap) nowLines.push('<b>' + Number(cfg.sizeCap).toLocaleString() + '</b> accounts score the full 100.');
+      const ev = btn && btn.getAttribute ? (btn.getAttribute('data-evidence') || '') : '';
+      closeAuditFactorInfo();
+      const wrap = document.createElement('div');
+      wrap.id = 'aa-factor-pop';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-label', f.label + ' — how it is scored');
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.25)';
+      wrap.innerHTML =
+        '<div style="max-width:340px;width:100%;max-height:80vh;overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 20px 40px -12px rgba(0,0,0,.3);padding:14px 16px;font-family:inherit">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px">' +
+            '<div style="font-size:13px;font-weight:800;color:#0f172a">' + esc(f.label) + '</div>' +
+            '<button type="button" id="aa-factor-pop-x" aria-label="Close" style="border:0;background:transparent;font-size:18px;line-height:1;color:#64748b;cursor:pointer;padding:0 2px">×</button>' +
+          '</div>' +
+          '<div style="font-size:11px;color:#4f46e5;margin-bottom:8px">' + nowLines.join('<br>') + '</div>' +
+          '<div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin-bottom:2px">How it is scored</div>' +
+          '<div style="font-size:11.5px;line-height:1.45;color:#334155;margin-bottom:8px">' + esc(f.how) + '</div>' +
+          '<div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin-bottom:2px">Why it matters</div>' +
+          '<div style="font-size:11.5px;line-height:1.45;color:#334155">' + esc(f.why) + '</div>' +
+          (ev ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:10.5px;line-height:1.4;color:#64748b">' + esc(ev) + '</div>' : '') +
+        '</div>';
+      wrap.addEventListener('click', function (e) { if (e.target === wrap) closeAuditFactorInfo(); });
+      document.body.appendChild(wrap);
+      const x = document.getElementById('aa-factor-pop-x');
+      if (x) { x.addEventListener('click', closeAuditFactorInfo); x.focus(); }
+      document.addEventListener('keydown', auditFactorPopKey, true);
+    }
+
     function readAuditWeightInputs() {
       const out = {};
       for (const f of AUDIT_RISK_FACTORS) {
@@ -11570,15 +12154,36 @@ html.page-fade-ready body {
     // applied until OK.
     function previewAuditRiskWeights() {
       const w = readAuditWeightInputs();
-      const vals = AUDIT_RISK_FACTORS.map(f => (isFinite(w[f.key]) && w[f.key] >= 0) ? w[f.key] : 0);
-      const sum = vals.reduce((s, v) => s + v, 0);
-      AUDIT_RISK_FACTORS.forEach((f, i) => {
-        const span = document.getElementById('aa-wpct-' + f.key);
-        if (span) span.textContent = (sum > 0 ? Math.round((vals[i] / sum) * 100) : 0) + '%';
-      });
+      const total = AUDIT_RISK_FACTORS.reduce((sum, f) => sum + ((isFinite(w[f.key]) && w[f.key] >= 0) ? w[f.key] : 0), 0);
+      const el = document.getElementById('aa-w-total');
+      if (el) {
+        const diff = Math.round((100 - total) * 100) / 100;
+        const rounded = Math.round(total * 100) / 100;
+        let cls, msg;
+        if (diff === 0) { cls = 'bg-accentEmerald/10 text-accentEmerald border-accentEmerald/30'; msg = '✓ Total ' + rounded + '% — ready to save'; }
+        else if (diff > 0) { cls = 'bg-accentAmber/10 text-accentAmber border-accentAmber/30'; msg = 'Total ' + rounded + '% — ' + diff + '% left to give'; }
+        else { cls = 'bg-accentRose/10 text-accentRose border-accentRose/30'; msg = 'Total ' + rounded + '% — ' + Math.abs(diff) + '% too much, lower something'; }
+        el.className = 'inline-flex items-center px-2 py-1 rounded-md border text-[10px] font-extrabold whitespace-nowrap ' + cls;
+        el.textContent = msg;
+      }
       const hint = document.getElementById('aa-w-hint');
       if (hint) hint.classList.remove('hidden');
     }
+
+    // Live "how many branches does this setting touch?" lines in the Rating
+    // Rules popup. Read-only: nothing is applied until Save.
+    function updateAuditSettingsPreview() {
+      const rows = window.__aaPreviewRows || [];
+      const val = k => { const el = document.getElementById('aa-cfg-' + k); const n = el ? parseInt(el.value, 10) : NaN; return isNaN(n) ? null : n; };
+      const put = (k, html) => { const el = document.getElementById('aa-pv-' + k); if (el) el.innerHTML = html; };
+      const T = rows.length;
+      const ms = val('minScore'), mg = val('minGapDays'), od = val('overdueDays'), sp = val('spacingDays');
+      if (ms !== null) { const n = rows.filter(r => r.s >= ms).length; const f = rows.filter(r => r.s < ms && r.f).length; put('minScore', '<b>' + n + '</b> of ' + T + ' branches score ' + ms + ' or higher' + (f ? ' (+' + f + ' more with a red flag)' : '') + '.'); }
+      if (mg !== null) { const n = rows.filter(r => r.d !== null && r.d < mg).length; put('minGapDays', '<b>' + n + '</b> branch' + (n === 1 ? ' was' : 'es were') + ' audited in the last ' + mg + ' days, so ' + (n === 1 ? 'it is' : 'they are') + ' held back.'); }
+      if (od !== null) { const n = rows.filter(r => r.d !== null && r.d >= od).length; put('overdueDays', '<b>' + n + '</b> branch' + (n === 1 ? ' has' : 'es have') + ' gone ' + od + ' days or more without an audit.'); }
+      if (sp !== null) { put('spacingDays', 'One auditor can start about <b>' + (Math.round((5 / sp) * 10) / 10) + '</b> branch audit' + (sp === 5 ? '' : 's') + ' per week.'); }
+    }
+    window.addEventListener('load', function () { try { updateAuditSettingsPreview(); } catch (e) {} });
 
     function applyAuditRiskWeights() {
       const cfg = window.auditAnalysisState;
@@ -11586,14 +12191,15 @@ html.page-fade-ready body {
       const bad = AUDIT_RISK_FACTORS.filter(f => !isFinite(w[f.key]) || w[f.key] < 0 || w[f.key] > 100);
       if (bad.length) {
         cfg.notice = { type: 'error', text: 'Weights must be numbers from 0 to 100 (check: ' + bad.map(f => f.label).join(', ') + '). Nothing was changed.' };
-      } else if (!AUDIT_RISK_FACTORS.some(f => w[f.key] > 0)) {
-        cfg.notice = { type: 'error', text: 'At least one factor needs a weight above 0. Nothing was changed.' };
+      } else if (Math.abs(AUDIT_RISK_FACTORS.reduce((t, f) => t + w[f.key], 0) - 100) > 0.001) {
+        const t = Math.round(AUDIT_RISK_FACTORS.reduce((t, f) => t + w[f.key], 0) * 100) / 100;
+        cfg.notice = { type: 'error', text: 'Weights must add up to exactly 100% (now ' + t + '%). Nothing was changed.' };
       } else {
         cfg.weights = w;
         cfg.weightsSource = 'custom';
         try { localStorage.setItem(AUDIT_RISK_WEIGHTS_KEY, JSON.stringify(w)); } catch (e) {}
         saveAuditRiskWeightsSource('custom');
-        cfg.notice = { type: 'ok', text: 'Risk-score weights applied and saved on this device — every score has been recalculated.' };
+        cfg.notice = { type: 'ok', text: 'Risk-score weights applied and synced to all your devices — every score has been recalculated.' };
       }
       cfg.weightsOpen = true;
       refreshAuditAnalysis(false);
@@ -11606,7 +12212,7 @@ html.page-fade-ready body {
       const cfg = window.auditAnalysisState;
       const problems = [];
 
-      const cfgKeys = ['minScore', 'minGapDays', 'overdueDays', 'spacingDays', 'findingsCap', 'sizeCap'];
+      const cfgKeys = ['minScore', 'minGapDays', 'overdueDays', 'spacingDays', 'findingsCap', 'sizeCap', 'repoCap', 'shortfallCap'];
       const newCfgVals = {};
       cfgKeys.forEach(key => {
         const el = document.getElementById('aa-cfg-' + key);
@@ -11628,9 +12234,9 @@ html.page-fade-ready body {
       if (badWeights.length) {
         weightsOk = false;
         problems.push('Weights must be numbers from 0 to 100 (check: ' + badWeights.map(f => f.label).join(', ') + ').');
-      } else if (!AUDIT_RISK_FACTORS.some(f => w[f.key] > 0)) {
-        weightsOk = false;
-        problems.push('At least one risk-score weight needs to be above 0.');
+      } else {
+        const t = Math.round(AUDIT_RISK_FACTORS.reduce((t, f) => t + w[f.key], 0) * 100) / 100;
+        if (Math.abs(t - 100) > 0.001) { weightsOk = false; problems.push('Risk-score weights must add up to exactly 100% (now ' + t + '%).'); }
       }
 
       if (problems.length) {
@@ -11685,6 +12291,32 @@ html.page-fade-ready body {
       window.auditAnalysisState.weightsOpen = !!isOpen;
     }
 
+    // Gear button in the popup header: show/hide the Rating Rules panel.
+    function toggleAuditSettings() {
+      const cfg = window.auditAnalysisState;
+      const open = !(cfg.settingsOpen || cfg.weightsOpen);
+      cfg.settingsOpen = open; cfg.weightsOpen = open;
+      refreshAuditAnalysis(false);
+      const body = document.getElementById('modalBody');
+    }
+
+    // Priority Audit Queue lives in its own popup: opened by the "View full
+    // queue" button, or automatically by any click-through that filters it.
+    // "View full queue" button: lists every branch (not just the ones that
+    // still need a schedule), so the count on the button matches the list.
+    function showAllAuditBranches() {
+      const cfg = window.auditAnalysisState;
+      resetAuditTableFilterState(cfg);
+      cfg.filterBucket = 'ALL';
+      refreshAuditAnalysis(true);
+    }
+
+    function toggleAuditQueue() {
+      const cfg = window.auditAnalysisState;
+      cfg.queueOpen = !cfg.queueOpen;
+      refreshAuditAnalysis(false);
+    }
+
     function setAuditSettingsOpen(isOpen) {
       window.auditAnalysisState.settingsOpen = !!isOpen;
     }
@@ -11701,13 +12333,13 @@ html.page-fade-ready body {
       cfg.auditorFilter = u ? u.value : 'ALL';
       // A search/tier/auditor lookup should look across every branch, not
       // just the ones currently needing a schedule.
-      if (cfg.filterBucket === 'ATTENTION' && (cfg.search || cfg.tierFilter !== 'ALL' || cfg.auditorFilter !== 'ALL')) cfg.filterBucket = 'ALL';
+      if (cfg.filterBucket === 'ATTENTION') cfg.filterBucket = 'ALL';
       refreshAuditAnalysis(true);
     }
 
     function resetAuditTableFilters() {
       const cfg = window.auditAnalysisState;
-      cfg.filterBucket = 'ATTENTION';
+      cfg.filterBucket = 'ALL';
       resetAuditTableFilterState(cfg);
       refreshAuditAnalysis(false);
     }
@@ -11724,10 +12356,10 @@ html.page-fade-ready body {
     // the default schedule view.
     function setAuditAnalysisFilter(bucket) {
       const cfg = window.auditAnalysisState;
-      const cur = cfg.filterBucket || 'ATTENTION';
+      const cur = cfg.filterBucket || 'ALL';
       const wasSame = (cur === bucket) && cfg.sortField === null;
       resetAuditTableFilterState(cfg);
-      cfg.filterBucket = wasSame ? 'ATTENTION' : bucket;
+      cfg.filterBucket = wasSame ? 'ALL' : bucket;
       refreshAuditAnalysis(true);
     }
 
@@ -11737,7 +12369,7 @@ html.page-fade-ready body {
       const cfg = window.auditAnalysisState;
       const wasSame = cfg.filterBucket === 'ALL' && cfg.sortField === field;
       resetAuditTableFilterState(cfg);
-      if (wasSame) { cfg.filterBucket = 'ATTENTION'; }
+      if (wasSame) { cfg.filterBucket = 'ALL'; }
       else { cfg.filterBucket = 'ALL'; cfg.sortField = field; cfg.sortDir = 'desc'; }
       refreshAuditAnalysis(true);
     }
@@ -11752,7 +12384,7 @@ html.page-fade-ready body {
       if (!k) return;
       const isSame = cfg.filterBucket === 'ALL' && cfg[k] === value;
       resetAuditTableFilterState(cfg);
-      if (isSame) { cfg.filterBucket = 'ATTENTION'; }
+      if (isSame) { cfg.filterBucket = 'ALL'; }
       else {
         cfg.filterBucket = 'ALL';
         cfg[k] = value;
@@ -11797,7 +12429,7 @@ html.page-fade-ready body {
     // The ✕ on a filter chip.
     function clearAuditFilterChip(kind) {
       const cfg = window.auditAnalysisState;
-      if (kind === 'bucket') cfg.filterBucket = 'ATTENTION';
+      if (kind === 'bucket') cfg.filterBucket = 'ALL';
       else if (kind === 'tier') cfg.tierFilter = 'ALL';
       else if (kind === 'auditor') cfg.auditorFilter = 'ALL';
       else if (kind === 'queue') cfg.queueFilter = '';
@@ -11815,6 +12447,7 @@ html.page-fade-ready body {
     function dispatchAuditClick(kind, value) {
       switch (kind) {
         case 'branch': openModalDetail(value); break;
+        case 'branchpopup': openBranchRiskPopupByName(value); break;
         case 'sort': setAuditAnalysisSort(value); break;
         case 'clear': clearAuditFilterChip(value); break;
         case 'clearall': resetAuditTableFilters(); break;
@@ -11828,6 +12461,10 @@ html.page-fade-ready body {
       const handle = function (e) {
         const t = e.target && e.target.closest ? e.target.closest('[data-aa-kind]') : null;
         if (!t || !container.contains(t)) return;
+        // Whole-row click: buttons/links/inputs inside the row (score pill, Set
+        // Schedule, status, name...) keep their own action instead of also
+        // opening the row popup.
+        if (t.tagName === 'TR' && e.target !== t && e.target.closest && e.target.closest('button, a, input, select, textarea, label')) return;
         if (e.type === 'keydown') {
           // Real <button>s already turn Enter/Space into a click; handling
           // it here too would fire twice (and a toggle would undo itself).
@@ -11864,6 +12501,13 @@ html.page-fade-ready body {
     // globals exist so the new cap-sanity check below is guaranteed to be
     // scoring branches exactly the same way computeAuditRiskScores does.
     function auditFindingsWeighted(b) { return (b.findings2024 || 0) + (b.findings2025 || 0) * 2 + (b.findings2026 || 0) * 3; }
+    // Repossession count (latest month with a figure) and estimated accounts NOT collecting.
+    function auditRepoCountOf(b) { return b.noOfRepoLatest || b.noOfRepoApr || b.noOfRepoMar || 0; }
+    function auditEffNowOf(b) { return (b.effLatest || 0) > 0 ? b.effLatest : ((b.effApr || 0) > 0 ? b.effApr : (b.effMar || 0)); }
+    function auditShortfallOf(b) {
+      const eff = auditEffNowOf(b), acc = (b.accountsMay || 0) > 0 ? b.accountsMay : (b.accountsApr || 0);
+      return (eff > 0 && acc > 0) ? Math.round(acc * Math.max(0, 100 - eff) / 100) : 0;
+    }
     function auditAccountsOf(b) { return (b.accountsMay || 0) > 0 ? b.accountsMay : (b.accountsApr || 0); }
 
     // "Is this cap actually calibrated to the portfolio, or just a stale/
@@ -11897,6 +12541,25 @@ html.page-fade-ready body {
     // Pearson correlation coefficient between two equal-length numeric
     // arrays. Returns null when there isn't enough spread or data to say
     // anything ( < 3 points, or no variation in either series ).
+    // Rank (Spearman) correlation: findings and repo counts are skewed, zero-heavy counts, where
+    // a few branches can dominate a Pearson r. Ranks (ties averaged) reflect "does a higher score
+    // go with more findings" without that distortion.
+    function auditRiskRanks(a) {
+      const idx = a.map((v, i) => i).sort((i, j) => a[i] - a[j]);
+      const r = new Array(a.length);
+      for (let k = 0; k < idx.length;) {
+        let m = k;
+        while (m + 1 < idx.length && a[idx[m + 1]] === a[idx[k]]) m++;
+        const avg = (k + m) / 2 + 1;
+        for (let t = k; t <= m; t++) r[idx[t]] = avg;
+        k = m + 1;
+      }
+      return r;
+    }
+    function auditRiskSpearman(xs, ys) {
+      if (xs.length < 3) return null;
+      return auditRiskPearson(auditRiskRanks(xs), auditRiskRanks(ys));
+    }
     function auditRiskPearson(xs, ys) {
       const n = xs.length;
       if (n < 3) return null;
@@ -11928,7 +12591,7 @@ html.page-fade-ready body {
           const x = r.risk && r.risk.factors && r.risk.factors.find(f => f.key === fac.key);
           if (x && x.available) { xs.push(x.points); ys.push(findingsWeighted(r.b)); }
         });
-        out[fac.key] = { r: auditRiskPearson(xs, ys), n: xs.length };
+        out[fac.key] = { r: auditRiskSpearman(xs, ys), n: xs.length };
       });
       return out;
     }
@@ -11986,13 +12649,23 @@ html.page-fade-ready body {
       const corr = computeAuditFactorCorrelations(rows);
       const overlap = computeAuditFactorOverlap(rows);
       const findingsWeight = Math.max(0, Number(cfg.weights.findings) || 0) || 25;
-      const remaining = Math.max(0, 100 - findingsWeight);
-      const others = AUDIT_RISK_FACTORS.filter(f => f.key !== 'findings');
+      // Recency is a POLICY weight, not learned: audits are what discover findings, so a branch
+      // audited recently can show MORE findings, and correlating recency with findings would
+      // reward or punish the audit schedule itself rather than measure risk.
+      const recencyWeight = Math.max(0, Number(cfg.weights.recency) || 0) || 10;
+      const remaining = Math.max(0, 100 - findingsWeight - recencyWeight);
+      const others = AUDIT_RISK_FACTORS.filter(f => f.key !== 'findings' && f.key !== 'recency');
       const floor = 2;
       let usableFactors = 0;
       const strengths = others.map(f => {
         const c = corr[f.key];
-        if (c && c.r !== null && c.n >= 5) { usableFactors++; return Math.max(floor, Math.abs(c.r) * 100); }
+        if (c && c.r !== null && c.n >= 5) {
+          usableFactors++;
+          // Only a link that is clearly above noise earns weight (|r| > ~2/sqrt(n), roughly p<0.05);
+          // a weak or opposite link is not evidence of risk, so it stays at the small floor.
+          const noise = 2 / Math.sqrt(c.n);
+          return c.r > noise ? Math.max(floor, c.r * 100) : floor;
+        }
         return floor;
       });
       // DEDUPLICATE OVERLAPPING FACTORS before turning strengths into weights.
@@ -12019,9 +12692,10 @@ html.page-fade-ready body {
         return size > 1 ? s / Math.sqrt(size) : s;
       });
       const sum = dedupedStrengths.reduce((s, v) => s + v, 0) || 1;
-      const w = { findings: findingsWeight };
+      const w = { findings: findingsWeight, recency: recencyWeight };
       others.forEach((f, i) => { w[f.key] = Math.round((dedupedStrengths[i] / sum) * remaining); });
-      return { weights: w, corr, overlap, usableFactors, n: rows.length };
+      const w100 = auditNormalizeWeights100(w);
+      return { weights: w100, corr, overlap, usableFactors, n: rows.length };
     }
 
     // Button handler: explicitly (re)derive weights from the current
@@ -12052,7 +12726,9 @@ html.page-fade-ready body {
       const cfg = window.auditAnalysisState;
       cfg.findingsCap = null;
       cfg.sizeCap = null;
-      cfg.notice = { type: 'ok', text: 'Findings and portfolio-size caps recalculated from the current portfolio, and frozen from here.' };
+      cfg.repoCap = null;
+      cfg.shortfallCap = null;
+      cfg.notice = { type: 'ok', text: 'All scoring scales recalculated from the current portfolio, and frozen from here.' };
       refreshAuditAnalysis(false);
     }
 
@@ -12087,8 +12763,16 @@ html.page-fade-ready body {
       if (cfg.sizeCap === null || cfg.sizeCap === undefined) {
         cfg.sizeCap = Math.round(auditRiskPercentile(rows.map(r => accountsOf(r.b)), 0.9)) || 1;
       }
+      if (cfg.repoCap === null || cfg.repoCap === undefined) {
+        cfg.repoCap = Math.max(Math.round(auditRiskPercentile(rows.map(r => auditRepoCountOf(r.b)), 0.9)), 3);
+      }
+      if (cfg.shortfallCap === null || cfg.shortfallCap === undefined) {
+        cfg.shortfallCap = Math.max(Math.round(auditRiskPercentile(rows.map(r => auditShortfallOf(r.b)), 0.9)), 1);
+      }
       const findingsCap = cfg.findingsCap;
       const sizeCap = cfg.sizeCap;
+      const repoCap = cfg.repoCap;
+      const shortfallCap = cfg.shortfallCap;
       const highTier = AUDIT_RISK_TIERS.find(t => t.key === 'HIGH');
       const tierRank = t => AUDIT_RISK_TIERS.indexOf(t); // 0 = Critical ... 3 = Low
 
@@ -12103,11 +12787,9 @@ html.page-fade-ready body {
           f.push({ key, label: def ? def.label : key, available, points: available ? Math.max(0, Math.min(100, points)) : 0, detail, short });
         };
 
+        // 'recency' is scored AFTER the data factors below, because how urgent
+        // "days since last audit" is depends on how healthy the branch's data is.
         const never = info.roundsCount === 0 || info.intervalDays === null || info.intervalDays === undefined;
-        add('recency', true,
-            never ? 100 : (Math.max(0, info.intervalDays) / Math.max(1, cfg.overdueDays)) * 100,
-            never ? 'Never audited' : info.intervalDays + ' days since last audit',
-            never ? 'Never audited' : info.intervalDays + 'd since audit');
 
         const fw = findingsWeighted(b);
         const ftotal = (b.findings2024 || 0) + (b.findings2025 || 0) + (b.findings2026 || 0);
@@ -12134,30 +12816,23 @@ html.page-fade-ready body {
         const effDelta = effNZ.length >= 2 ? effNZ[effNZ.length - 1] - effNZ[0] : null;
         const effTrendPts = (effDelta !== null && effDelta < 0) ? Math.min(100, (-effDelta / 15) * 100) : 0;
         const statusPts = AUDIT_RISK_STATUS_POINTS.collection[b.collection];
-        const hasStatus = statusPts !== undefined && statusPts !== null;
-        let effPts, hasEfficiencyFactor;
-        if (hasEff && effDelta !== null && hasStatus) {
-          effPts = effLevelPts * 0.55 + effTrendPts * 0.20 + statusPts * 0.25;
-          hasEfficiencyFactor = true;
-        } else if (hasEff && hasStatus) {
-          effPts = effLevelPts * 0.75 + statusPts * 0.25;
-          hasEfficiencyFactor = true;
-        } else if (hasEff) {
-          effPts = effDelta !== null ? (effLevelPts * 0.7 + effTrendPts * 0.3) : effLevelPts;
-          hasEfficiencyFactor = true;
-        } else if (hasStatus) {
-          // No % on file yet for this branch — the reported status alone
-          // still tells us something, so it carries the whole factor
-          // instead of the branch losing this weight entirely.
-          effPts = statusPts;
-          hasEfficiencyFactor = true;
-        } else {
-          effPts = 0;
-          hasEfficiencyFactor = false;
-        }
+        const hasStatus = statusPts !== undefined && statusPts !== null && b.collectionKnown !== false; // a blank status cell is missing data, not "Stable"
+        // Blend of up to four parts; a part with no data is dropped and the rest rescaled.
+        const hasAcctEff = ((b.accountsMay || 0) > 0 ? b.accountsMay : (b.accountsApr || 0)) > 0;
+        const shortfall = auditShortfallOf(b);
+        const shortfallPts = (shortfall / shortfallCap) * 100;
+        const effParts = [];
+        if (hasEff) effParts.push([effLevelPts, 0.40]);
+        if (hasEff && effDelta !== null) effParts.push([effTrendPts, 0.15]);
+        if (hasStatus) effParts.push([statusPts, 0.20]);
+        if (hasEff && hasAcctEff) effParts.push([Math.min(100, shortfallPts), 0.25]);
+        const effWSum = effParts.reduce((t, x) => t + x[1], 0);
+        const hasEfficiencyFactor = effWSum > 0;
+        const effPts = hasEfficiencyFactor ? effParts.reduce((t, x) => t + x[0] * x[1], 0) / effWSum : 0;
         add('efficiency', hasEfficiencyFactor, effPts,
             (hasEff ? (effNow + '% ' + (effSeries[2] > 0 ? 'latest' : 'most recent available') + ' efficiency'
-              + (effDelta !== null ? (', ' + (effDelta > 0 ? '+' : '') + effDelta + ' pts vs earliest month on record') : '')) : 'No efficiency % on file')
+              + (effDelta !== null ? (', ' + (effDelta > 0 ? '+' : '') + effDelta + ' pts vs earliest month on record') : '')
+              + (shortfall > 0 ? (', ~' + shortfall.toLocaleString() + ' accounts not collecting') : '')) : 'No efficiency % on file')
               + (hasStatus ? '; collection reported as ' + (b.collection || 'Stable') : ''),
             'Efficiency ' + effNow + '%' + (effDelta !== null && effDelta < 0 ? ' (falling)' : '') + ', collection ' + String(b.collection || 'Stable').toLowerCase());
 
@@ -12173,22 +12848,57 @@ html.page-fade-ready body {
         const repoHasTrend = hasAcct && repoSeries[0] > 0;
         const repoDelta = repoHasTrend ? repoSeries[2] - repoSeries[0] : null;
         const repoTrendPts = (repoDelta !== null && repoDelta > 0) ? Math.min(100, (repoDelta / 3) * 100) : 0;
-        const repoPts = repoHasTrend ? (repoLevelPts * 0.7 + repoTrendPts * 0.3) : repoLevelPts;
+        const repoCount = auditRepoCountOf(b);
+        const repoCountPts = Math.min(100, (repoCount / repoCap) * 100);
+        const repoParts = [[repoLevelPts, 0.40], [repoCountPts, 0.30]];
+        if (repoHasTrend) repoParts.push([repoTrendPts, 0.30]);
+        const repoWSum = repoParts.reduce((t, x) => t + x[1], 0);
+        const repoPts = repoParts.reduce((t, x) => t + x[0] * x[1], 0) / repoWSum;
         add('repo', hasAcct, repoPts,
-            hasAcct ? (repo.toFixed(2) + '% latest repo rate'
+            hasAcct ? (repo.toFixed(2) + '% latest repo rate, ' + repoCount + ' repossession' + (repoCount === 1 ? '' : 's')
               + (repoHasTrend ? (', ' + (repoDelta > 0 ? '+' : '') + repoDelta.toFixed(1) + ' pts vs earliest month on record') : '')) : 'No account data',
-            'Repo ' + repo.toFixed(1) + '%' + (repoDelta !== null && repoDelta > 0 ? ' (rising)' : ''));
+            'Repo ' + repo.toFixed(1) + '% (' + repoCount + ')' + (repoDelta !== null && repoDelta > 0 ? ' (rising)' : ''));
 
-        add('sales', true, AUDIT_RISK_STATUS_POINTS.sales[b.sales] ?? 20,
+        add('sales', b.salesKnown !== false, AUDIT_RISK_STATUS_POINTS.sales[b.sales] ?? 20,
             'Sales are ' + (b.sales || 'Stable'), 'Sales ' + String(b.sales || 'Stable').toLowerCase());
 
-        add('service', true, AUDIT_RISK_STATUS_POINTS.service[b.service] ?? 0,
+        add('service', b.serviceKnown !== false, AUDIT_RISK_STATUS_POINTS.service[b.service] ?? 0,
             b.service === 'Declining' ? 'Below service target' : 'On service target',
             b.service === 'Declining' ? 'Service below target' : 'Service on target');
 
         add('size', hasAcct, (accountsOf(b) / sizeCap) * 100,
             hasAcct ? (accountsOf(b).toLocaleString() + ' accounts') : 'No account data',
             accountsOf(b).toLocaleString() + ' accounts');
+
+        // DATA-DRIVEN RECENCY. Old rule: days / overdueDays x 100 (fresh audit = 0,
+        // anything past the threshold = 100 no matter how healthy the branch is).
+        // New rule: 1) score the branch on its DATA factors only (dataScore 0-100);
+        // 2) that sets THIS branch's own due interval - healthy data = longer
+        // (up to 1.75x the threshold), risky data = shorter (down to 0.5x);
+        // 3) points follow a smooth curve of days / dueDays: 50 at the due date,
+        // rising toward (never abruptly hitting) 100; 4) a floor of 25% of the
+        // data score, so a risky branch is not "0" just because it was audited
+        // yesterday, while a clean branch stays near 0.
+        let dSum = 0, dW = 0;
+        f.forEach(x => { if (x.available) { const w = Math.max(0, Number(weights[x.key]) || 0); dSum += w * x.points; dW += w; } });
+        const dataScore = dW > 0 ? dSum / dW : 50;
+        const baseDue = Math.max(1, cfg.overdueDays);
+        const dueDays = Math.round(baseDue * (1.75 - 1.25 * (dataScore / 100)));
+        const recFloor = 0.25 * dataScore;
+        let recPts, recDetail, recShort;
+        if (never) {
+          recPts = 60 + 0.4 * dataScore;
+          recDetail = 'Never audited (scored from its data: ' + Math.round(dataScore) + '/100)';
+          recShort = 'Never audited';
+        } else {
+          const r = Math.max(0, info.intervalDays) / dueDays;
+          const curve = (r * r) / (1 + r * r);
+          recPts = recFloor + (100 - recFloor) * curve;
+          recDetail = info.intervalDays + ' days since last audit; this branch\u2019s data (' + Math.round(dataScore) + '/100) makes it due about every ' + dueDays + ' days';
+          recShort = info.intervalDays + 'd since audit (due ~' + dueDays + 'd)';
+        }
+        f.unshift({ key: 'recency', label: 'Time since last audit', available: true,
+          points: Math.max(0, Math.min(100, recPts)), detail: recDetail, short: recShort });
 
         let weightSum = 0, weightTotal = 0;
         f.forEach(x => {
@@ -12285,7 +12995,9 @@ html.page-fade-ready body {
       // OK button, or "Reset").
       let hasSavedWeights = false;
       try { hasSavedWeights = localStorage.getItem(AUDIT_RISK_WEIGHTS_KEY) !== null; } catch (e) {}
-      if (!hasSavedWeights && rows.length >= AUDIT_WEIGHTS_MIN_ROWS) {
+      // Only seed data-derived weights once the server has answered AND holds no shared view;
+      // otherwise every device would invent its own weights from its own data.
+      if (!hasSavedWeights && auditSync.everPulled && !auditSync.serverHasState && rows.length >= AUDIT_WEIGHTS_MIN_ROWS) {
         computeAuditRiskScores(rows, cfg); // populate factor .points (weight-independent) so they can be correlated
         const auto = computeDataDrivenAuditRiskWeights(rows, cfg);
         if (auto.usableFactors >= 2) {
@@ -12319,7 +13031,7 @@ html.page-fade-ready body {
         const days = info.intervalDays;
         const hasDays = days !== null && days !== undefined;
         const highRisk = auditIsHighRisk(row, cfg);
-        const pastMinGap = !hasDays || days >= cfg.minGapDays;
+        const pastMinGap = !hasDays || days >= Math.min(cfg.minGapDays, row.risk.cycleDays); // rest period can never exceed the rating's own cycle
 
         if (info.roundsCount === 0 && !hasExpected) {
           neverAudited.push(row);
@@ -12391,6 +13103,20 @@ html.page-fade-ready body {
         if (lane && busy[lane] && r.info.expectedAuditDateRaw) {
           occupiedDays(new Date(r.info.expectedAuditDateRaw)).forEach(d => busy[lane].add(auditDayKey(d)));
         }
+      });
+      // Also block every day an auditor already has on ANY future-dated round
+      // (Edit Assignment rounds + rotation sheet), not just the "Up Next" date.
+      const laneKey = v => String(v || '').trim().toUpperCase();
+      rows.forEach(r => {
+        const rounds = [];
+        const own = r.b.assignmentRounds || {};
+        for (let n = 1; n <= 4; n++) if (own[n] && own[n].dateRaw) rounds.push(own[n]);
+        const sch = (activeData.branchAuditSchedule || {})[r.b.name];
+        if (sch && sch.rounds) sch.rounds.forEach(x => { if (x && x.dateRaw) rounds.push(x); });
+        rounds.forEach(x => {
+          const lane = lanes.find(n => laneKey(n) === laneKey(x.auditor));
+          if (lane && x.dateRaw >= today - 86400000) occupiedDays(new Date(x.dateRaw)).forEach(d => busy[lane].add(auditDayKey(d)));
+        });
       });
       const startFrom = new Date(today); startFrom.setDate(startFrom.getDate() + 1); startFrom.setHours(0, 0, 0, 0);
       const firstFreeSlot = (lane) => {
@@ -12618,7 +13344,7 @@ html.page-fade-ready body {
     // them as removable chips ("show what is needed").
     function getAuditAnalysisTableRows(a, bucketOverride, sortOverride) {
       const cfg = window.auditAnalysisState;
-      const bucket = bucketOverride || (cfg.filterBucket || 'ATTENTION');
+      const bucket = bucketOverride || ((cfg.filterBucket && cfg.filterBucket !== 'ATTENTION') ? cfg.filterBucket : 'ALL');
       const all = getAuditAnalysisAllRows(a);
       let title, rows;
       switch (bucket) {
@@ -12633,9 +13359,9 @@ html.page-fade-ready body {
         case 'ON_TRACK':
           title = 'On Track'; rows = all.filter(r => r.reason === 'On track' || r.reason === 'Monitor — recently audited'); break;
         case 'HIGH_RISK':
-          title = 'High-Risk Branches (score ' + cfg.minScore + '+ or a data red flag), ranked by score'; rows = all.filter(r => auditIsHighRisk(r, cfg)); break;
+          title = 'Critical & High risk branches (score 55+ or a data red flag), ranked by score'; rows = all.filter(r => r.risk.tier.key === 'CRITICAL' || r.risk.tier.key === 'HIGH'); break;
         case 'OVERDUE':
-          title = 'Overdue Audits (no audit for ' + cfg.overdueDays + '+ days, or a scheduled date that passed)';
+          title = 'Overdue Audits (past the audit cycle for their risk rating, or a scheduled date that passed)';
           rows = all.filter(r => r.reason === 'Overdue, not yet scheduled' || r.reason === 'Expected date already passed'); break;
         case 'EVER_AUDITED':
           title = 'Branches Audited At Least Once (audit coverage)'; rows = all.filter(r => r.reason !== 'Never audited'); break;
@@ -12648,7 +13374,7 @@ html.page-fade-ready body {
       const baseTitle = title;
       const chips = [];
       if (!bucketOverride) {
-      if (bucket !== 'ATTENTION') chips.push({ kind: 'bucket', label: 'View: ' + baseTitle.replace(/, ranked by (risk )?score$/, '') });
+      if (bucket !== 'ALL') chips.push({ kind: 'bucket', label: 'View: ' + baseTitle.replace(/, ranked by (risk )?score$/, '') });
       const factorOf = (r, key) => r.risk.factors.find(x => x.key === key);
       const factorLabel = (key) => (AUDIT_RISK_FACTORS.find(f => f.key === key) || {}).label || key;
 
@@ -12703,7 +13429,31 @@ html.page-fade-ready body {
         if (val) rows = rows.slice().sort((x, y) => { const p = val(x), q = val(y); return (p < q ? -1 : (p > q ? 1 : 0)) * dir; });
       }
       const filtered = chips.some(c => c.kind !== 'bucket');
-      return { title: (filtered && bucket === 'ALL') ? 'Filtered Branches' : baseTitle, rows, chips };
+      // A single drill-down (tapping a tier bar, an auditor, a status, ...) gets a
+      // specific title like every other entry to this popup, instead of the
+      // generic "Filtered Branches". Several filters at once keep the generic one.
+      let title2 = baseTitle;
+      if (filtered && bucket === 'ALL') {
+        title2 = 'Filtered Branches';
+        const active = chips.filter(c => c.kind !== 'bucket');
+        if (active.length === 1) {
+          const k = active[0].kind;
+          if (k === 'tier') {
+            const ti = AUDIT_RISK_TIERS.findIndex(x => x.key === cfg.tierFilter);
+            if (ti >= 0) {
+              const t = AUDIT_RISK_TIERS[ti];
+              const rng = ti === 0 ? t.min + '+' : (t.key === 'LOW' ? 'under ' + AUDIT_RISK_TIERS[ti - 1].min : t.min + '\u2013' + (AUDIT_RISK_TIERS[ti - 1].min - 1));
+              title2 = t.label + ' risk branches (score ' + rng + '), ranked by score';
+            }
+          }
+          else if (k === 'auditor') title2 = 'Branches assigned to ' + cfg.auditorFilter;
+          else if (k === 'queue') title2 = 'Branches in ' + cfg.queueFilter + '\u2019s queue';
+          else if (k === 'reason') title2 = cfg.reasonFilter + ' branches';
+          else if (k === 'dist') title2 = active[0].label + ' branches';
+          else if (k === 'driver') title2 = active[0].label + ' branches';
+        }
+      }
+      return { title: title2, rows, chips };
     }
 
     // Flat rows for the consolidated Excel export — same data the on-screen
@@ -12744,6 +13494,8 @@ html.page-fade-ready body {
         ['', '', '', '', ''],
         ['Findings cap', '', '', cfg.findingsCap + ' weighted points score 100 on the Findings factor. Fixed and editable in Settings (not recalculated from whichever branches happen to be loaded).', ''],
         ['Portfolio-size cap', '', '', cfg.sizeCap + ' accounts score 100 on the Portfolio Size factor. Fixed and editable in Settings, same reason as above.', ''],
+        ['Repossession-count cap', '', '', cfg.repoCap + ' repossessions score 100 on the count part of the Repossessions factor. Fixed and editable in Settings.', ''],
+        ['Not-collecting accounts cap', '', '', cfg.shortfallCap + ' accounts not collecting (accounts x (100 - efficiency %)) score 100 on that part of Collection health. Fixed and editable in Settings.', ''],
         ['Risk tiers', '', '', 'Critical 70+, High 55-69, Medium 40-54, Low below 40. Any data red flag lifts a branch to at least High.', ''],
         ['Data red flags', '', '', AUDIT_RED_FLAGS.map(x => x.label).join('; ') + '. Any one qualifies a branch for scheduling whatever its score.', 'A weighted average can dilute one severe signal; these tripwires cannot be averaged away.'],
         ['Scheduling rules', '', '', 'Coverage rules (always scheduled): never audited; scheduled date passed without Done; no audit for ' + cfg.overdueDays + '+ days. Risk rule: risk score ' + cfg.minScore + '+ or any data red flag, and last audited at least ' + cfg.minGapDays + ' days ago. Suggested auditors never repeat the branch\'s most recent auditor when someone else is available; dates are per auditor, skip weekends/holidays and never overlap an audit they already have scheduled.', ''],
@@ -12761,20 +13513,21 @@ html.page-fade-ready body {
       const cfg = window.auditAnalysisState;
       const a = computeAuditScheduleAnalysis();
       const fmtDate = d => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-      const filterBucket = cfg.filterBucket || 'ATTENTION';
-      const highRiskCount = a.rows.filter(r => auditIsHighRisk(r, cfg)).length;
+      const filterBucket = (cfg.filterBucket && cfg.filterBucket !== 'ATTENTION') ? cfg.filterBucket : 'ALL';
+      const highRiskCount = a.rows.filter(r => r.risk.tier.key === 'CRITICAL' || r.risk.tier.key === 'HIGH').length;
       const overdueCount = a.overdueUnscheduled.length + a.scheduledPastDue.length;
       const coveragePct = a.totalBranches ? Math.round(((a.totalBranches - a.neverAudited.length) / a.totalBranches) * 100) : null;
       const attention = computeAuditManagementAttention(a, cfg);
       const weightSum = AUDIT_RISK_FACTORS.reduce((s, f) => s + (Number(cfg.weights[f.key]) || 0), 0) || 1;
       const notice = cfg.notice; cfg.notice = null;
+      window.__aaPreviewRows = a.rows.map(r => ({ s: r.risk.score, d: (r.info.intervalDays === undefined ? null : r.info.intervalDays), n: r.info.roundsCount, f: !!(r.risk.redFlags && r.risk.redFlags.length) }));
 
       // Attribute string that makes an element click-through (mouse + keyboard).
       const drill = (kind, value, active, extraCls) =>
         `data-aa-kind="${kind}" data-aa-value="${escapeHTML(value)}" role="button" tabindex="0" title="Click to list these branches below" class="cursor-pointer transition-all active:scale-[0.99] hover:bg-slate-100 ${extraCls || ''}"`;
       const okBtn = (onclick, label) => `<button type="button" onclick="${onclick}" aria-label="${escapeHTML(label || 'Apply')}" class="px-2.5 py-1 text-[10px] font-extrabold bg-accentCyan text-white rounded-lg hover:brightness-95 active:scale-95 transition-all cursor-pointer whitespace-nowrap">OK</button>`;
       const inputCls = 'w-14 px-1.5 py-0.5 border border-coolBorder rounded-md text-xs text-center focus:outline-none focus:ring-1 focus:ring-accentCyan';
-      const cfgInput = (key, min, max) => `<input id="aa-cfg-${key}" type="number" inputmode="numeric" min="${min}" max="${max}" value="${cfg[key]}" onkeydown="if(event.key==='Enter'){applyAllAuditAnalysisSettings()}" class="${inputCls}">`;
+      const cfgInput = (key, min, max) => `<input id="aa-cfg-${key}" type="number" inputmode="numeric" min="${min}" max="${max}" value="${cfg[key]}" oninput="updateAuditSettingsPreview()" onkeydown="if(event.key==='Enter'){applyAllAuditAnalysisSettings()}" class="${inputCls}">`;
 
       // ---- Executive KPI tile ------------------------------------------
       // A compact, click-to-filter stat card for the top-of-page command
@@ -12872,9 +13625,9 @@ html.page-fade-ready body {
           }).join('');
 
           return `
-          <tr class="${idx % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-accentCyan/10 transition-colors">
+          <tr data-aa-kind="branchpopup" data-aa-value="${escapeHTML(row.b.name)}" role="button" tabindex="0" title="Click to see why ${escapeHTML(row.b.name)} needs attention" class="${idx % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-accentCyan/10 transition-colors cursor-pointer">
             <td class="p-1.5 text-center"><span class="text-[10px] font-bold text-slate-400">${idx + 1}</span></td>
-            <td class="p-1.5 text-xs leading-tight"><button type="button" data-aa-kind="branch" data-aa-value="${escapeHTML(row.b.name)}" title="Open ${escapeHTML(row.b.name)}'s detailed profile" class="font-bold text-slate-800 text-left break-words hover:text-accentCyan hover:underline underline-offset-2 cursor-pointer">${escapeHTML(row.b.name)}</button></td>
+            <td class="p-1.5 text-xs leading-tight"><span class="font-bold text-slate-800 text-left break-words">${escapeHTML(row.b.name)}</span></td>
             <td class="p-1.5 text-center"><button type="button" data-aa-kind="reason" data-aa-value="${escapeHTML(row.reason)}" title="List every branch with this status" class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-${tint}/10 text-${tint} rounded-md border border-${tint}/20 leading-tight whitespace-nowrap cursor-pointer hover:brightness-95">${escapeHTML(row.reason)}</button></td>
             <td class="p-1.5 text-center">
               <button type="button" onclick="toggleAuditRiskDetail(${idx})" title="Click to see exactly how this score was calculated" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-${tierTint}/10 border border-${tierTint}/20 text-${tierTint} hover:brightness-95 active:scale-95 transition-all cursor-pointer">
@@ -12939,24 +13692,24 @@ html.page-fade-ready body {
         const avg = tierAvgScore(t.key);
         return `
           <div ${drill('tier', t.key, cfg.tierFilter === t.key, 'flex items-center gap-2 px-1 py-0.5 rounded-lg')}>
-            <span class="w-24 shrink-0 text-[11px] font-semibold text-slate-700">${escapeHTML(t.label)} <span class="text-slate-400 font-medium">${tierRanges[t.key]}</span></span>
+            <span class="w-20 sm:w-24 shrink-0 text-[11px] font-semibold text-slate-700">${escapeHTML(t.label)} <span class="text-slate-400 font-medium">${tierRanges[t.key]}</span></span>
             <div class="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
               <div class="h-full bg-${t.tint} rounded-full" style="width:${Math.round((t.count / maxTier) * 100)}%"></div>
             </div>
             <span class="w-9 shrink-0 text-right text-[11px] font-bold text-slate-600">${t.count}</span>
             <span class="w-9 shrink-0 text-right text-[10px] text-slate-400">${pct}%</span>
-            <span class="w-16 shrink-0 text-right text-[10px] text-slate-400">avg ${avg !== null ? avg.toFixed(0) : '—'}</span>
+            <span class="hidden sm:block w-16 shrink-0 text-right text-[10px] text-slate-400">avg ${avg !== null ? avg.toFixed(0) : '—'}</span>
           </div>`;
       }).join('');
 
       const maxDriver = Math.max(0.0001, ...a.driverStats.map(d => d.avgContribution));
       const driverRows = a.driverStats.slice().sort((x, y) => y.avgContribution - x.avgContribution).map(d => `
           <div ${drill('driver', d.key, cfg.driverFilter === d.key, 'flex items-center gap-2 px-1 py-0.5 rounded-lg')}>
-            <span class="w-32 shrink-0 text-[11px] font-semibold text-slate-700 truncate">${escapeHTML(d.label)}</span>
+            <span class="w-24 sm:w-32 shrink-0 text-[11px] font-semibold text-slate-700 truncate" title="${escapeHTML(d.label)}">${escapeHTML(d.label)}</span>
             <div class="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
               <div class="h-full bg-accentIndigo rounded-full" style="width:${Math.round((d.avgContribution / maxDriver) * 100)}%"></div>
             </div>
-            <span class="w-28 shrink-0 text-right text-[10px] text-slate-500"><span class="font-bold text-slate-700">${d.elevated}</span> elevated · ${d.withData}/${a.totalBranches} data</span>
+            <span class="shrink-0 sm:w-28 text-right text-[10px] text-slate-500"><span class="font-bold text-slate-700">${d.elevated}</span> elevated<span class="hidden sm:inline"> · ${d.withData}/${a.totalBranches} data</span></span>
           </div>`).join('');
 
       const statusDefs = [
@@ -12998,11 +13751,11 @@ html.page-fade-ready body {
         if (!c || c.r === null || c.n < 5) {
           return { dot: 'bg-slate-200', text: '<span class="text-slate-400" title="Fewer than 5 branches currently have enough data to check this.">Not enough history yet</span>' };
         }
-        const abs = Math.abs(c.r);
-        const strength = abs >= 0.5 ? 'Strong' : (abs >= 0.3 ? 'Moderate' : 'Weak');
+        const abs = Math.max(0, c.r);
+        const strength = c.r <= -0.3 ? 'Opposite' : (abs >= 0.5 ? 'Strong' : (abs >= 0.3 ? 'Moderate' : 'Weak'));
         const dot = abs >= 0.5 ? 'bg-accentEmerald' : (abs >= 0.3 ? 'bg-accentBlue' : 'bg-slate-300');
         const color = abs >= 0.5 ? 'text-accentEmerald' : (abs >= 0.3 ? 'text-accentBlue' : 'text-slate-400');
-        const tip = 'Statistically: Pearson r = ' + c.r.toFixed(2) + ', across ' + c.n + ' branches with data. Closer to 1 means this factor has more reliably lined up with real findings in the past.';
+        const tip = 'Statistically: rank correlation (Spearman) r = ' + c.r.toFixed(2) + ', across ' + c.n + ' branches with data. Closer to 1 means this factor has more reliably lined up with real findings in the past.';
         return { dot, text: '<span class="' + color + ' font-semibold" title="' + tip + '">' + strength + ' evidence</span>' };
       };
       // Kept for the "How the ranking is decided" methodology table further
@@ -13040,25 +13793,25 @@ html.page-fade-ready body {
         return '<span class="text-[8.5px] text-accentAmber font-semibold" title="' + escapeHTML(bits.join(' ')) + '">⚠ check this</span>';
       };
 
+      const shownWeights = auditNormalizeWeights100(cfg.weights);
+      const weightsTotalNow = AUDIT_RISK_FACTORS.reduce((t, f) => t + shownWeights[f.key], 0);
       const weightInputs = AUDIT_RISK_FACTORS.map(f => {
-        const val = Number(cfg.weights[f.key]) || 0;
-        const pct = Math.round((val / weightSum) * 100);
+        const val = shownWeights[f.key];
         const info = corrInfo(f.key);
         const evidenceTip = f.key === 'findings'
           ? 'Not shown for Audit findings itself — comparing findings to findings would always show a perfect link, which is not meaningful.'
           : (info.text.match(/title="([^"]*)"/) || [])[1] || '';
         return `
           <div class="flex items-center gap-3 px-3 py-1.5" title="${escapeHTML(f.why)}">
-            <span class="w-2 h-2 rounded-full flex-shrink-0 ${info.dot}" title="${escapeHTML(evidenceTip)}"></span>
-            <span class="text-[11px] font-semibold text-slate-700 w-28 sm:w-40 leading-tight">${escapeHTML(f.label)}</span>
+            <button type="button" onclick="showAuditFactorInfo('${f.key}', this)" data-evidence="${escapeHTML(evidenceTip)}" title="Tap to see how this is scored" class="text-[11px] font-semibold text-slate-700 w-28 sm:w-40 leading-tight text-left cursor-pointer hover:text-accentIndigo underline decoration-dotted decoration-slate-300 underline-offset-2 bg-transparent border-0 p-0">${escapeHTML(f.label)} <span class="text-accentIndigo/70 no-underline">ⓘ</span></button>
             <input id="aa-ws-${f.key}" type="range" min="0" max="100" step="1" value="${val}"
               oninput="document.getElementById('aa-w-${f.key}').value=this.value; previewAuditRiskWeights();"
               title="Drag to change how much this factor counts" class="flex-1 h-1.5 accent-accentIndigo cursor-pointer">
-            <input id="aa-w-${f.key}" type="number" inputmode="decimal" min="0" max="100" step="1" value="${val}"
+            <input id="aa-w-${f.key}" type="number" inputmode="numeric" min="0" max="100" step="1" value="${val}"
               oninput="document.getElementById('aa-ws-${f.key}').value=this.value; previewAuditRiskWeights();"
               onkeydown="if(event.key==='Enter'){applyAllAuditAnalysisSettings()}"
-              title="Weight (points). Higher = counts for more of the score." class="w-11 px-1 py-1 border border-coolBorder rounded-md text-[11px] text-center focus:outline-none focus:ring-1 focus:ring-accentCyan">
-            <span id="aa-wpct-${f.key}" class="w-9 text-right text-[11px] font-extrabold text-accentIndigo whitespace-nowrap">${pct}%</span>
+              title="Percent of the score this factor counts for. All factors must add up to 100." class="w-12 px-1 py-1 border border-coolBorder rounded-md text-[11px] text-center focus:outline-none focus:ring-1 focus:ring-accentCyan">
+            <span class="w-5 text-left text-[11px] font-extrabold text-accentIndigo">%</span>
           </div>`;
       }).join('');
 
@@ -13086,14 +13839,14 @@ html.page-fade-ready body {
       const selectCls = 'px-2 py-1 border border-coolBorder rounded-lg text-xs font-normal normal-case tracking-normal text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-accentCyan';
 
       const chipsHtml = table.chips.length ? `
-          <div class="flex flex-wrap items-center gap-1.5 mb-2">
+          <div class="aaq-chips">
             <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Showing</span>
             ${table.chips.map(c => `<button type="button" data-aa-kind="clear" data-aa-value="${c.kind}" title="Remove this filter" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-accentIndigo/10 text-accentIndigo border border-accentIndigo/20 rounded-full hover:brightness-95 active:scale-95 cursor-pointer whitespace-nowrap">${escapeHTML(c.label)} <span aria-hidden="true">✕</span></button>`).join('')}
             <button type="button" data-aa-kind="clearall" class="px-2 py-0.5 text-[10px] font-bold bg-white border border-coolBorder rounded-full hover:bg-gray-100 active:scale-95 cursor-pointer whitespace-nowrap">Clear all</button>
           </div>` : '';
 
-      const emptyMsg = (filterBucket === 'ATTENTION' && !table.chips.length)
-          ? 'Nothing needs scheduling — every branch is either on track or already scheduled.'
+      const emptyMsg = (filterBucket === 'ALL' && !table.chips.length)
+          ? 'No branches to show yet.'
           : 'No branches match these filters. Remove a filter above to widen the list.';
 
       const attentionHtml = attention.length
@@ -13133,7 +13886,7 @@ html.page-fade-ready body {
       }).join('');
       const tierKey = a.riskTiers.map(t => `<span class="inline-flex items-center gap-1 text-[10px] text-white/80"><span class="w-2 h-2 rounded-full" style="background:${TINT_HEX[t.tint]}"></span>${escapeHTML(t.label)}</span>`).join('');
       const topCards = a.suggestions.slice(0, 10).map((r, i) => `
-        <div ${drill('focus', r.b.name, false, 'rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 p-1.5 text-white min-w-0')}>
+        <div data-aa-kind="branchpopup" data-aa-value="${escapeHTML(r.b.name)}" role="button" tabindex="0" title="Click to see why ${escapeHTML(r.b.name)} needs attention" class="cursor-pointer transition-all active:scale-[0.99] rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 p-1.5 text-white min-w-0">
           <div class="flex items-center justify-between gap-2">
             <span class="text-[8px] font-bold uppercase tracking-wider text-white/60">#${i + 1}</span>
             <span class="px-1 py-px rounded text-[9px] font-extrabold" style="background:${TINT_HEX[r.risk.tier.tint]}">${r.risk.score.toFixed(0)} ${escapeHTML(r.risk.tier.label)}</span>
@@ -13163,72 +13916,114 @@ html.page-fade-ready body {
               <div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">${tierKey}</div>
             </div>
           </div>
-          ${topCards ? `<div class="px-3.5 sm:px-4 pb-3.5"><div class="text-[9px] font-bold uppercase tracking-wider text-white/60 mb-1.5">Audit these first — top ${Math.min(10, a.suggestions.length)}</div><div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5">${topCards}</div></div>` : ''}
-          <details class="bg-white/95" open>
-            <summary class="px-3.5 sm:px-4 py-2 cursor-pointer text-[10px] font-bold uppercase tracking-wider text-slate-600 select-none">What the ratings mean</summary>
-            <div class="px-3.5 sm:px-4 pb-2.5">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">${legendRows}</div>
-              <div class="text-[9px] text-slate-400 mt-1">Score 0–100 blends time since last audit, findings, collection, repossession, sales, service and loan-book size. A data red flag lifts a branch to at least High. Tap any score in the table for the exact math.</div>
-            </div>
-          </details>
+          ${topCards ? `<div class="px-3.5 sm:px-4 pb-3.5"><div class="text-[9px] font-bold uppercase tracking-wider text-white/60 mb-1.5 flex items-center justify-between gap-2"><span>Audit these first — top ${Math.min(10, a.suggestions.length)}</span><button type="button" onclick="showAllAuditBranches()" class="px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white text-[10px] font-bold normal-case tracking-normal cursor-pointer">View full queue (${a.totalBranches}) ▸</button></div><div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5">${topCards}</div></div>` : ''}
         </div>`;
       container.innerHTML = `
       <div class="space-y-5 pb-2">
         ${bannerHtml}
 
-        <details class="mx-2 sm:mx-3 bg-white border border-coolBorder rounded-xl shadow-sm" ${(cfg.settingsOpen || cfg.weightsOpen) ? 'open' : ''} ontoggle="setAuditSettingsOpen(this.open); setAuditWeightsOpen(this.open);">
-          <summary class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 py-2.5 cursor-pointer select-none rounded-xl hover:bg-gray-50">
+        <div role="dialog" aria-modal="true" aria-label="Rating rules and manual settings" onclick="if(event.target===this)toggleAuditSettings()" style="position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:12px;${(cfg.settingsOpen || cfg.weightsOpen) ? 'display:flex;' : 'display:none;'}">
+        <div class="bg-white border border-coolBorder rounded-2xl shadow-2xl w-full max-w-3xl" style="max-height:88vh;overflow-y:auto">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 py-2.5 sticky top-0 bg-white rounded-t-2xl border-b border-coolBorder" style="z-index:1">
             <span class="p-0.5 rounded-md bg-accentIndigo/10 text-accentIndigo text-[11px] leading-none">⚙</span>
-            <span class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Rating Rules &amp; Manual Settings</span>
-            <span class="text-[10px] font-medium text-slate-400 normal-case tracking-normal">Queue at score ${cfg.minScore}+ · longest gap ${cfg.overdueDays}d<span class="hidden sm:inline"> — tap to change the rules</span></span>
-          </summary>
+            <span class="text-[12px] font-bold text-slate-700">Rating rules &amp; settings</span>
+            <span class="text-[10px] font-medium text-slate-400 normal-case tracking-normal">Queue at ${cfg.minScore}+ points, at most ${cfg.overdueDays} days between audits</span>
+            <button type="button" onclick="toggleAuditSettings()" class="ml-auto px-2 py-0.5 text-[10px] font-bold text-slate-500 border border-coolBorder rounded-md hover:bg-gray-100 cursor-pointer">Close ✕</button>
+          </div>
 
           <div class="px-3.5 pb-3.5 pt-2.5 border-t border-coolBorder space-y-3">
 
-            <!-- Thresholds + caps: one compact row instead of two separate boxed sections -->
-            <div class="flex flex-wrap items-end gap-x-5 gap-y-2.5 p-2.5 bg-gray-50/70 border border-coolBorder rounded-lg">
-              <label class="flex flex-col gap-1" title="Schedule a branch once its risk score reaches this, out of 100">
-                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-snug">Queue at risk score of<span class="block normal-case font-medium text-slate-400 tracking-normal max-w-[9rem]">Branch joins the queue once its score reaches this</span></span>
-                <span class="flex items-center gap-1">${cfgInput('minScore', 1, 100)}<span class="text-[9px] text-slate-400">/100</span></span>
-              </label>
-              <label class="flex flex-col gap-1" title="But skip it if it was already audited within this many days">
-                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-snug">Do not re-audit within<span class="block normal-case font-medium text-slate-400 tracking-normal max-w-[9rem]">Ignores branches audited very recently</span></span>
-                <span class="flex items-center gap-1">${cfgInput('minGapDays', 0, 3650)}<span class="text-[9px] text-slate-400">days</span></span>
-              </label>
-              <label class="flex flex-col gap-1" title="Always schedule any branch with no audit for this long, regardless of score">
-                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-snug">Longest allowed gap<span class="block normal-case font-medium text-slate-400 tracking-normal max-w-[9rem]">Every branch is queued after this many days</span></span>
-                <span class="flex items-center gap-1">${cfgInput('overdueDays', 1, 3650)}<span class="text-[9px] text-slate-400">days</span></span>
-              </label>
-              <label class="flex flex-col gap-1" title="Space out each auditor's suggested visits by this many business days">
-                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-snug">Days between visits<span class="block normal-case font-medium text-slate-400 tracking-normal max-w-[9rem]">Gap between one auditor's suggested dates</span></span>
-                <span class="flex items-center gap-1">${cfgInput('spacingDays', 1, 3650)}<span class="text-[9px] text-slate-400">biz d</span></span>
-              </label>
-              <label class="flex flex-col gap-1" title="Weighted findings (3x ${window.FINDING_YEARS[2]}, 2x ${window.FINDING_YEARS[1]}, 1x ${window.FINDING_YEARS[0]}) at or above this score 100 on the findings factor. Fixed — not recalculated from whichever branches are currently loaded.">
-                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-snug">Findings = max risk<span class="block normal-case font-medium text-slate-400 tracking-normal max-w-[9rem]">Weighted findings that score 100</span></span>
-                <span class="flex items-center gap-1">${cfgInput('findingsCap', 1, 1000)}<span class="text-[9px] text-slate-400">pts</span></span>
-              </label>
-              <label class="flex flex-col gap-1" title="Branches with this many accounts or more score 100 on the portfolio-size factor. Fixed — not recalculated from whichever branches are currently loaded.">
-                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-snug">Accounts = max risk<span class="block normal-case font-medium text-slate-400 tracking-normal max-w-[9rem]">Loan accounts that score 100</span></span>
-                <span class="flex items-center gap-1">${cfgInput('sizeCap', 1, 10000000)}<span class="text-[9px] text-slate-400">accts</span></span>
-              </label>
-              <button type="button" onclick="resetAuditRiskCaps()" title="Recompute both caps from the current portfolio's 90th percentile, then freeze them again from here" class="px-2 py-1 text-[9.5px] font-bold bg-white border border-coolBorder rounded-md hover:bg-gray-100 active:scale-95 transition-all cursor-pointer whitespace-nowrap self-center">Recalc caps</button>
+            <!-- 1. Where things stand today (read-only, live from your data) -->
+            <div class="rounded-lg border border-coolBorder bg-white p-3">
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span class="text-[22px] font-extrabold text-slate-800 leading-none">${a.suggestions.length}</span>
+                <span class="text-[12px] font-semibold text-slate-700">of ${a.totalBranches} branches are in the audit queue right now</span>
+              </div>
+              <div class="text-[10.5px] text-slate-500 mt-1">They are here for one of these reasons:</div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5">
+                <div class="rounded-md bg-slate-50 border border-coolBorder px-2 py-1.5"><div class="text-[15px] font-extrabold text-slate-800 leading-none">${a.riskFlagged.length}</div><div class="text-[10px] text-slate-500 leading-snug mt-0.5">Risk score too high</div></div>
+                <div class="rounded-md bg-slate-50 border border-coolBorder px-2 py-1.5"><div class="text-[15px] font-extrabold text-slate-800 leading-none">${a.overdueUnscheduled.length}</div><div class="text-[10px] text-slate-500 leading-snug mt-0.5">Waited too long</div></div>
+                <div class="rounded-md bg-slate-50 border border-coolBorder px-2 py-1.5"><div class="text-[15px] font-extrabold text-slate-800 leading-none">${a.neverAudited.length}</div><div class="text-[10px] text-slate-500 leading-snug mt-0.5">Never audited</div></div>
+                <div class="rounded-md bg-slate-50 border border-coolBorder px-2 py-1.5"><div class="text-[15px] font-extrabold text-slate-800 leading-none">${a.scheduledPastDue.length}</div><div class="text-[10px] text-slate-500 leading-snug mt-0.5">Missed its scheduled date</div></div>
+              </div>
             </div>
+
+            <!-- 2. The rating table: what each rating means in practice -->
+            <div class="rounded-lg border border-coolBorder bg-white overflow-hidden">
+              <div class="px-3 py-1.5 bg-gray-50/70 border-b border-coolBorder text-[11px] font-bold text-slate-700">How often each rating gets audited</div>
+              <div class="overflow-x-auto">
+              <table class="w-full text-[11px]">
+                <thead><tr class="text-left text-slate-400 text-[10px]"><th class="px-3 py-1 font-semibold">Rating</th><th class="px-2 py-1 font-semibold">Risk score</th><th class="px-2 py-1 font-semibold text-right">Branches</th><th class="px-3 py-1 font-semibold">Audit at least every</th></tr></thead>
+                <tbody>${AUDIT_RISK_TIERS.map((t, i) => {
+                  const n = (a.riskTiers.find(x => x.key === t.key) || {}).count || 0;
+                  const rng = i === 0 ? t.min + ' and up' : (t.key === 'LOW' ? 'below ' + AUDIT_RISK_TIERS[i - 1].min : t.min + ' to ' + (AUDIT_RISK_TIERS[i - 1].min - 1));
+                  return '<tr class="border-t border-coolBorder"><td class="px-3 py-1.5 font-bold text-slate-800"><span class="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style="background:' + TINT_HEX[t.tint] + '"></span>' + t.label + '</td><td class="px-2 py-1.5 text-slate-600">' + rng + '</td><td class="px-2 py-1.5 text-right font-bold text-slate-700">' + n + '</td><td class="px-3 py-1.5 text-slate-700"><b>' + auditTierCycleDays(t.key, cfg) + '</b> days</td></tr>';
+                }).join('')}</tbody>
+              </table>
+              </div>
+            </div>
+
+            <!-- 3. The settings, one plain question each, with a live "what it affects" line -->
+            <div class="rounded-lg border border-coolBorder bg-white">
+              <div class="px-3 py-1.5 bg-gray-50/70 border-b border-coolBorder rounded-t-lg">
+                <div class="text-[11px] font-bold text-slate-700">Change the rules</div>
+                <div class="text-[10px] text-slate-500">Type a new number and the line underneath shows how many branches it would affect. Nothing changes until you press Save.</div>
+              </div>
+              <div class="divide-y divide-coolBorder">
+                <label class="flex items-start justify-between gap-3 px-3 py-2.5" title="Branches scoring at or above this join the queue, even if they were audited recently enough not to be overdue.">
+                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-[12px] text-slate-800">When is a branch risky enough to audit?</b>Queue a branch once its risk score (0 to 100) reaches this number. Lower = more branches queued.<span id="aa-pv-minScore" class="block mt-1 text-[10.5px] text-accentIndigo"></span></span>
+                  <span class="flex items-center gap-1 shrink-0">${cfgInput('minScore', 1, 100)}<span class="text-[10px] text-slate-400 w-8">points</span></span>
+                </label>
+                <label class="flex items-start justify-between gap-3 px-3 py-2.5" title="Prevents re-auditing a branch that was just audited. It can never be longer than the branch's own rating cycle.">
+                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-[12px] text-slate-800">How long to leave a branch alone after an audit</b>A branch audited more recently than this is not queued again, even if it looks risky.<span id="aa-pv-minGapDays" class="block mt-1 text-[10.5px] text-accentIndigo"></span></span>
+                  <span class="flex items-center gap-1 shrink-0">${cfgInput('minGapDays', 0, 3650)}<span class="text-[10px] text-slate-400 w-8">days</span></span>
+                </label>
+                <label class="flex items-start justify-between gap-3 px-3 py-2.5" title="The longest a healthy (Low) branch can go without an audit. Riskier ratings have shorter cycles, and none can exceed this.">
+                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-[12px] text-slate-800">Longest a healthy branch can go unaudited</b>Even a low-risk branch is queued after this many days. Riskier ratings use shorter limits (see the table above).<span id="aa-pv-overdueDays" class="block mt-1 text-[10.5px] text-accentIndigo"></span></span>
+                  <span class="flex items-center gap-1 shrink-0">${cfgInput('overdueDays', 1, 3650)}<span class="text-[10px] text-slate-400 w-8">days</span></span>
+                </label>
+                <label class="flex items-start justify-between gap-3 px-3 py-2.5" title="How many working days (Mon–Fri, no holidays) one branch audit blocks on an auditor's calendar.">
+                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-[12px] text-slate-800">How many working days one audit takes</b>Used to space out the suggested dates for each auditor.<span id="aa-pv-spacingDays" class="block mt-1 text-[10.5px] text-accentIndigo"></span></span>
+                  <span class="flex items-center gap-1 shrink-0">${cfgInput('spacingDays', 1, 3650)}<span class="text-[10px] text-slate-400 w-8">days</span></span>
+                </label>
+              </div>
+            </div>
+
+            <details class="border border-coolBorder rounded-lg bg-white">
+              <summary class="px-3 py-2 cursor-pointer select-none text-[11px] font-bold text-slate-700">Advanced: what counts as "worst case" for each risk factor <span class="font-medium text-slate-400">(set from your data, rarely needs changing)</span></summary>
+              <div class="px-3 pb-3 pt-2 space-y-2.5 border-t border-coolBorder">
+                <p class="text-[10.5px] text-slate-500 leading-snug">Each factor is scored 0 to 100. A branch that reaches the number below gets the full 100 for that factor. The starting numbers are set so roughly the worst 10% of branches score 100.</p>
+                <label class="flex items-start justify-between gap-3" title="Weighted findings: ${window.FINDING_YEARS[2]} ×3, ${window.FINDING_YEARS[1]} ×2, ${window.FINDING_YEARS[0]} ×1.">
+                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-slate-800">Audit findings</b>Recent findings count more (${window.FINDING_YEARS[2]} ×3, ${window.FINDING_YEARS[1]} ×2, ${window.FINDING_YEARS[0]} ×1). ${cfg.findingsCap ? 'This number is about ' + Math.round(cfg.findingsCap / 3) + ' findings in ' + window.FINDING_YEARS[2] + '.' : ''}${findingsSanity ? ' <span class="text-accentIndigo">' + findingsSanity.maxedCount + ' of ' + findingsSanity.total + ' branches are at 100 today.</span>' : ''}</span>
+                  <span class="flex items-center gap-1 shrink-0">${cfgInput('findingsCap', 1, 1000)}<span class="text-[10px] text-slate-400 w-8">points</span></span>
+                </label>
+                <label class="flex items-start justify-between gap-3" title="Branches with this many loan accounts or more score 100 on loan-book size.">
+                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-slate-800">Branch size (loan accounts)</b>A bigger loan book means more money at stake.${sizeSanity ? ' <span class="text-accentIndigo">' + sizeSanity.maxedCount + ' of ' + sizeSanity.total + ' branches are at 100 today.</span>' : ''}</span>
+                  <span class="flex items-center gap-1 shrink-0">${cfgInput('sizeCap', 1, 10000000)}<span class="text-[10px] text-slate-400 w-8">accts</span></span>
+                </label>
+                <label class="flex items-start justify-between gap-3" title="Branches with this many repossessions or more score 100 on the repo-count part of the Repossessions factor.">
+                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-slate-800">Repossessions in the latest month</b>Number of repossessions that earns the full 100 on the count part of this factor.</span>
+                  <span class="flex items-center gap-1 shrink-0">${cfgInput('repoCap', 1, 100000)}<span class="text-[10px] text-slate-400 w-8">repos</span></span>
+                </label>
+                <label class="flex items-start justify-between gap-3" title="Accounts not collecting = accounts × (100 − collection efficiency %).">
+                  <span class="text-[11px] text-slate-600 leading-snug min-w-0"><b class="block text-slate-800">Accounts not being collected</b>Accounts × (100 − collection efficiency %), so the same efficiency matters more at a bigger branch.</span>
+                  <span class="flex items-center gap-1 shrink-0">${cfgInput('shortfallCap', 1, 10000000)}<span class="text-[10px] text-slate-400 w-8">accts</span></span>
+                </label>
+                <button type="button" onclick="resetAuditRiskCaps()" title="Recompute all four numbers from the current portfolio's 90th percentile" class="px-2 py-1 text-[10px] font-bold bg-white border border-coolBorder rounded-md hover:bg-gray-100 active:scale-95 transition-all cursor-pointer">Reset these four from current data</button>
+              </div>
+            </details>
 
             <!-- Weights: shown inline, no second click needed -->
             <div>
               <div class="flex items-center gap-1.5 mb-1">
-                <h4 class="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider">How much each factor counts</h4>
-                <span class="text-[9.5px] text-slate-400 normal-case">— higher = counts more; the % beside each is calculated for you</span>
+                <h4 class="text-[11px] font-bold text-slate-700">How much each factor counts toward the risk score</h4>
+                <span class="text-[10px] text-slate-400">Give each factor a share. The total must be 100%.</span>
               </div>
-              ${(a.overlap && a.overlap.length) ? `
-              <div class="px-2.5 py-1.5 mb-1.5 rounded-lg bg-accentAmber/10 border border-accentAmber/25 text-[9.5px] text-slate-600 leading-relaxed">
-                <span class="font-bold text-accentAmber uppercase tracking-wide">⚠ Overlap</span> —
-                ${a.overlap.map(p => `<span title="Pearson r = ${p.r.toFixed(2)} across ${p.n} branches with data in both factors — how closely these two factors' points moved together, not how either relates to findings.">${escapeHTML(p.labelA)} & ${escapeHTML(p.labelB)} move together (r=${p.r.toFixed(2)}, n=${p.n})</span>`).join('; ')} — consider lowering one or combining them into a single factor.
-              </div>` : ''}
               <div class="divide-y divide-coolBorder border border-coolBorder rounded-lg bg-white overflow-hidden">${weightInputs}</div>
-              <p class="text-[9px] text-slate-400 leading-snug px-0.5 mt-1">Dot = match to real findings so far: <span class="text-accentEmerald font-semibold">green</span> strong, <span class="text-accentBlue font-semibold">blue</span> moderate, <span class="text-slate-400 font-semibold">grey</span> weak.</p>
+              
               <div class="flex flex-wrap items-center gap-2 pt-1.5">
-                <span id="aa-w-hint" class="hidden text-[9.5px] font-bold text-accentAmber">Preview only — press Save to apply.</span>
+                <span id="aa-w-total" class="inline-flex items-center px-2 py-1 rounded-md border text-[10px] font-extrabold whitespace-nowrap bg-accentEmerald/10 text-accentEmerald border-accentEmerald/30">✓ Total ${weightsTotalNow}% — ready to save</span>
+                <span id="aa-w-hint" class="hidden text-[9.5px] font-bold text-accentAmber">Not saved yet — press Save.</span>
                 <span class="ml-auto flex items-center gap-2">
                   <button type="button" onclick="suggestAuditRiskWeightsFromData()" title="Set weights proportional to each factor's correlation with actual findings" class="px-2 py-1 text-[9.5px] font-bold bg-accentIndigo/10 text-accentIndigo border border-accentIndigo/20 rounded-md hover:brightness-95 active:scale-95 transition-all cursor-pointer whitespace-nowrap">Suggest from data</button>
                   <button type="button" onclick="resetAuditRiskWeights()" title="Re-derive weights from findings correlation; falls back to the original starting numbers only if there isn't enough audit history yet" class="px-2 py-1 text-[9.5px] font-bold bg-white border border-coolBorder rounded-md hover:bg-gray-100 active:scale-95 transition-all cursor-pointer whitespace-nowrap">Reset</button>
@@ -13239,7 +14034,8 @@ html.page-fade-ready body {
           </div>
 
           ${notice ? `<div role="status" class="px-3.5 py-2 border-t border-coolBorder text-[10px] font-semibold ${notice.type === 'error' ? 'text-accentRose' : 'text-accentEmerald'}">${notice.type === 'error' ? '⚠ ' : '✓ '}${escapeHTML(notice.text)}</div>` : ''}
-        </details>
+        </div>
+        </div>
 
         <div>
           <div class="flex items-center justify-between px-2 sm:px-3 mb-1.5">
@@ -13258,17 +14054,6 @@ html.page-fade-ready body {
             ${kpiCard(a.avgIntervalDays !== null ? a.avgIntervalDays + 'd' : '—', 'Avg Days Since Audit', { tint: 'accentIndigo', title: 'Click to view these branches', onClick: `onclick="openModal('Avg Days Since Audit','kpiBucket','DAYS_SORT')"` })}
             ${kpiCard(coveragePct !== null ? coveragePct + '%' : '—', 'Audit Coverage', { tint: 'accentIndigo', title: 'Click to view these branches', onClick: `onclick="openModal('Audit Coverage','kpiBucket','EVER_AUDITED')"`, sub: 'ever audited' })}
           </div>
-        </div>
-
-        <div class="mx-2 sm:mx-3">
-          <div class="flex items-center justify-between mb-1.5">
-            <div>
-              <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide">Management Attention</h3>
-              <p class="text-[10px] text-slate-400 mt-0.5">The most consequential exceptions right now, worst first — pulled straight from the data below. Tap any item to see the branches behind it.</p>
-            </div>
-            ${attention.length ? `<span class="shrink-0 px-2 py-1 rounded-full text-[9.5px] font-extrabold uppercase tracking-wider text-white" style="background:${TINT_HEX.accentRose}">${attention.length} open item${attention.length === 1 ? '' : 's'}</span>` : ''}
-          </div>
-          ${attentionHtml}
         </div>
 
         <div class="mx-2 sm:mx-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -13314,54 +14099,60 @@ html.page-fade-ready body {
           <div class="p-1 bg-white border border-coolBorder rounded-xl shadow-sm divide-y divide-coolBorder/60">${recentCompletionsHtml}</div>
         </div>
 
-        <div id="aa-table-section" class="mx-2 sm:mx-3">
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-0.5">
-            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide">Priority Audit Queue <span class="normal-case font-medium text-slate-400">— ${escapeHTML(table.title)}</span></h3>
-            <span class="px-2 py-0.5 rounded-full text-[9.5px] font-extrabold uppercase tracking-wider text-white" style="background:${TINT_HEX.accentIndigo}">${table.rows.length} branch${table.rows.length === 1 ? '' : 'es'}</span>
+        <div role="dialog" aria-modal="true" aria-label="Priority audit queue" class="aaq-overlay" onclick="if(event.target===this)toggleAuditQueue()" style="position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.55);align-items:center;justify-content:center;${cfg.queueOpen ? 'display:flex;' : 'display:none;'}">
+        <div id="aa-table-section" class="aaq-card">
+          <div class="aaq-head">
+            <div class="aaq-title">
+              <span class="aaq-h">Priority Audit Queue</span>
+              <span class="aaq-sub" title="${escapeHTML(table.title)}">${escapeHTML(table.title)}</span>
+            </div>
+            <span class="aaq-count" title="${table.rows.length} shown out of ${a.totalBranches} branches in total">${table.rows.length}${table.rows.length !== a.totalBranches ? ' of ' + a.totalBranches : ''} branch${(table.rows.length !== a.totalBranches ? a.totalBranches : table.rows.length) === 1 ? '' : 'es'}</span>
+            <button type="button" class="aaq-close" onclick="toggleAuditQueue()" aria-label="Close" title="Close"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
           </div>
-          <p class="text-[10px] text-slate-500 mb-2">Ranked by risk score, highest first. Tap a branch to open its profile, a badge or number to filter by it, a column heading to sort, or a risk score to see how it was calculated.</p>
 
-          <div class="flex flex-wrap items-end gap-x-3 gap-y-2 p-3 bg-gray-50 border border-coolBorder rounded-xl mb-2">
-            <label class="${fieldLbl}">Search branch
-              <input id="aa-f-search" type="text" value="${escapeHTML(cfg.search)}" placeholder="Branch name" onkeydown="if(event.key==='Enter'){applyAuditTableFilters()}" class="w-44 px-2 py-1 border border-coolBorder rounded-lg text-xs font-normal normal-case tracking-normal text-slate-700 focus:outline-none focus:ring-1 focus:ring-accentCyan">
-            </label>
-            <label class="${fieldLbl}">Risk tier
-              <select id="aa-f-tier" class="${selectCls}">${tierOptions}</select>
-            </label>
-            <label class="${fieldLbl}">Auditor
-              <select id="aa-f-auditor" class="${selectCls}">${auditorOptions}</select>
-            </label>
-            ${okBtn('applyAuditTableFilters()', 'Apply table filters')}
-            <button type="button" onclick="resetAuditTableFilters()" class="px-2.5 py-1 text-[10px] font-bold bg-white border border-coolBorder rounded-lg hover:bg-gray-100 active:scale-95 transition-all cursor-pointer whitespace-nowrap">Reset filters</button>
+          <div class="aaq-toolbar">
+            <div class="aaq-search">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input id="aa-f-search" type="search" autocomplete="off" value="${escapeHTML(cfg.search)}" placeholder="Search branch…" aria-label="Search branch" onkeydown="if(event.key==='Enter'){applyAuditTableFilters()}">
+            </div>
+            <select id="aa-f-tier" aria-label="Risk tier" onchange="applyAuditTableFilters()">${tierOptions}</select>
+            <select id="aa-f-auditor" aria-label="Auditor" onchange="applyAuditTableFilters()">${auditorOptions}</select>
+            <button type="button" class="aaq-btn aaq-btn-p" onclick="applyAuditTableFilters()" aria-label="Apply table filters">Apply</button>
+            <button type="button" class="aaq-btn aaq-btn-s" onclick="resetAuditTableFilters()">Reset</button>
           </div>
           ${chipsHtml}
 
+          <div class="aaq-body custom-scrollbar">
           ${table.rows.length > 0 ? `
-          <div class="rounded-xl border border-coolBorder max-h-[55vh] overflow-auto custom-scrollbar shadow-sm">
-            <table class="w-full min-w-[980px] text-left border-collapse bg-white">
-              <thead class="bg-gray-50 border-b border-coolBorder text-[10px] text-slate-500 tracking-wider font-semibold uppercase sticky top-0 z-10 shadow-sm">
-                <tr>
-                  <th class="p-1.5 bg-gray-50 text-center w-9 whitespace-nowrap">Priority</th>
-                  ${sortTh('name', 'Branch').replace('text-center', 'text-left')}
-                  ${sortTh('reason', 'Schedule Status / Reason')}
-                  ${sortTh('risk', 'Risk Score')}
-                  ${sortTh('last', 'Last Audited')}
-                  ${sortTh('days', 'Days Since')}
-                  ${sortTh('auditor', 'Assigned Auditor')}
-                  ${sortTh('date', 'Suggested Date')}
-                  <th class="p-1.5 bg-gray-50 text-center whitespace-nowrap">Action</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-coolBorder text-xs">${tableRowsHtml}</tbody>
-            </table>
-          </div>` : `<div class="p-5 text-center text-sm text-slate-500 font-semibold bg-gray-50 rounded-xl border border-coolBorder">${emptyMsg}</div>`}
+            <div class="rounded-xl border border-coolBorder shadow-sm">
+              <table class="aa-rtable w-full min-w-[980px] text-left border-collapse bg-white">
+                <thead class="bg-gray-50 border-b border-coolBorder text-[10px] text-slate-500 tracking-wider font-semibold uppercase sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th class="p-1.5 bg-gray-50 text-center w-9 whitespace-nowrap">Priority</th>
+                    ${sortTh('name', 'Branch').replace('text-center', 'text-left')}
+                    ${sortTh('reason', 'Schedule Status / Reason')}
+                    ${sortTh('risk', 'Risk Score')}
+                    ${sortTh('last', 'Last Audited')}
+                    ${sortTh('days', 'Days Since')}
+                    ${sortTh('auditor', 'Assigned Auditor')}
+                    ${sortTh('date', 'Suggested Date')}
+                    <th class="p-1.5 bg-gray-50 text-center whitespace-nowrap">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-coolBorder text-xs">${tableRowsHtml}</tbody>
+              </table>
+            </div>` : `<div class="p-5 text-center text-sm text-slate-500 font-semibold bg-gray-50 rounded-xl border border-coolBorder">${emptyMsg}</div>`}
+          </div>
+        </div>
         </div>
 
-        <div class="mx-2 sm:mx-3 p-3.5 sm:p-4 bg-accentIndigo/5 border border-accentIndigo/20 rounded-xl">
-          <div class="flex items-center gap-2 mb-1.5">
+        <details class="mx-2 sm:mx-3 bg-accentIndigo/5 border border-accentIndigo/20 rounded-xl">
+          <summary class="flex items-center gap-2 p-3.5 sm:p-4 cursor-pointer select-none">
             <span class="p-1 rounded-md bg-accentIndigo/15 text-accentIndigo text-[11px] font-extrabold">i</span>
             <h3 class="text-sm font-bold text-accentIndigo uppercase tracking-wide">How the ranking is decided</h3>
-          </div>
+            <span class="ml-auto text-[10px] font-semibold text-slate-400">tap to show / hide</span>
+          </summary>
+          <div class="px-3.5 sm:px-4 pb-3.5 sm:pb-4">
           <p class="text-xs sm:text-[13px] text-slate-700 leading-relaxed mb-3">Branches are not ranked on audit interval alone. Each one gets a 0–100 risk score built from everything the dashboard tracks — audit history, findings, collections, efficiency, repo, sales, service and portfolio size — and the suggested schedule is ordered by that score, highest first.</p>
           <div class="overflow-x-auto">
             <table class="w-full text-xs text-left">
@@ -13374,7 +14165,7 @@ html.page-fade-ready body {
           <ul class="mt-3 text-xs sm:text-[13px] text-slate-700 leading-relaxed space-y-1.5 list-disc pl-4">
             <li><strong>Tiers.</strong> Critical 70+, High 55–69, Medium 40–54, Low below 40. A branch with any data red flag (below) is shown as at least High.</li>
             <li><strong>Data red flags.</strong> A weighted average can dilute one severe signal, so these tripwires cannot be averaged away: ${AUDIT_RED_FLAGS.map(x => escapeHTML(x.label)).join('; ')}. Any one qualifies an unscheduled branch for the schedule whatever its overall score.</li>
-            <li><strong>Who gets scheduled, and why.</strong> The primary driver is the risk rule: any unscheduled branch whose own numbers put its risk score at ${cfg.minScore}+ or trip a data red flag (last audited at least ${cfg.minGapDays} days ago) is scheduled because of what its data says — findings, trends, efficiency, repo rate or portfolio size — not because of the calendar. On top of that sit three coverage rules that exist purely as a safety net, not as an evaluation of the branch: branches never audited, branches whose scheduled date passed without being marked Done, and branches with no audit for ${cfg.overdueDays}+ days. These guarantee no branch is skipped forever just because its other numbers look fine, but they are the exception, not the basis, for the ranking.</li>
+            <li><strong>Who gets scheduled, and why.</strong> Every rating has an audit cycle: Critical ${auditTierCycleDays('CRITICAL', cfg)} days, High ${auditTierCycleDays('HIGH', cfg)}, Medium ${auditTierCycleDays('MEDIUM', cfg)}, Low ${cfg.overdueDays}. A branch is queued when (1) its risk score reaches ${cfg.minScore}+ or it trips a data red flag and it was not audited in the last ${Math.min(cfg.minGapDays, cfg.overdueDays)} days or less, (2) it has gone past its own rating's cycle, (3) it was never audited, or (4) its scheduled date passed without being marked Done. Rules 2–4 are safety nets so no branch is skipped just because its other numbers look fine.</li>
             <li><strong>Missing data.</strong> If a branch has no data for a factor, that factor is left out and the others are rescaled to 100% — a branch is never marked up or down for a number that isn't there.</li>
             <li><strong>Consistent with the dashboard.</strong> Efficiency and repo scoring use the same red/amber/green cut-offs already shown on the branch cards (efficiency 70% / 50%, repo 4% / 7%). The Branch Scorecard's Risk column and each branch's profile use this same score, so a branch reads the same everywhere.</li>
             <li><strong>Findings for ${window.FINDING_YEARS[2]}</strong> are year-to-date, which is why recent years are weighted more heavily rather than compared like-for-like.</li>
@@ -13384,8 +14175,10 @@ html.page-fade-ready body {
             <li><strong>Weights are set from evidence, not opinion.</strong> By default each factor's weight is derived from its own Pearson correlation with real, historical findings across the portfolio (r-value shown against each factor above) — a factor only counts for more of the score once the data shows it actually predicts findings. Anyone can still type in their own numbers, but doing so is a visible, logged override (shown as "Custom weights" above), not the default state.</li>
             <li><strong>A prioritisation aid, not an audit conclusion.</strong> The score says where to look first. It does not say something is wrong at a branch. Weights and thresholds are adjustable above and every score can be traced line by line.</li>
           </ul>
-        </div>
+          </div>
+        </details>
       </div>`;
+      try { updateAuditSettingsPreview(); } catch (e) {}
     }
 
     // Popup opened from the AUDITOR NEXT ASSIGNMENT stock card. Reuses the
@@ -13718,7 +14511,7 @@ html.page-fade-ready body {
     function getAuditPortfolioRiskMap() {
       const cfg = window.auditAnalysisState;
       const branches = (activeData && activeData.branches) || [];
-      const key = branches.length + '|' + JSON.stringify(cfg.weights) + '|' + cfg.overdueDays + '|' + new Date().toDateString();
+      const key = branches.length + '|' + JSON.stringify(cfg.weights) + '|' + [cfg.overdueDays, cfg.findingsCap, cfg.sizeCap, cfg.repoCap, cfg.shortfallCap].join(',') + '|' + new Date().toDateString();
       const c = _auditPortfolioRiskCache;
       if (c.map && c.branches === branches && c.key === key && (Date.now() - c.at) < 1500) return c.map;
       const rows = branches.map(b => ({ b: b, info: getBranchAuditRoundInfo(b) }));
@@ -18601,18 +19394,7 @@ html.page-fade-ready body {
       // AUDIT RISK & SCHEDULE ANALYSIS overview card — same risk/scheduling
       // engine the modal uses (computeAuditScheduleAnalysis), just read for
       // three headline numbers instead of the full breakdown.
-      try {
-        const riskAttentionEl = document.getElementById('stat-audit-risk-attention');
-        if (riskAttentionEl) {
-          const ra = computeAuditScheduleAnalysis();
-          const attention = (ra.neverAudited.length + ra.riskFlagged.length + ra.overdueUnscheduled.length + ra.scheduledPastDue.length);
-          const onTrackCount = (ra.onTrack.length + ra.scheduledUpcoming.length);
-          animateCountUp(riskAttentionEl, attention);
-          const avgEl = document.getElementById('stat-audit-risk-avg');
-          if (avgEl) avgEl.innerText = (ra.avgRiskScore !== null && ra.avgRiskScore !== undefined) ? ra.avgRiskScore : '—';
-          animateCountUp(document.getElementById('stat-audit-risk-ontrack'), onTrackCount);
-        }
-      } catch (e) { /* non-fatal — card just keeps its placeholders */ }
+      updateAuditRiskOverviewCard();
       
       animateCountUp(document.getElementById('stat-collection-improving'), sum.improvingCollection || 0, { suffixHTML: ' <span class="text-sm font-medium text-slate-500">improving</span>' });
       document.getElementById('stat-collection-sub').innerText = `${sum.decliningCollection || 0} declining · ${sum.stableCollection || 0} stable · ${sum.recoveringCollection || 0} recovering`;
@@ -19621,9 +20403,20 @@ html.page-fade-ready body {
             // fraction. Reuse parseRepoPct()'s ×100-if-under-1 normalization,
             // then round to a whole number since Efficiency is always shown
             // and compared (effAccent, sort, etc.) as an integer percentage.
-            let effMarParsed = Math.round(parseRepoPct(row[11]));   // Column L
-            let effAprParsed = Math.round(parseRepoPct(row[12]));   // Column M
-            let effLatestParsed = Math.round(parseRepoPct(row[13])); // Column N
+            // Efficiency: a cell showing 100% is stored as exactly 1 (or slightly above for
+            // over-collection). parseRepoPct only scales values BELOW 1, so 100% was read as 1%,
+            // which scored as maximum risk and tripped the "efficiency below 50%" red flag.
+            // Efficiency is never realistically 1-2%, so a plain number up to 2 is a fraction.
+            const parseEffPct = (raw) => {
+               if (raw === undefined || raw === null || raw === "") return 0;
+               const hasPct = String(raw).indexOf('%') !== -1;
+               const val = parseFloat(String(raw).replace('%', ''));
+               if (isNaN(val)) return 0;
+               return Math.round((!hasPct && val > 0 && val <= 2) ? val * 100 : val);
+            };
+            let effMarParsed = parseEffPct(row[11]);   // Column L
+            let effAprParsed = parseEffPct(row[12]);   // Column M
+            let effLatestParsed = parseEffPct(row[13]); // Column N
 
             tempBranchesMap[branchName] = {
               name: branchName,
@@ -19643,6 +20436,9 @@ html.page-fade-ready body {
               effLatest: effLatestParsed, 
               collection: finalColStat,
               sales: finalSaleStat,
+              collectionKnown: colStat !== "",
+              salesKnown: saleStat !== "",
+              serviceKnown: servStat !== "",
               serviceTarget: parseInt(row[28]) || 0,
               serviceMar: parseInt(row[29]) || 0,
               serviceApr: parseInt(row[30]) || 0,
