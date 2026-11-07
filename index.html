@@ -10008,4 +10008,43 @@ html body #scorecardTableBody tr{transition:background-color .15s var(--ease-std
   setTimeout(function(){var ov=document.getElementById('section-overview');if(ov)ov.classList.add('reveal-done')},1400);
 })();
 </script>
+<script id="fixed-branch-bar-v1">
+(function(){
+  // Branch Performance bar is pinned exactly like the header: position:fixed right under it,
+  // with a spacer that keeps the page layout unchanged.
+  var hdr=document.querySelector('header.app-header-reveal');
+  var bar=document.getElementById('overviewHeaderRow');
+  if(!hdr||!bar||!bar.parentNode)return;
+  var main=bar.parentNode;
+  var spacer=document.createElement('div');
+  spacer.id='overviewHeaderSpacer';
+  spacer.setAttribute('aria-hidden','true');
+  main.insertBefore(spacer,bar);
+  var raf=0;
+  function layout(){
+    raf=0;
+    var hidden=getComputedStyle(bar).display==='none';
+    if(hidden){spacer.style.height='0px';return}
+    var h=hdr.getBoundingClientRect().height;
+    var mr=main.getBoundingClientRect(),cs=getComputedStyle(main);
+    var pl=parseFloat(cs.paddingLeft)||0,pr=parseFloat(cs.paddingRight)||0;
+    var set=function(k,v){bar.style.setProperty(k,v,'important')};
+    set('position','fixed');
+    set('top',(h-1)+'px');
+    set('left',(mr.left+pl)+'px');
+    set('width',(mr.width-pl-pr)+'px');
+    set('right','auto');
+    set('z-index','30');
+    set('box-sizing','border-box');
+    spacer.style.height=bar.offsetHeight+'px';
+  }
+  function queue(){if(!raf)raf=requestAnimationFrame(layout)}
+  layout();
+  window.addEventListener('resize',queue);
+  window.addEventListener('orientationchange',queue);
+  window.addEventListener('load',queue);
+  if(window.ResizeObserver){var ro=new ResizeObserver(queue);ro.observe(hdr);ro.observe(main);ro.observe(bar)}
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(queue);
+})();
+</script>
 </body></html>
