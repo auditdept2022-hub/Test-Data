@@ -2203,7 +2203,7 @@ html body main.dash-container #section-overview + .grid{margin-top:12px !importa
             <span class="mo-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
           </div>
           <div class="mo-main">
-            <div class="mo-primary"><span class="mo-label">BRANCHES<br>IMPROVING</span><div class="mo-value" id="moCollectionPrimary">—</div><span class="mo-unit">branches</span></div>
+            <div class="mo-primary"><span class="mo-label">BRANCHES<br>IMPROVING</span><div class="mo-value" id="moCollectionPrimary">—</div></div>
             <div class="mo-breakdown" id="moCollectionStats"></div>
           </div>
           <div class="mo-foot">
@@ -2230,7 +2230,7 @@ html body main.dash-container #section-overview + .grid{margin-top:12px !importa
             <span class="mo-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
           </div>
           <div class="mo-main">
-            <div class="mo-primary"><span class="mo-label">BRANCHES<br>IMPROVING</span><div class="mo-value" id="moSalesPrimary">—</div><span class="mo-unit">branches</span></div>
+            <div class="mo-primary"><span class="mo-label">BRANCHES<br>IMPROVING</span><div class="mo-value" id="moSalesPrimary">—</div></div>
             <div class="mo-breakdown" id="moSalesStats"></div>
           </div>
           <div class="mo-foot">
@@ -2258,7 +2258,7 @@ html body main.dash-container #section-overview + .grid{margin-top:12px !importa
             <span class="mo-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
           </div>
           <div class="mo-main">
-            <div class="mo-primary"><span class="mo-label">BRANCHES<br>ON TARGET</span><div class="mo-value" id="moServicePrimary">—</div><span class="mo-unit">branches</span></div>
+            <div class="mo-primary"><span class="mo-label">BRANCHES<br>ON TARGET</span><div class="mo-value" id="moServicePrimary">—</div></div>
             <div class="mo-service-side">
               <span class="mo-side-label">NEEDS ATTENTION</span>
               <div class="mo-side-count" id="moServiceDeclining">—</div>
@@ -9915,7 +9915,7 @@ html body .mo-collection .mo-mini-stat,html body .mo-sales .mo-mini-stat,html bo
 html body .mo-collection .mo-breakdown,html body .mo-sales .mo-breakdown{width:auto!important;flex:0 0 auto!important;grid-template-columns:repeat(3,76px)!important;gap:5px!important;justify-content:end!important}
 html body .mo-collection .mo-mini-stat strong,html body .mo-sales .mo-mini-stat strong{padding-left:0!important;font-size:15px!important}
 html body .mo-collection .mo-mini-label,html body .mo-sales .mo-mini-label{font-size:8px!important}
-html body #section-overview .mo-main{min-height:72px!important;align-items:flex-end!important;gap:8px!important}
+html body #section-overview .mo-main{min-height:58px!important;align-items:flex-end!important;gap:8px!important}
 html body #section-overview .mo-primary{flex:1 1 auto!important;min-width:0!important}
 html body #section-overview .mo-label{white-space:normal!important}
 html body .mo-service .mo-service-side{align-self:flex-end!important;flex:0 0 auto!important}
@@ -9961,6 +9961,9 @@ html body #section-scorecard #scorecardFilterControls > button{flex:0 0 auto!imp
 html body #section-scorecard #scorecardRiskLegend{margin:0 0 8px!important;padding:5px 10px!important;gap:12px!important}
 }
 /* freeze the Branch Performance bar right under the sticky header */
+/* sticky needs html/body NOT to be scroll containers: overflow-x:hidden made body one and froze nothing; 'clip' keeps the no-sideways-scroll behaviour */
+html,html body{overflow-x:clip!important}
+html body main.dash-container{overflow:visible!important}
 html body #overviewHeaderRow{position:sticky!important;top:calc(var(--hdr-h,64px) - 1px)!important;z-index:30!important;background:#fff!important;box-shadow:0 1px 4px rgba(15,23,42,.04)!important;transition:box-shadow .25s cubic-bezier(.22,1,.36,1)!important}
 html body #overviewHeaderRow.is-stuck{box-shadow:0 8px 18px rgba(15,23,42,.10)!important}
 /* ===== Motion polish: one easing curve, cheap properties only, touch-safe, reduced-motion aware ===== */
