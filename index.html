@@ -9960,5 +9960,49 @@ html body #section-scorecard #branchFilterBtn{width:100%!important;max-width:non
 html body #section-scorecard #scorecardFilterControls > button{flex:0 0 auto!important;width:auto!important;min-width:84px!important;height:34px!important;padding:0 12px!important;font-size:11px!important;grid-column:auto!important}
 html body #section-scorecard #scorecardRiskLegend{margin:0 0 8px!important;padding:5px 10px!important;gap:12px!important}
 }
+/* freeze the Branch Performance bar right under the sticky header */
+html body #overviewHeaderRow{position:sticky!important;top:calc(var(--hdr-h,64px) - 1px)!important;z-index:30!important;background:#fff!important;box-shadow:0 1px 4px rgba(15,23,42,.04)!important;transition:box-shadow .25s cubic-bezier(.22,1,.36,1)!important}
+html body #overviewHeaderRow.is-stuck{box-shadow:0 8px 18px rgba(15,23,42,.10)!important}
+/* ===== Motion polish: one easing curve, cheap properties only, touch-safe, reduced-motion aware ===== */
+:root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-std:cubic-bezier(.4,0,.2,1)}
+html{scroll-padding-top:calc(var(--hdr-h,64px) + 64px)}
+html body a,html body button,html body [role=button]{-webkit-tap-highlight-color:transparent}
+/* Tailwind transition-all animates layout properties too (janky): limit to cheap ones */
+html body .transition-all{transition-property:transform,opacity,box-shadow,background-color,border-color,color,fill,stroke!important;transition-duration:.22s!important;transition-timing-function:var(--ease-out)!important}
+html body .transition-colors{transition-duration:.18s!important;transition-timing-function:var(--ease-std)!important}
+/* overview cards: smooth lift/press, snappier hover than the entrance */
+html body #section-overview > *{transition-property:opacity,transform,box-shadow,border-color,background-color!important;transition-duration:.5s,.34s,.26s,.2s,.2s!important;transition-timing-function:var(--ease-out)!important}
+html body #section-overview.reveal-done > *{transition-delay:0s!important}
+html body .mo-mini-stat,html body .mo-service-side{transition:transform .2s var(--ease-out),box-shadow .2s var(--ease-out),background-color .2s var(--ease-std)!important}
+@media (hover:hover){
+  html body #section-overview > *:hover .mo-mini-stat,html body #section-overview > *:hover .mo-service-side{background:#fff!important;box-shadow:0 3px 8px rgba(15,23,42,.07)!important}
+}
+/* touch screens: no sticky hover lift, keep the press feedback */
+@media (hover:none){
+  html body .hover\:-translate-y-1:hover{--tw-translate-y:0px!important}
+  html body .hover\:shadow-lg:hover{box-shadow:inherit!important}
+}
+html body #scorecardTableBody tr{transition:background-color .15s var(--ease-std)!important}
+@media (prefers-reduced-motion:reduce){
+  html body *,html body *::before,html body *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important;scroll-behavior:auto!important}
+}
 </style>
+<script id="sticky-branch-bar-v1">
+(function(){
+  var h=document.querySelector('header.app-header-reveal');
+  if(!h)return;
+  function set(){document.documentElement.style.setProperty('--hdr-h',Math.round(h.getBoundingClientRect().height)+'px')}
+  set();
+  window.addEventListener('resize',set);
+  window.addEventListener('load',set);
+  if(window.ResizeObserver)new ResizeObserver(set).observe(h);
+  // stronger shadow only while the Branch Performance bar is actually stuck
+  var bar=document.getElementById('overviewHeaderRow'),tick=false;
+  function stuck(){tick=false;if(!bar)return;var top=bar.getBoundingClientRect().top;bar.classList.toggle('is-stuck',top<=h.getBoundingClientRect().height+1&&window.scrollY>4)}
+  window.addEventListener('scroll',function(){if(!tick){tick=true;requestAnimationFrame(stuck)}},{passive:true});
+  stuck();
+  // once the entrance stagger has played, remove the per-card delay so hover/press respond instantly
+  setTimeout(function(){var ov=document.getElementById('section-overview');if(ov)ov.classList.add('reveal-done')},1400);
+})();
+</script>
 </body></html>
