@@ -1223,9 +1223,7 @@ main.dash-container > #overviewHeaderRow,
 .mo-service .mo-main{min-height:84px !important;align-items:flex-end !important}
 .mo-service .mo-foot{margin-top:auto !important}
 .mo-service .mo-value{font-size:36px !important}
-.mo-service .mo-breakdown{width:auto !important;grid-template-columns:repeat(3,minmax(0,88px)) !important;gap:6px !important;justify-content:end !important}
-.mo-service .mo-mini-stat{min-height:52px !important;padding:8px 8px 7px !important;box-sizing:border-box !important}
-.mo-service .mo-mini-label{font-size:8.5px !important}
+.mo-service .mo-service-side{align-self:flex-end !important;justify-content:center !important;box-sizing:border-box !important}
 /* beat later page rules (higher specificity): slim light header + gap between rows */
 html body #overviewHeaderRow{padding:6px 14px !important;gap:10px 14px !important;border-radius:14px !important;border:1px solid #eef2f8 !important;background:linear-gradient(120deg,#ffffff 0%,#fafcff 100%) !important;box-shadow:0 1px 4px rgba(15,23,42,.025) !important;min-height:0 !important;row-gap:6px !important}
 html body #overviewHeaderRow .bqs-head-left{gap:12px !important;margin:0 !important}
@@ -2260,7 +2258,11 @@ html body main.dash-container #section-overview + .grid{margin-top:12px !importa
           </div>
           <div class="mo-main">
             <div class="mo-primary"><span class="mo-label">ON TARGET</span><div class="mo-value" id="moServicePrimary">—</div><span class="mo-unit">branches on target</span></div>
-            <div class="mo-breakdown" id="moServiceStats"></div>
+            <div class="mo-service-side">
+              <span class="mo-side-label">NEEDS ATTENTION</span>
+              <div class="mo-side-count" id="moServiceDeclining">—</div>
+              <span class="mo-side-caption">declining</span>
+            </div>
           </div>
           <div class="mo-foot">
             <div class="mo-progress" id="moServiceProgress" aria-label="Service status distribution"></div>
@@ -8480,8 +8482,7 @@ button:disabled:active,button[disabled]:active,[aria-disabled=true]:active{trans
   function refresh(){
     var sum=((typeof activeData!=='undefined')&&activeData.summary)||{};
     var coll=[{label:'Declining',value:sum.decliningCollection,color:'#ef727c'},{label:'Stable',value:sum.stableCollection,color:'#94a3b8'},{label:'Recovering',value:sum.recoveringCollection,color:'#e5a53b'}];
-    var sales=[{label:'Declining',value:sum.salesDeclining,color:'#ef727c'},{label:'Stable',value:sum.salesStable,color:'#94a3b8'},{label:'Recovering',value:sum.salesRecovering,color:'#e5a53b'}];
-    var service=[{label:'Declining',value:sum.serviceDeclining,color:'#ef727c'},{label:'Stable',value:sum.serviceStable,color:'#94a3b8'},{label:'Recovering',value:sum.serviceRecovering,color:'#e5a53b'}];
+    var sales=[{label:'Declining',value:sum.salesDeclining,color:'#ef727c'},{label:'Stable',value:sum.salesStable,color:'#94a3b8'}];
     put('moCollectionPrimary',number(sum.improvingCollection).toLocaleString());
     var c=document.getElementById('moCollectionStats');if(c)c.innerHTML=breakdownHtml(coll);
     setProgress('moCollectionProgress',[{value:sum.improvingCollection,color:'#0caa6c'}].concat(coll));
@@ -8489,8 +8490,8 @@ button:disabled:active,button[disabled]:active,[aria-disabled=true]:active{trans
     var sl=document.getElementById('moSalesStats');if(sl)sl.innerHTML=breakdownHtml(sales);
     setProgress('moSalesProgress',[{value:sum.salesImproving,color:'#5576e8'}].concat(sales));
     put('moServicePrimary',number(sum.serviceTarget).toLocaleString());
-    var sv=document.getElementById('moServiceStats');if(sv)sv.innerHTML=breakdownHtml(service);
-    setProgress('moServiceProgress',[{value:sum.serviceTarget,color:'#0b9fc4'}].concat(service));
+    put('moServiceDeclining',number(sum.serviceDeclining).toLocaleString());
+    setProgress('moServiceProgress',[{value:sum.serviceTarget,color:'#0b9fc4'},{value:sum.serviceDeclining,color:'#ee9763'}]);
     var ys=window.FINDING_YEARS||[2024,2025,2026];
     var vals=[number(sum.findings2024),number(sum.findings2025),number(sum.findings2026)];
     var max=Math.max(1,vals[0],vals[1],vals[2]);
@@ -9905,8 +9906,25 @@ html body #overviewHeaderRow{padding:3px 12px!important;gap:4px 12px!important}
 html body #overviewHeaderRow #branchQuickSearch{min-height:28px!important}
 html body #overviewHeaderRow #branchQuickSearch .bqs-input{min-height:26px!important}
 html body #overviewHeaderRow #liveDateTime{min-height:26px!important;padding:2px 8px!important}
-html body #section-overview{gap:10px!important;margin-top:0!important}
-html body #section-overview>*{padding:12px 14px!important}
+html body #section-overview{gap:10px!important}
+html body main.dash-container #section-overview{margin-top:8px!important}
+/* every stack card (chips + Service box) is the same size; content/behaviour unchanged */
+html body .mo-collection .mo-mini-stat,html body .mo-sales .mo-mini-stat,html body .mo-service .mo-service-side{width:88px!important;min-width:88px!important;max-width:88px!important;height:58px!important;min-height:58px!important;padding:8px!important;box-sizing:border-box!important;justify-content:center!important}
+html body .mo-collection .mo-breakdown,html body .mo-sales .mo-breakdown{width:auto!important;grid-template-columns:repeat(3,88px)!important;gap:6px!important;justify-content:end!important}
+html body .mo-service .mo-side-label{font-size:7px!important;letter-spacing:.05em!important;white-space:nowrap!important}
+html body .mo-service .mo-side-count{font-size:19px!important}
+html body .mo-service .mo-service-side{align-items:flex-start!important}
+html body .mo-service .mo-primary .mo-unit{white-space:nowrap!important}
+/* minimal top/bottom space in the Branch Performance bar and the 4 overview cards */
+html body #overviewHeaderRow{padding:2px 12px!important}
+html body #section-overview > :nth-child(n){padding:10px 14px!important;min-height:0!important;height:auto!important}
+html body #section-overview .mo-head{margin:0!important}
+html body #section-overview .mo-icon{width:34px!important;height:34px!important;flex-basis:34px!important}
+html body #section-overview .mo-main{margin-top:8px!important;min-height:0!important}
+html body #section-overview .mo-value{font-size:32px!important}
+html body #section-overview .mo-foot{margin-top:8px!important;padding-top:6px!important}
+html body #section-overview .mo-footnote{margin-top:4px!important}
+html body #section-overview + .grid{margin-top:8px!important}
 /* Scorecard toolbar: desktop-style compact row at every screen size (wraps when narrow) */
 @media all{
 html body #section-scorecard > :first-child{margin-bottom:8px!important}
