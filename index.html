@@ -2181,6 +2181,7 @@ html body main.dash-container #section-overview + .grid{margin-top:12px !importa
           <div id="stat-audit-risk-sub" class="flex justify-center items-center flex-wrap font-semibold text-slate-500" style="line-height:1.25;gap:.45em .9em;font-size:9px;font-size:clamp(7px,3.5cqw,9px)" title="Distribution of branch risk tiers"></div>
           
         </div>
+        <div class="mo-footnote ar-foot"><span>Audit risk summary</span><span>View details <b>↗</b></span></div>
       </div>
       <div onclick="openModal('Collection Status Overview', 'collection', 'ALL')" class="bg-coolCard border border-coolBorder rounded-2xl p-4 sm:p-5 hover:border-accentEmerald/50 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all shadow-md cursor-pointer group" role="button" tabindex="0" aria-label="Open Collection overview">
         <div class="flex items-center justify-between">
@@ -9910,11 +9911,17 @@ html body #overviewHeaderRow #liveDateTime{min-height:26px!important;padding:2px
 html body #section-overview{gap:10px!important}
 html body main.dash-container #section-overview{margin-top:6px!important}
 /* every stack card (chips + Service box) is the same size; content/behaviour unchanged */
-html body .mo-collection .mo-mini-stat,html body .mo-sales .mo-mini-stat,html body .mo-service .mo-service-side{width:88px!important;min-width:88px!important;max-width:88px!important;height:58px!important;min-height:58px!important;padding:8px!important;box-sizing:border-box!important;justify-content:center!important}
-html body .mo-collection .mo-breakdown,html body .mo-sales .mo-breakdown{width:auto!important;grid-template-columns:repeat(3,88px)!important;gap:6px!important;justify-content:end!important}
-html body .mo-service .mo-side-label{font-size:7px!important;letter-spacing:.05em!important;white-space:nowrap!important}
-html body .mo-service .mo-side-count{font-size:19px!important}
-html body .mo-service .mo-service-side{align-items:flex-start!important}
+html body .mo-collection .mo-mini-stat,html body .mo-sales .mo-mini-stat,html body .mo-service .mo-service-side{width:76px!important;min-width:76px!important;max-width:76px!important;height:46px!important;min-height:46px!important;padding:6px 7px!important;gap:2px!important;box-sizing:border-box!important;justify-content:center!important;align-items:flex-start!important;border-radius:10px!important}
+html body .mo-collection .mo-breakdown,html body .mo-sales .mo-breakdown{width:auto!important;flex:0 0 auto!important;grid-template-columns:repeat(3,76px)!important;gap:5px!important;justify-content:end!important}
+html body .mo-collection .mo-mini-stat strong,html body .mo-sales .mo-mini-stat strong{padding-left:0!important;font-size:15px!important}
+html body .mo-collection .mo-mini-label,html body .mo-sales .mo-mini-label{font-size:8px!important}
+html body #section-overview .mo-main{min-height:72px!important;align-items:flex-end!important;gap:8px!important}
+html body #section-overview .mo-primary{flex:1 1 auto!important;min-width:0!important}
+html body #section-overview .mo-label{white-space:normal!important}
+html body .mo-service .mo-service-side{align-self:flex-end!important;flex:0 0 auto!important}
+html body .mo-service .mo-side-count{font-size:15px!important;line-height:1!important}
+html body .mo-service .mo-side-caption{font-size:8px!important;line-height:1!important}
+html body .mo-service .mo-side-label{font-size:6.5px!important;letter-spacing:.03em!important;white-space:nowrap!important;line-height:1!important}
 html body .mo-service .mo-primary .mo-unit{white-space:nowrap!important}
 /* minimal top/bottom space in the Branch Performance bar and the 4 overview cards */
 html body #overviewHeaderRow{padding:2px 12px!important}
@@ -9926,6 +9933,11 @@ html body #section-overview .mo-value{font-size:32px!important}
 html body #section-overview .mo-foot{margin-top:8px!important;padding-top:6px!important}
 html body #section-overview .mo-footnote{margin-top:4px!important}
 html body #section-overview + .grid{margin-top:8px!important}
+/* Audit Risk card: "View details" footer pinned to the bottom like the other cards */
+html body #section-overview > :first-child{display:flex!important;flex-direction:column!important}
+html body #section-overview .ar-foot{display:flex!important;justify-content:space-between!important;align-items:center!important;margin-top:auto!important;padding-top:6px!important;font-size:9px!important;color:#8592a4!important;font-weight:650!important}
+html body #section-overview .ar-foot span:last-child{color:#738399!important;font-weight:800!important}
+html body #section-overview .ar-foot b{font-size:11px!important;margin-left:2px!important}
 /* Scorecard toolbar: desktop-style compact row at every screen size (wraps when narrow) */
 @media all{
 html body #section-scorecard > :first-child{margin-bottom:8px!important}
