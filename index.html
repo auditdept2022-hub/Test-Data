@@ -1223,7 +1223,9 @@ main.dash-container > #overviewHeaderRow,
 .mo-service .mo-main{min-height:84px !important;align-items:flex-end !important}
 .mo-service .mo-foot{margin-top:auto !important}
 .mo-service .mo-value{font-size:36px !important}
-.mo-service .mo-service-side{align-self:stretch !important;justify-content:center !important;min-width:100px !important;box-sizing:border-box !important}
+.mo-service .mo-breakdown{width:auto !important;grid-template-columns:repeat(3,minmax(0,88px)) !important;gap:6px !important;justify-content:end !important}
+.mo-service .mo-mini-stat{min-height:52px !important;padding:8px 8px 7px !important;box-sizing:border-box !important}
+.mo-service .mo-mini-label{font-size:8.5px !important}
 /* beat later page rules (higher specificity): slim light header + gap between rows */
 html body #overviewHeaderRow{padding:6px 14px !important;gap:10px 14px !important;border-radius:14px !important;border:1px solid #eef2f8 !important;background:linear-gradient(120deg,#ffffff 0%,#fafcff 100%) !important;box-shadow:0 1px 4px rgba(15,23,42,.025) !important;min-height:0 !important;row-gap:6px !important}
 html body #overviewHeaderRow .bqs-head-left{gap:12px !important;margin:0 !important}
@@ -2197,7 +2199,7 @@ html body main.dash-container #section-overview + .grid{margin-top:12px !importa
           <div class="mo-head">
             <div class="mo-heading">
               <span class="mo-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></span>
-              <span class="mo-heading-copy"><span class="mo-eyebrow">COLLECTION</span><strong>Collection momentum</strong><small>Branch payment performance</small></span>
+              <span class="mo-heading-copy"><span class="mo-eyebrow">COLLECTION</span><strong>Collection</strong><small>Branch payment performance</small></span>
             </div>
             <span class="mo-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
           </div>
@@ -2224,7 +2226,7 @@ html body main.dash-container #section-overview + .grid{margin-top:12px !importa
           <div class="mo-head">
             <div class="mo-heading">
               <span class="mo-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h2l2.2 11.2a2 2 0 0 0 2 1.6h8.9a2 2 0 0 0 2-1.6L22 7H6"/><circle cx="10" cy="20" r="1.2"/><circle cx="18" cy="20" r="1.2"/></svg></span>
-              <span class="mo-heading-copy"><span class="mo-eyebrow">SALES</span><strong>Sales momentum</strong><small>Branch sales performance</small></span>
+              <span class="mo-heading-copy"><span class="mo-eyebrow">SALES</span><strong>Sales</strong><small>Branch sales performance</small></span>
             </div>
             <span class="mo-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
           </div>
@@ -2252,17 +2254,13 @@ html body main.dash-container #section-overview + .grid{margin-top:12px !importa
           <div class="mo-head">
             <div class="mo-heading">
               <span class="mo-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="1.8"/><path d="m16.5 7.5 4-4"/></svg></span>
-              <span class="mo-heading-copy"><span class="mo-eyebrow">SERVICE</span><strong>Service performance</strong><small>Branches meeting service target</small></span>
+              <span class="mo-heading-copy"><span class="mo-eyebrow">SERVICE</span><strong>Service</strong><small>Branches meeting service target</small></span>
             </div>
             <span class="mo-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
           </div>
           <div class="mo-main">
             <div class="mo-primary"><span class="mo-label">ON TARGET</span><div class="mo-value" id="moServicePrimary">—</div><span class="mo-unit">branches on target</span></div>
-            <div class="mo-service-side">
-              <span class="mo-side-label">NEEDS ATTENTION</span>
-              <div class="mo-side-count" id="moServiceDeclining">—</div>
-              <span class="mo-side-caption">declining</span>
-            </div>
+            <div class="mo-breakdown" id="moServiceStats"></div>
           </div>
           <div class="mo-foot">
             <div class="mo-progress" id="moServiceProgress" aria-label="Service status distribution"></div>
@@ -8482,7 +8480,8 @@ button:disabled:active,button[disabled]:active,[aria-disabled=true]:active{trans
   function refresh(){
     var sum=((typeof activeData!=='undefined')&&activeData.summary)||{};
     var coll=[{label:'Declining',value:sum.decliningCollection,color:'#ef727c'},{label:'Stable',value:sum.stableCollection,color:'#94a3b8'},{label:'Recovering',value:sum.recoveringCollection,color:'#e5a53b'}];
-    var sales=[{label:'Declining',value:sum.salesDeclining,color:'#ef727c'},{label:'Stable',value:sum.salesStable,color:'#94a3b8'}];
+    var sales=[{label:'Declining',value:sum.salesDeclining,color:'#ef727c'},{label:'Stable',value:sum.salesStable,color:'#94a3b8'},{label:'Recovering',value:sum.salesRecovering,color:'#e5a53b'}];
+    var service=[{label:'Declining',value:sum.serviceDeclining,color:'#ef727c'},{label:'Stable',value:sum.serviceStable,color:'#94a3b8'},{label:'Recovering',value:sum.serviceRecovering,color:'#e5a53b'}];
     put('moCollectionPrimary',number(sum.improvingCollection).toLocaleString());
     var c=document.getElementById('moCollectionStats');if(c)c.innerHTML=breakdownHtml(coll);
     setProgress('moCollectionProgress',[{value:sum.improvingCollection,color:'#0caa6c'}].concat(coll));
@@ -8490,8 +8489,8 @@ button:disabled:active,button[disabled]:active,[aria-disabled=true]:active{trans
     var sl=document.getElementById('moSalesStats');if(sl)sl.innerHTML=breakdownHtml(sales);
     setProgress('moSalesProgress',[{value:sum.salesImproving,color:'#5576e8'}].concat(sales));
     put('moServicePrimary',number(sum.serviceTarget).toLocaleString());
-    put('moServiceDeclining',number(sum.serviceDeclining).toLocaleString());
-    setProgress('moServiceProgress',[{value:sum.serviceTarget,color:'#0b9fc4'},{value:sum.serviceDeclining,color:'#ee9763'}]);
+    var sv=document.getElementById('moServiceStats');if(sv)sv.innerHTML=breakdownHtml(service);
+    setProgress('moServiceProgress',[{value:sum.serviceTarget,color:'#0b9fc4'}].concat(service));
     var ys=window.FINDING_YEARS||[2024,2025,2026];
     var vals=[number(sum.findings2024),number(sum.findings2025),number(sum.findings2026)];
     var max=Math.max(1,vals[0],vals[1],vals[2]);
@@ -9892,4 +9891,34 @@ button:disabled:active,button[disabled]:active,[aria-disabled=true]:active{trans
 }
 </style>
 
+<style id="compact-layout-v1">
+/* Compact spacing: slimmer header, tighter Branch Performance bar, smaller gaps */
+html body header.app-header-reveal .dash-container-header{padding-top:5px!important;padding-bottom:5px!important;min-height:0!important;gap:8px!important}
+html body header.app-header-reveal .hamburger-btn{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;border-radius:10px!important}
+html body header.app-header-reveal h1{font-size:17px!important;line-height:1.15!important}
+html body header.app-header-reveal p.block{font-size:10px!important;line-height:1.2!important}
+html body header.app-header-reveal #updateDataBtn{padding-top:3px!important;padding-bottom:3px!important}
+html body header.app-header-reveal #authLogoutBtn{padding-top:3px!important;padding-bottom:3px!important}
+html body main.dash-container{margin-top:8px!important}
+html body main.dash-container.space-y-4>*+*{margin-top:8px!important}
+html body #overviewHeaderRow{padding:3px 12px!important;gap:4px 12px!important}
+html body #overviewHeaderRow #branchQuickSearch{min-height:28px!important}
+html body #overviewHeaderRow #branchQuickSearch .bqs-input{min-height:26px!important}
+html body #overviewHeaderRow #liveDateTime{min-height:26px!important;padding:2px 8px!important}
+html body #section-overview{gap:10px!important;margin-top:0!important}
+html body #section-overview>*{padding:12px 14px!important}
+/* Scorecard toolbar: desktop-style compact row at every screen size (wraps when narrow) */
+@media all{
+html body #section-scorecard > :first-child{margin-bottom:8px!important}
+html body #section-scorecard > :nth-child(2){display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:8px!important;padding:8px 10px!important;margin-bottom:8px!important}
+html body #section-scorecard > :nth-child(2) > :first-child{flex:0 1 240px!important;min-width:180px!important;width:auto!important}
+html body #section-scorecard #tableSearch{min-height:34px!important;font-size:12px!important;padding-top:6px!important;padding-bottom:6px!important}
+html body #section-scorecard #scorecardFilterControls{display:flex!important;flex-wrap:wrap!important;flex:1 1 560px!important;align-items:center!important;gap:6px!important;width:auto!important}
+html body #section-scorecard #scorecardFilterControls select{flex:1 1 120px!important;width:auto!important;min-width:110px!important;max-width:none!important;height:34px!important;padding:0 10px!important;font-size:11px!important}
+html body #section-scorecard #branchFilterWrap{flex:1 1 130px!important;min-width:120px!important;width:auto!important}
+html body #section-scorecard #branchFilterBtn{width:100%!important;max-width:none!important;height:34px!important;padding:0 10px!important;font-size:11px!important}
+html body #section-scorecard #scorecardFilterControls > button{flex:0 0 auto!important;width:auto!important;min-width:84px!important;height:34px!important;padding:0 12px!important;font-size:11px!important;grid-column:auto!important}
+html body #section-scorecard #scorecardRiskLegend{margin:0 0 8px!important;padding:5px 10px!important;gap:12px!important}
+}
+</style>
 </body></html>
