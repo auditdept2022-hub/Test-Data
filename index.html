@@ -9938,6 +9938,15 @@ html body #section-overview > :first-child{display:flex!important;flex-direction
 html body #section-overview .ar-foot{display:flex!important;justify-content:space-between!important;align-items:center!important;margin-top:auto!important;padding-top:6px!important;font-size:9px!important;color:#8592a4!important;font-weight:650!important}
 html body #section-overview .ar-foot span:last-child{color:#738399!important;font-weight:800!important}
 html body #section-overview .ar-foot b{font-size:11px!important;margin-left:2px!important}
+/* remove the big desktop gap under the header (main had 22px top padding) */
+html body main.dash-container{margin-top:0!important;padding-top:6px!important}
+@media (max-width:767px){html body main.dash-container{padding-top:4px!important}}
+/* Branch Performance bar: a little more expanded */
+html body #overviewHeaderRow{padding:8px 16px!important;gap:6px 14px!important;min-height:52px!important}
+html body #overviewHeaderRow .bqs-head-left h2{font-size:18px!important}
+html body #overviewHeaderRow #branchQuickSearch{min-height:38px!important;border-radius:12px!important}
+html body #overviewHeaderRow #branchQuickSearch .bqs-input{min-height:36px!important;font-size:13px!important}
+html body #overviewHeaderRow #liveDateTime{min-height:34px!important;padding:4px 12px!important;border-radius:12px!important}
 /* Scorecard toolbar: desktop-style compact row at every screen size (wraps when narrow) */
 @media all{
 html body #section-scorecard > :first-child{margin-bottom:8px!important}
