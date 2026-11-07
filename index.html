@@ -1191,8 +1191,6 @@ main.dash-container > #overviewHeaderRow,
 #liveDateText,#overviewHeaderRow #liveDateTime > span:nth-child(2){font-size:10.5px !important}
 
 /* Overview: keep Risk + Collection + Sales only, and make Collection/Sales identical inside */
-#section-overview > :nth-child(4){display:none !important}
-#section-overview{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
 #section-overview > :nth-child(2),#section-overview > :nth-child(3){min-height:196px !important;display:flex !important;flex-direction:column !important}
 #section-overview > :nth-child(2) > .mobile-overview-content,#section-overview > :nth-child(3) > .mobile-overview-content{flex:1 1 auto !important;display:flex !important;flex-direction:column !important}
 .mo-collection .mo-main,.mo-sales .mo-main{min-height:84px !important;align-items:flex-end !important}
@@ -1218,6 +1216,24 @@ main.dash-container > #overviewHeaderRow,
 
 /* standard rank badges: same neutral style for every row */
 #section-findings ul > li.finding-rank-row:nth-child(n) .finding-rank-number{background:#edf1f7 !important;color:#5c6a7e !important}
+
+/* Service card back, standardized with Collection / Sales */
+#section-overview > :nth-child(4){min-height:196px !important;display:flex !important;flex-direction:column !important}
+#section-overview > :nth-child(4) > .mobile-overview-content{flex:1 1 auto !important;display:flex !important;flex-direction:column !important}
+.mo-service .mo-main{min-height:84px !important;align-items:flex-end !important}
+.mo-service .mo-foot{margin-top:auto !important}
+.mo-service .mo-value{font-size:36px !important}
+.mo-service .mo-service-side{align-self:stretch !important;justify-content:center !important;min-width:100px !important;box-sizing:border-box !important}
+/* beat later page rules (higher specificity): slim light header + gap between rows */
+html body #overviewHeaderRow{padding:6px 14px !important;gap:10px 14px !important;border-radius:14px !important;border:1px solid #eef2f8 !important;background:linear-gradient(120deg,#ffffff 0%,#fafcff 100%) !important;box-shadow:0 1px 4px rgba(15,23,42,.025) !important;min-height:0 !important;row-gap:6px !important}
+html body #overviewHeaderRow .bqs-head-left{gap:12px !important;margin:0 !important}
+html body #overviewHeaderRow .bqs-head-left h2{font-size:16px !important;line-height:1.15 !important;margin:0 !important}
+html body #overviewHeaderRow #branchQuickSearch{width:min(360px,38vw) !important;min-height:32px !important;border-radius:10px !important;background:#f8fafd !important;border:1px solid #edf1f7 !important}
+html body #overviewHeaderRow #branchQuickSearch .bqs-input{min-height:30px !important;font-size:12px !important;padding-top:0 !important;padding-bottom:0 !important}
+html body #overviewHeaderRow #liveDateTime{min-height:30px !important;padding:3px 10px !important;border-radius:10px !important;background:#f8fafd !important;border:1px solid #edf1f7 !important;box-shadow:none !important}
+html body #liveTimeText{font-size:13px !important}
+html body #liveDateText,html body #overviewHeaderRow #liveDateTime > span:nth-child(2){font-size:10.5px !important}
+html body main.dash-container #section-overview + .grid{margin-top:12px !important}
 }</style>
 </head>
 <body class="bg-coolDark text-slate-800 min-h-screen selection:bg-accentCyan/30 selection:text-slate-900 relative">
